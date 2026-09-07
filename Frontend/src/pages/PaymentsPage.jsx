@@ -1,37 +1,113 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Wallet } from 'lucide-react';
+import { PaymentTabs } from '../components/payments/PaymentTabs';
+import { PaymentFilters } from '../components/payments/PaymentFilters';
+import { PaymentTable } from '../components/payments/PaymentTable';
+import {
+  getSavedExpensePayments,
+  getSavedIncomePayments,
+  filterPayments,
+} from '../data/paymentsData';
 
 export function PaymentsPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const [activeTab, setActiveTab] = useState(
+    location.state?.activeTab || 'expenses'
+  );
+
+  const [expensePayments, setExpensePayments] = useState([]);
+  const [incomePayments, setIncomePayments] = useState([]);
+
+  const [filters, setFilters] = useState({
+    search: '',
+    searchBy: '- All -',
+    dateFrom: '',
+    dateTo: '',
+    amountFrom: '',
+    amountTo: '',
+  });
+
+  useEffect(() => {
+    setExpensePayments(getSavedExpensePayments());
+    setIncomePayments(getSavedIncomePayments());
+  }, []);
+
+  const isIncomeTab = activeTab === 'income';
+
+  const rawRecords = isIncomeTab ? incomePayments : expensePayments;
+
+  const filteredRecords = useMemo(() => {
+    return filterPayments(rawRecords, filters, isIncomeTab);
+  }, [rawRecords, filters, isIncomeTab]);
+
+  const handleClearFilters = () => {
+    setFilters({
+      search: '',
+      searchBy: '- All -',
+      dateFrom: '',
+      dateTo: '',
+      amountFrom: '',
+      amountTo: '',
+    });
+  };
+
+  const handleSearch = () => {
+    // Filter calculation triggers automatically via useMemo
+  };
+
+  const handleAddPaymentClick = () => {
+    if (isIncomeTab) {
+      navigate('/payments/income/create');
+    } else {
+      navigate('/payments/expenses/create');
+    }
+  };
+
+  const handleTabSwitch = (tab) => {
+    setActiveTab(tab);
+    handleClearFilters();
+  };
+
   return (
     <AppLayout>
-      <div className="space-y-6 text-left">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/properties"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:text-[#00a36f] shadow-2xs"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Property Manager</span>
-          </Link>
-          <span className="text-xs text-slate-400">/</span>
-          <span className="text-xs font-bold text-slate-900">Payments</span>
+      <div className="space-y-6 text-left pb-12">
+        {/* PAGE TOP TITLE */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              Payments Register
+            </h1>
+            <p className="text-xs sm:text-sm font-medium text-slate-500 mt-1">
+              View, record, and reconcile incoming rent receipts and outgoing supplier payments.
+            </p>
+          </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-          <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-            <div className="p-2.5 rounded-xl bg-emerald-50 text-[#00a36f]">
-              <Wallet className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-xl font-extrabold text-slate-900">Payments Register</h1>
-              <p className="text-xs text-slate-500 font-medium">Record and reconcile bank transactions, standing orders, and direct debits.</p>
-            </div>
+        {/* CONTAINER FOR TABS, FILTERS & TABLE */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+          {/* TAB SWITCHER */}
+          <PaymentTabs activeTab={activeTab} setActiveTab={handleTabSwitch} />
+
+          <div className="p-4 sm:p-6 space-y-6">
+            {/* FILTERS BAR */}
+            <PaymentFilters
+              filters={filters}
+              setFilters={setFilters}
+              onSearch={handleSearch}
+              onClear={handleClearFilters}
+              isIncomeTab={isIncomeTab}
+            />
+
+            {/* PAYMENTS TABLE */}
+            <PaymentTable
+              payments={filteredRecords}
+              isIncomeTab={isIncomeTab}
+              onAddPaymentClick={handleAddPaymentClick}
+            />
           </div>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            Payments Register View Placeholder
-          </p>
         </div>
       </div>
     </AppLayout>

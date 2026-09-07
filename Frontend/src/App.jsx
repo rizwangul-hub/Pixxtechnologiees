@@ -33,6 +33,8 @@ import { SupplierDetailPage } from './pages/SupplierDetailPage';
 import { IncomePage } from './pages/IncomePage';
 import { AddIncomePage } from './pages/AddIncomePage';
 import { PaymentsPage } from './pages/PaymentsPage';
+import { AddExpensePaymentPage } from './pages/AddExpensePaymentPage';
+import { AddIncomePaymentPage } from './pages/AddIncomePaymentPage';
 
 /**
  * ProtectedRoute Wrapper
@@ -169,6 +171,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <PaymentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payments/expenses/create"
+            element={
+              <ProtectedRoute>
+                <AddExpensePaymentPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payments/income/create"
+            element={
+              <ProtectedRoute>
+                <AddIncomePaymentPage />
               </ProtectedRoute>
             }
           />
