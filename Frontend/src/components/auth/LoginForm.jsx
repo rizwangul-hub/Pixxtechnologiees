@@ -4,9 +4,11 @@ import { Mail, CheckCircle2, AlertCircle, KeyRound, ArrowLeft } from 'lucide-rea
 import { AuthInput } from './AuthInput';
 import { PasswordInput } from './PasswordInput';
 import { AuthButton } from './AuthButton';
+import { useAuth } from '../../context/AuthContext';
 
 export function LoginForm({ isPasskeyMode = false, onTogglePasskeyMode, onOpenPasskeyModal }) {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [systemVersion, setSystemVersion] = useState('current'); // 'current' | 'legacy'
   const [formData, setFormData] = useState({
     email: '',
@@ -82,6 +84,12 @@ export function LoginForm({ isPasskeyMode = false, onTogglePasskeyMode, onOpenPa
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
+      login({
+        name: 'Old Street Holdings Ltd',
+        email: formData.email || 'ftaccountants@hotmail.com',
+        company: 'LandlordVision Property Management',
+        avatarUrl: null,
+      });
       setStatusMessage({
         type: 'success',
         text: isPasskeyMode

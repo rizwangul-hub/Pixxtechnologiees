@@ -3,11 +3,16 @@ import React, { createContext, useContext, useState } from 'react';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState({
-    name: 'Old Street Holdings Ltd',
-    email: 'ftaccountants@hotmail.com',
-    company: 'LandlordVision Property Management',
-    avatarUrl: null,
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('landlordvision_user');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null; // Unauthenticated by default so site opens to Login/Registration
   });
 
   const [selectedPortfolio, setSelectedPortfolio] = useState('My Portfolio');
@@ -19,9 +24,20 @@ export function AuthProvider({ children }) {
     { id: 'development', name: 'Development Portfolio', count: 2 },
   ];
 
+  const login = (userData) => {
+    const loggedInUser = userData || {
+      name: 'Old Street Holdings Ltd',
+      email: 'ftaccountants@hotmail.com',
+      company: 'LandlordVision Property Management',
+      avatarUrl: null,
+    };
+    setUser(loggedInUser);
+    localStorage.setItem('landlordvision_user', JSON.stringify(loggedInUser));
+  };
+
   const logout = () => {
-    // Session state clearing
     setUser(null);
+    localStorage.removeItem('landlordvision_user');
   };
 
   return (
@@ -32,6 +48,7 @@ export function AuthProvider({ children }) {
         selectedPortfolio,
         setSelectedPortfolio,
         portfolios,
+        login,
         logout,
         isAuthenticated: Boolean(user),
       }}

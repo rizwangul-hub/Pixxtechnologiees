@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { PrivacyNoticePage } from './pages/PrivacyNoticePage';
@@ -34,6 +34,18 @@ import { IncomePage } from './pages/IncomePage';
 import { AddIncomePage } from './pages/AddIncomePage';
 import { PaymentsPage } from './pages/PaymentsPage';
 
+/**
+ * ProtectedRoute Wrapper
+ * Redirects unauthenticated users to /login page first.
+ */
+function ProtectedRoute({ children }) {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -45,45 +57,241 @@ function App() {
           <Route path="/privacy-notice" element={<PrivacyNoticePage />} />
           <Route path="/terms-and-conditions" element={<TermsPage />} />
 
-          {/* Main Authenticated Application Routes */}
-          <Route path="/dashboard" element={<DashboardPage />} />
+          {/* Main Authenticated Application Routes (Protected) */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Property Manager Routes */}
-          <Route path="/properties" element={<PropertiesPage />} />
-          <Route path="/properties/create" element={<CreatePropertyPage />} />
-          <Route path="/properties/:propertyId" element={<PropertyDetailPage />} />
-          <Route path="/expenses" element={<ExpensesPage />} />
-          <Route path="/expenses/create" element={<CreateExpensePage />} />
-          <Route path="/expenses/repeating/create" element={<CreateRepeatingExpensePage />} />
-          <Route path="/expenses/credit-note/create" element={<CreateCreditNotePage />} />
-          <Route path="/expenses/summary" element={<ExpensesSummaryPage />} />
-          <Route path="/expenses/:expenseId" element={<ExpenseDetailPage />} />
-          <Route path="/suppliers/:supplierId" element={<SupplierDetailPage />} />
-          <Route path="/income" element={<IncomePage />} />
-          <Route path="/income/create" element={<AddIncomePage />} />
-          <Route path="/payments" element={<PaymentsPage />} />
+          {/* Property Manager Routes (Protected) */}
+          <Route
+            path="/properties"
+            element={
+              <ProtectedRoute>
+                <PropertiesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/properties/create"
+            element={
+              <ProtectedRoute>
+                <CreatePropertyPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/properties/:propertyId"
+            element={
+              <ProtectedRoute>
+                <PropertyDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/expenses"
+            element={
+              <ProtectedRoute>
+                <ExpensesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/expenses/create"
+            element={
+              <ProtectedRoute>
+                <CreateExpensePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/expenses/repeating/create"
+            element={
+              <ProtectedRoute>
+                <CreateRepeatingExpensePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/expenses/credit-note/create"
+            element={
+              <ProtectedRoute>
+                <CreateCreditNotePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/expenses/summary"
+            element={
+              <ProtectedRoute>
+                <ExpensesSummaryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/expenses/:expenseId"
+            element={
+              <ProtectedRoute>
+                <ExpenseDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/suppliers/:supplierId"
+            element={
+              <ProtectedRoute>
+                <SupplierDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/income"
+            element={
+              <ProtectedRoute>
+                <IncomePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/income/create"
+            element={
+              <ProtectedRoute>
+                <AddIncomePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payments"
+            element={
+              <ProtectedRoute>
+                <PaymentsPage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Management & Auxiliary Routes */}
-          <Route path="/tenants" element={<TenantsPage />} />
-          <Route path="/accounts" element={<AccountsPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/portfolios" element={<PortfoliosPage />} />
-          <Route path="/contacts" element={<ContactsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/account" element={<AccountPage />} />
-          <Route path="/help" element={<HelpPage />} />
-          <Route path="/tenancies/create" element={<CreateTenancyPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
+          {/* Management & Auxiliary Routes (Protected) */}
+          <Route
+            path="/tenants"
+            element={
+              <ProtectedRoute>
+                <TenantsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/accounts"
+            element={
+              <ProtectedRoute>
+                <AccountsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <ProtectedRoute>
+                <ReportsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/portfolios"
+            element={
+              <ProtectedRoute>
+                <PortfoliosPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/contacts"
+            element={
+              <ProtectedRoute>
+                <ContactsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/account"
+            element={
+              <ProtectedRoute>
+                <AccountPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/help"
+            element={
+              <ProtectedRoute>
+                <HelpPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tenancies/create"
+            element={
+              <ProtectedRoute>
+                <CreateTenancyPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Payment & Financial Detail Routes */}
-          <Route path="/payments/overdue" element={<OverduePaymentsPage />} />
-          <Route path="/expenses/overdue" element={<OverdueExpensesPage />} />
-          <Route path="/payments/upcoming" element={<UpcomingPaymentsPage />} />
-          <Route path="/expenses/upcoming" element={<UpcomingExpensesPage />} />
+          {/* Payment & Financial Detail Routes (Protected) */}
+          <Route
+            path="/payments/overdue"
+            element={
+              <ProtectedRoute>
+                <OverduePaymentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/expenses/overdue"
+            element={
+              <ProtectedRoute>
+                <OverdueExpensesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payments/upcoming"
+            element={
+              <ProtectedRoute>
+                <UpcomingPaymentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/expenses/upcoming"
+            element={
+              <ProtectedRoute>
+                <UpcomingExpensesPage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Default Redirection */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          {/* Default Redirection to Login */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

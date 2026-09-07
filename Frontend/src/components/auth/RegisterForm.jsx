@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, CheckCircle2, AlertCircle, Pencil, Tag } from 'lucide-react';
 import { AuthInput } from './AuthInput';
 import { PasswordInput } from './PasswordInput';
 import { AuthButton } from './AuthButton';
 import { EditPricingModal } from './EditPricingModal';
+import { useAuth } from '../../context/AuthContext';
 
 export function RegisterForm() {
+  const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -133,10 +136,19 @@ export function RegisterForm() {
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
+      login({
+        name: formData.fullName || 'Landlord User',
+        email: formData.email,
+        company: 'LandlordVision Property Management',
+        avatarUrl: null,
+      });
       setStatusMessage({
         type: 'success',
         text: `Free trial for ${activePlan.name} plan validated! Redirecting...`,
       });
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 600);
     }, 1200);
   };
 
