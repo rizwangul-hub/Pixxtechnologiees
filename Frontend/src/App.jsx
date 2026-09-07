@@ -35,6 +35,12 @@ import { AddIncomePage } from './pages/AddIncomePage';
 import { PaymentsPage } from './pages/PaymentsPage';
 import { AddExpensePaymentPage } from './pages/AddExpensePaymentPage';
 import { AddIncomePaymentPage } from './pages/AddIncomePaymentPage';
+import { TenantManagerTenantsPage } from './pages/tenant-manager/TenantManagerTenantsPage';
+import { TenanciesPage } from './pages/tenant-manager/TenanciesPage';
+import { PaymentSchedulesPage } from './pages/tenant-manager/PaymentSchedulesPage';
+import { TenantInvoicesPage } from './pages/tenant-manager/TenantInvoicesPage';
+import { AgentsFeesPage } from './pages/tenant-manager/AgentsFeesPage';
+import { TenantPaymentsPage } from './pages/tenant-manager/TenantPaymentsPage';
 
 /**
  * ProtectedRoute Wrapper
@@ -191,12 +197,62 @@ function App() {
             }
           />
 
+          {/* Tenant Manager Routes (Protected) */}
+          <Route
+            path="/tenant-manager/tenants"
+            element={
+              <ProtectedRoute>
+                <TenantManagerTenantsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tenant-manager/tenancies"
+            element={
+              <ProtectedRoute>
+                <TenanciesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tenant-manager/payment-schedules"
+            element={
+              <ProtectedRoute>
+                <PaymentSchedulesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tenant-manager/invoices"
+            element={
+              <ProtectedRoute>
+                <TenantInvoicesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tenant-manager/agents-fees"
+            element={
+              <ProtectedRoute>
+                <AgentsFeesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tenant-manager/payments"
+            element={
+              <ProtectedRoute>
+                <TenantPaymentsPage />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Management & Auxiliary Routes (Protected) */}
           <Route
             path="/tenants"
             element={
               <ProtectedRoute>
-                <TenantsPage />
+                <TenantManagerTenantsPage />
               </ProtectedRoute>
             }
           />

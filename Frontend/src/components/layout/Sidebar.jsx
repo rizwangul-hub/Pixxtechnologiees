@@ -1,12 +1,48 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { LayoutDashboard, Building2, Users, Wallet, FileText, X } from 'lucide-react';
 import { SidebarItem } from './SidebarItem';
 import { PortfolioSelector } from './PortfolioSelector';
 
 export function Sidebar({ isMobileMenuOpen, setIsMobileMenuOpen }) {
+  const location = useLocation();
+
+  // Accordion state: "property" | "tenant" | null
+  const [activeManager, setActiveManager] = useState(null);
+
+  // Auto-expand accordion based on active URL route
+  useEffect(() => {
+    const path = location.pathname;
+    if (
+      path.startsWith('/properties') ||
+      path.startsWith('/expenses') ||
+      path.startsWith('/income') ||
+      path.startsWith('/payments') ||
+      path.startsWith('/suppliers')
+    ) {
+      setActiveManager('property');
+    } else if (
+      path.startsWith('/tenant-manager') ||
+      path.startsWith('/tenants') ||
+      path.startsWith('/tenancies')
+    ) {
+      setActiveManager('tenant');
+    }
+  }, [location.pathname]);
+
+  const handleToggleManager = (key) => {
+    setActiveManager((prevKey) => (prevKey === key ? null : key));
+  };
+
   const menuItems = [
-    { name: 'Portfolio Dashboard', path: '/dashboard', icon: LayoutDashboard },
     {
+      itemKey: 'dashboard',
+      name: 'Portfolio Dashboard',
+      path: '/dashboard',
+      icon: LayoutDashboard,
+    },
+    {
+      itemKey: 'property',
       name: 'Property Manager',
       path: '/properties',
       icon: Building2,
@@ -17,9 +53,32 @@ export function Sidebar({ isMobileMenuOpen, setIsMobileMenuOpen }) {
         { name: 'Payments', path: '/payments' },
       ],
     },
-    { name: 'Tenant Manager', path: '/tenants', icon: Users },
-    { name: 'Account Manager', path: '/accounts', icon: Wallet },
-    { name: 'Reports', path: '/reports', icon: FileText },
+    {
+      itemKey: 'tenant',
+      name: 'Tenant Manager',
+      path: '/tenant-manager/tenants',
+      icon: Users,
+      subItems: [
+        { name: 'Tenants', path: '/tenant-manager/tenants' },
+        { name: 'Tenancies', path: '/tenant-manager/tenancies' },
+        { name: 'Payment Schedules', path: '/tenant-manager/payment-schedules' },
+        { name: 'Invoices', path: '/tenant-manager/invoices' },
+        { name: 'Agents Fees', path: '/tenant-manager/agents-fees' },
+        { name: 'Payments', path: '/tenant-manager/payments' },
+      ],
+    },
+    {
+      itemKey: 'account',
+      name: 'Account Manager',
+      path: '/accounts',
+      icon: Wallet,
+    },
+    {
+      itemKey: 'reports',
+      name: 'Reports',
+      path: '/reports',
+      icon: FileText,
+    },
   ];
 
   return (
@@ -27,12 +86,17 @@ export function Sidebar({ isMobileMenuOpen, setIsMobileMenuOpen }) {
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex flex-col w-60 shrink-0 bg-white border-r border-slate-200/80 min-h-[calc(100vh-7rem)] p-4 space-y-6">
         <div className="space-y-1">
-          <p className="px-3 text-[11px] font-extrabold uppercase tracking-wider text-slate-400 pb-2">
+          <p className="px-3 text-[11px] font-extrabold uppercase tracking-wider text-slate-400 pb-2 text-left">
             Main Management
           </p>
           <nav className="space-y-1.5">
             {menuItems.map((item) => (
-              <SidebarItem key={item.name} {...item} />
+              <SidebarItem
+                key={item.itemKey || item.name}
+                {...item}
+                activeManager={activeManager}
+                onToggleManager={handleToggleManager}
+              />
             ))}
           </nav>
         </div>
@@ -77,9 +141,11 @@ export function Sidebar({ isMobileMenuOpen, setIsMobileMenuOpen }) {
                 <nav className="space-y-1.5">
                   {menuItems.map((item) => (
                     <SidebarItem
-                      key={item.name}
+                      key={item.itemKey || item.name}
                       {...item}
-                      onClick={() => setIsMobileMenuOpen(false)}
+                      activeManager={activeManager}
+                      onToggleManager={handleToggleManager}
+                      onMobileClick={() => setIsMobileMenuOpen(false)}
                     />
                   ))}
                 </nav>
