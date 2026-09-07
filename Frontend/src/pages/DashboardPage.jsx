@@ -5,7 +5,6 @@ import { SummaryCard } from '../components/dashboard/SummaryCard';
 import { OccupancyChart } from '../components/dashboard/OccupancyChart';
 import { IncomeChart } from '../components/dashboard/IncomeChart';
 import { ActualVsTargetChart } from '../components/dashboard/ActualVsTargetChart';
-import { RecentActivity } from '../components/dashboard/RecentActivity';
 import { PaymentSection } from '../components/dashboard/PaymentSection';
 import { dashboardPaymentsData } from '../data/dashboardPaymentsData';
 import { Building2, Layers, CheckCircle, Home, Users, AlertCircle } from 'lucide-react';
@@ -71,10 +70,7 @@ export function DashboardPage() {
           <ActualVsTargetChart />
         </div>
 
-        {/* 4. RECENT ACTIVITY TIMELINE */}
-        <RecentActivity />
-
-        {/* 5. OVERDUE PAYMENTS SECTION */}
+        {/* 4. OVERDUE PAYMENTS SECTION */}
         <PaymentSection
           type="overdue"
           rentCharges={dashboardPaymentsData.overdue.rentCharges}
