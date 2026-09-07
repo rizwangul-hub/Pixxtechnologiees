@@ -1,0 +1,487 @@
+/**
+ * Property Manager Data Layer
+ * Decouples demo property records, configuration lists, and filtering functions from UI.
+ * Future integration: Replace this object with backend API requests (GET /api/properties, POST /api/properties).
+ */
+
+export const propertyTypes = [
+  'All',
+  'House',
+  'Flat',
+  'Shop',
+  'Office',
+  'Commercial',
+  'Other',
+];
+
+export const furnishingTypes = [
+  'All',
+  'Fully',
+  'Part-Furnished',
+  'None',
+];
+
+export const paymentTerms = [
+  'Monthly',
+  'Weekly',
+  'Quarterly',
+  'Yearly',
+  'Other',
+];
+
+export const demoPropertiesList = [
+  {
+    id: 'prop-101',
+    portfolioId: 'port-1',
+    reference: '10 CROMWELL ROAD GRAYS ESSEX RM17 5HF',
+    propertyType: 'House',
+    furnishing: 'Fully',
+    constructionDate: 'N/A',
+    habitableRooms: 0,
+    status: 'Occupied',
+    activeTenanciesCount: 1,
+    totalUnitsCount: 1,
+    address: {
+      streetAddress: '10 Cromwell Road',
+      townCity: 'Grays',
+      countyRegion: 'Essex',
+      postcode: 'RM17 5HF',
+      country: 'United Kingdom',
+    },
+    targetRent: 1450.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2018-05-12', price: 285000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 2, garage: true, smokeAlarm: 2, coAlarm: 1, houseAlarm: true },
+    notes: 'Primary residential property in Grays.',
+    image: null,
+  },
+  {
+    id: 'prop-102',
+    portfolioId: 'port-1',
+    reference: '10-12 Cromwell Road (Shop)',
+    propertyType: 'Shop',
+    furnishing: 'None',
+    constructionDate: 'N/A',
+    habitableRooms: 0,
+    status: 'Vacant',
+    activeTenanciesCount: 0,
+    totalUnitsCount: 0,
+    address: {
+      streetAddress: '10-12 Cromwell Road',
+      townCity: 'Grays',
+      countyRegion: 'Essex',
+      postcode: 'RM17 5HF',
+      country: 'United Kingdom',
+    },
+    targetRent: 2200.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2019-02-20', price: 340000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 1, garage: false, smokeAlarm: 1, coAlarm: 1, houseAlarm: true },
+    notes: 'Ground floor retail unit.',
+    image: null,
+  },
+  {
+    id: 'prop-103',
+    portfolioId: 'port-1',
+    reference: '104 Pretoria Road',
+    propertyType: 'House',
+    furnishing: 'Fully',
+    constructionDate: 'N/A',
+    habitableRooms: 0,
+    status: 'Vacant',
+    activeTenanciesCount: 0,
+    totalUnitsCount: 1,
+    address: {
+      streetAddress: '104 Pretoria Road',
+      townCity: 'Grays',
+      countyRegion: 'Essex',
+      postcode: 'RM17 6LX',
+      country: 'United Kingdom',
+    },
+    targetRent: 1200.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2020-09-15', price: 245000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 1, garage: false, smokeAlarm: 2, coAlarm: 1, houseAlarm: false },
+    notes: 'Currently awaiting new tenancy agreement.',
+    image: null,
+  },
+  {
+    id: 'prop-104',
+    portfolioId: 'port-1',
+    reference: '10A-12A Cromwell Road (Flats)',
+    propertyType: 'Flat',
+    furnishing: 'None',
+    constructionDate: 'N/A',
+    habitableRooms: 0,
+    status: 'Vacant',
+    activeTenanciesCount: 0,
+    totalUnitsCount: 1,
+    address: {
+      streetAddress: '10A-12A Cromwell Road',
+      townCity: 'Grays',
+      countyRegion: 'Essex',
+      postcode: 'RM17 5HF',
+      country: 'United Kingdom',
+    },
+    targetRent: 1100.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2021-01-10', price: 210000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 0, garage: false, smokeAlarm: 1, coAlarm: 0, houseAlarm: false },
+    notes: 'Upper floor flat block.',
+    image: null,
+  },
+  {
+    id: 'prop-105',
+    portfolioId: 'port-1',
+    reference: '12 Alexandra Street (Ground Floor Shop)',
+    propertyType: 'Shop',
+    furnishing: 'None',
+    constructionDate: 'N/A',
+    habitableRooms: 0,
+    status: 'Occupied',
+    activeTenanciesCount: 1,
+    totalUnitsCount: 1,
+    address: {
+      streetAddress: '12 Alexandra Street',
+      townCity: 'Southend-on-Sea',
+      countyRegion: 'Essex',
+      postcode: 'SS1 1BU',
+      country: 'United Kingdom',
+    },
+    targetRent: 1850.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2017-11-04', price: 290000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 1, garage: false, smokeAlarm: 2, coAlarm: 1, houseAlarm: true },
+    notes: 'Commercial lease active.',
+    image: null,
+  },
+  {
+    id: 'prop-106',
+    portfolioId: 'port-1',
+    reference: '124 Millard Terrace',
+    propertyType: 'House',
+    furnishing: 'Fully',
+    constructionDate: 'N/A',
+    habitableRooms: 0,
+    status: 'Occupied',
+    activeTenanciesCount: 1,
+    totalUnitsCount: 3,
+    address: {
+      streetAddress: '124 Millard Terrace',
+      townCity: 'Dagenham',
+      countyRegion: 'Greater London',
+      postcode: 'RM10 8BW',
+      country: 'United Kingdom',
+    },
+    targetRent: 1600.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2016-08-22', price: 320000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 2, garage: true, smokeAlarm: 3, coAlarm: 1, houseAlarm: true },
+    notes: 'Multi-unit residential conversion.',
+    image: null,
+  },
+  {
+    id: 'prop-107',
+    portfolioId: 'port-1',
+    reference: '127 Southend Road (Shop)',
+    propertyType: 'Shop',
+    furnishing: 'None',
+    constructionDate: 'N/A',
+    habitableRooms: 0,
+    status: 'Occupied',
+    activeTenanciesCount: 1,
+    totalUnitsCount: 1,
+    address: {
+      streetAddress: '127 Southend Road',
+      townCity: 'Stanford-le-Hope',
+      countyRegion: 'Essex',
+      postcode: 'SS17 0PQ',
+      country: 'United Kingdom',
+    },
+    targetRent: 1950.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2019-06-30', price: 315000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 2, garage: false, smokeAlarm: 2, coAlarm: 1, houseAlarm: true },
+    notes: 'Retail shop lease.',
+    image: null,
+  },
+  {
+    id: 'prop-108',
+    portfolioId: 'port-1',
+    reference: '127A Southend Road (Flat)',
+    propertyType: 'Flat',
+    furnishing: 'Fully',
+    constructionDate: 'N/A',
+    habitableRooms: 0,
+    status: 'Occupied',
+    activeTenanciesCount: 1,
+    totalUnitsCount: 1,
+    address: {
+      streetAddress: '127A Southend Road',
+      townCity: 'Stanford-le-Hope',
+      countyRegion: 'Essex',
+      postcode: 'SS17 0PQ',
+      country: 'United Kingdom',
+    },
+    targetRent: 1050.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2019-06-30', price: 165000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 1, garage: false, smokeAlarm: 1, coAlarm: 1, houseAlarm: false },
+    notes: 'First floor flat above shop.',
+    image: null,
+  },
+  {
+    id: 'prop-109',
+    portfolioId: 'port-1',
+    reference: '12A,12B, 12C, 12D Alexandra Street',
+    propertyType: 'Flat',
+    furnishing: 'Fully',
+    constructionDate: 'N/A',
+    habitableRooms: 0,
+    status: 'Occupied',
+    activeTenanciesCount: 1,
+    totalUnitsCount: 2,
+    address: {
+      streetAddress: '12A, 12B, 12C, 12D Alexandra Street',
+      townCity: 'Southend-on-Sea',
+      countyRegion: 'Essex',
+      postcode: 'SS1 1BU',
+      country: 'United Kingdom',
+    },
+    targetRent: 4200.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2015-03-18', price: 680000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 4, garage: false, smokeAlarm: 4, coAlarm: 2, houseAlarm: true },
+    notes: 'Block of 4 self-contained flats.',
+    image: null,
+  },
+  {
+    id: 'prop-110',
+    portfolioId: 'port-1',
+    reference: '13 A ,15 A & 15 B Clarance Road (Flats)',
+    propertyType: 'Flat',
+    furnishing: 'Fully',
+    constructionDate: 'N/A',
+    habitableRooms: 0,
+    status: 'Occupied',
+    activeTenanciesCount: 1,
+    totalUnitsCount: 1,
+    address: {
+      streetAddress: '13 A, 15 A & 15 B Clarance Road',
+      townCity: 'Grays',
+      countyRegion: 'Essex',
+      postcode: 'RM17 6QJ',
+      country: 'United Kingdom',
+    },
+    targetRent: 3800.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2018-10-05', price: 540000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 3, garage: false, smokeAlarm: 3, coAlarm: 1, houseAlarm: true },
+    notes: 'Residential flat block.',
+    image: null,
+  },
+  {
+    id: 'prop-111',
+    portfolioId: 'port-1',
+    reference: '45 Commercial Way Office Building',
+    propertyType: 'Office',
+    furnishing: 'Part-Furnished',
+    constructionDate: '2008-04-15',
+    habitableRooms: 6,
+    status: 'Occupied',
+    activeTenanciesCount: 2,
+    totalUnitsCount: 2,
+    address: {
+      streetAddress: '45 Commercial Way',
+      townCity: 'Woking',
+      countyRegion: 'Surrey',
+      postcode: 'GU21 6HN',
+      country: 'United Kingdom',
+    },
+    targetRent: 5500.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2014-12-01', price: 820000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 8, garage: false, smokeAlarm: 6, coAlarm: 2, houseAlarm: true },
+    notes: 'Modern commercial office suite.',
+    image: null,
+  },
+  {
+    id: 'prop-112',
+    portfolioId: 'port-1',
+    reference: '65 Lansbury Avenue Family Home',
+    propertyType: 'House',
+    furnishing: 'Part-Furnished',
+    constructionDate: '1998-06-20',
+    habitableRooms: 4,
+    status: 'Occupied',
+    activeTenanciesCount: 1,
+    totalUnitsCount: 1,
+    address: {
+      streetAddress: '65 Lansbury Avenue',
+      townCity: 'Rainham',
+      countyRegion: 'Essex',
+      postcode: 'RM13 8JT',
+      country: 'United Kingdom',
+    },
+    targetRent: 1750.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2017-04-11', price: 360000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 2, garage: true, smokeAlarm: 2, coAlarm: 1, houseAlarm: true },
+    notes: 'Detached 4-bedroom house.',
+    image: null,
+  },
+  {
+    id: 'prop-113',
+    portfolioId: 'port-1',
+    reference: '82 Como Street House',
+    propertyType: 'House',
+    furnishing: 'Fully',
+    constructionDate: 'N/A',
+    habitableRooms: 3,
+    status: 'Occupied',
+    activeTenanciesCount: 1,
+    totalUnitsCount: 1,
+    address: {
+      streetAddress: '82 Como Street',
+      townCity: 'Romford',
+      countyRegion: 'Greater London',
+      postcode: 'RM7 7DU',
+      country: 'United Kingdom',
+    },
+    targetRent: 1550.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2016-01-14', price: 310000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 1, garage: false, smokeAlarm: 2, coAlarm: 1, houseAlarm: true },
+    notes: 'Terraced house in Romford.',
+    image: null,
+  },
+  {
+    id: 'prop-114',
+    portfolioId: 'port-1',
+    reference: 'Unit 9 Retail Square',
+    propertyType: 'Commercial',
+    furnishing: 'None',
+    constructionDate: '2012-09-01',
+    habitableRooms: 0,
+    status: 'Not Available',
+    activeTenanciesCount: 0,
+    totalUnitsCount: 1,
+    address: {
+      streetAddress: 'Unit 9 Retail Square',
+      townCity: 'Basildon',
+      countyRegion: 'Essex',
+      postcode: 'SS14 3EB',
+      country: 'United Kingdom',
+    },
+    targetRent: 3200.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2021-03-01', price: 450000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: true,
+    facilities: { parkingSpaces: 3, garage: false, smokeAlarm: 2, coAlarm: 0, houseAlarm: true },
+    notes: 'Undergoing major refurbishment.',
+    image: null,
+  },
+  {
+    id: 'prop-115',
+    portfolioId: 'port-1',
+    reference: '7 Vansittart Street',
+    propertyType: 'House',
+    furnishing: 'Part-Furnished',
+    constructionDate: 'N/A',
+    habitableRooms: 3,
+    status: 'Partially Occupied',
+    activeTenanciesCount: 1,
+    totalUnitsCount: 2,
+    address: {
+      streetAddress: '7 Vansittart Street',
+      townCity: 'Grays',
+      countyRegion: 'Essex',
+      postcode: 'RM17 5HX',
+      country: 'United Kingdom',
+    },
+    targetRent: 1350.0,
+    paymentTerm: 'Monthly',
+    purchase: { date: '2019-11-20', price: 275000.0 },
+    selling: { date: '', price: '' },
+    notAvailableForLetting: false,
+    facilities: { parkingSpaces: 1, garage: false, smokeAlarm: 2, coAlarm: 1, houseAlarm: false },
+    notes: 'Semi-detached house with annexe.',
+    image: null,
+  },
+];
+
+/**
+ * Filter properties list based on search term, status, property type, furnishing, availability, etc.
+ */
+export function filterProperties(properties = [], filters = {}) {
+  let result = [...properties];
+
+  // 1. Search Query (name, reference, address, postcode, city)
+  if (filters.search && filters.search.trim()) {
+    const q = filters.search.toLowerCase().trim();
+    result = result.filter(
+      (item) =>
+        (item.reference && item.reference.toLowerCase().includes(q)) ||
+        (item.propertyType && item.propertyType.toLowerCase().includes(q)) ||
+        (item.address && item.address.streetAddress.toLowerCase().includes(q)) ||
+        (item.address && item.address.townCity.toLowerCase().includes(q)) ||
+        (item.address && item.address.postcode.toLowerCase().includes(q))
+    );
+  }
+
+  // 2. Status Filter ("Any", "Occupied", "Vacant")
+  if (filters.status && filters.status !== 'Any') {
+    result = result.filter((item) => item.status === filters.status);
+  }
+
+  // 3. Property Type Filter ("All", "House", "Flat", "Shop", etc.)
+  if (filters.propertyType && filters.propertyType !== 'All') {
+    result = result.filter((item) => item.propertyType === filters.propertyType);
+  }
+
+  // 4. Advanced Filters
+  if (filters.furnishing && filters.furnishing !== 'All') {
+    result = result.filter((item) => item.furnishing === filters.furnishing);
+  }
+
+  if (filters.notAvailableOnly) {
+    result = result.filter((item) => item.notAvailableForLetting);
+  }
+
+  if (filters.minTargetRent) {
+    result = result.filter((item) => (item.targetRent || 0) >= Number(filters.minTargetRent));
+  }
+
+  if (filters.maxTargetRent) {
+    result = result.filter((item) => (item.targetRent || 0) <= Number(filters.maxTargetRent));
+  }
+
+  return result;
+}
