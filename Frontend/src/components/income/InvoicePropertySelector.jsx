@@ -32,8 +32,8 @@ export function InvoicePropertySelector({ formData, setFormData, errors }) {
         >
           <option value="">- Select Property -</option>
           {demoPropertiesList.map((prop) => (
-            <option key={prop.id} value={prop.reference}>
-              {prop.reference}
+            <option key={prop.id} value={prop.name || prop.reference}>
+              {prop.name || prop.reference}
             </option>
           ))}
         </select>

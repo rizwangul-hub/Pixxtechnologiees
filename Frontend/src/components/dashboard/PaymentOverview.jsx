@@ -229,10 +229,10 @@ export function PaymentOverview() {
                         Pending
                       </span>
                     )}
-                    {item.status === 'Paid' && (
+                    {(item.status === 'Paid' || item.status === 'Received') && (
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-50 text-[#00a36f] border border-emerald-200">
                         <CheckCircle2 className="w-3 h-3 text-[#00a36f]" />
-                        Paid
+                        Received
                       </span>
                     )}
                   </td>

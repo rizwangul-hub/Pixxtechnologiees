@@ -1,0 +1,19 @@
+# Environment Variables (CRITICAL: Never commit secrets to GitHub)
+.env
+.env.local
+.env.production
+*.env
+
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

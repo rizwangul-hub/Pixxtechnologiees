@@ -79,7 +79,6 @@ export function PropertyFormAddress({ formData, setFormData }) {
           <option value="United Kingdom">United Kingdom</option>
           <option value="Ireland">Ireland</option>
           <option value="United States">United States</option>
-          <option value="Pakistan">Pakistan</option>
           <option value="Other">Other</option>
         </select>
       </div>

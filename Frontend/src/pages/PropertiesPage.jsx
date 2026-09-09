@@ -1,155 +1,244 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
-import { Link } from 'react-router-dom';
-import { Plus, Download, Building, Home } from 'lucide-react';
-import { PropertyFilters } from '../components/properties/PropertyFilters';
-import { PropertyTable } from '../components/properties/PropertyTable';
-import { PropertyPagination } from '../components/properties/PropertyPagination';
-import { demoPropertiesList, filterProperties } from '../data/propertiesData';
+import { Plus, Download, Search, Eye, Edit, Trash2, Building2, MapPin, UserCheck } from 'lucide-react';
+import {
+  getSavedProperties,
+  deleteProperty,
+  getPropertyMetrics,
+  exportPropertiesToFile,
+} from '../data/propertiesData';
+import { fetchPropertiesFromAPI } from '../services/apiData';
+import { downloadFileAPI } from '../services/api';
 
 export function PropertiesPage() {
-  const [properties, setProperties] = useState(() => {
-    // Combine demo list with any newly created properties stored in localStorage
-    const saved = localStorage.getItem('landlordvision_properties');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return [...parsed, ...demoPropertiesList];
-      } catch (e) {
-        return demoPropertiesList;
+  const navigate = useNavigate();
+
+  const [properties, setProperties] = useState(() => getSavedProperties());
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const loadProperties = async () => {
+    try {
+      const apiProps = await fetchPropertiesFromAPI();
+      if (apiProps && Array.isArray(apiProps)) {
+        setProperties(apiProps);
       }
+    } catch (e) {
+      console.warn('[Properties Page API Notice]', e.message);
     }
-    return demoPropertiesList;
-  });
+  };
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  useEffect(() => {
+    loadProperties();
+  }, []);
 
-  // Filter State
-  const [filters, setFilters] = useState({
-    search: '',
-    status: 'Any',
-    propertyType: 'All',
-    furnishing: 'All',
-    minTargetRent: '',
-    maxTargetRent: '',
-  });
-
-  // Calculate filtered properties
-  const filteredData = useMemo(() => {
-    return filterProperties(properties, filters);
-  }, [properties, filters]);
-
-  // Pagination calculation
-  const totalRecords = filteredData.length;
-  const totalPages = Math.ceil(totalRecords / pageSize) || 1;
-  const currentRecords = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredData.slice(start, start + pageSize);
-  }, [filteredData, currentPage, pageSize]);
-
-  // Handlers
-  const handleClearFilters = () => {
-    setFilters({
-      search: '',
-      status: 'Any',
-      propertyType: 'All',
-      furnishing: 'All',
-      minTargetRent: '',
-      maxTargetRent: '',
+  const filteredProperties = useMemo(() => {
+    if (!searchTerm || !searchTerm.trim()) return properties;
+    const q = searchTerm.toLowerCase().trim();
+    return properties.filter((p) => {
+      const name = p.name || p.propertyName || '';
+      const address = p.address || '';
+      const city = p.city || '';
+      const area = p.area || '';
+      const type = p.type || '';
+      const landlord = p.landlordId?.fullName || p.landlordName || '';
+      return (
+        name.toLowerCase().includes(q) ||
+        address.toLowerCase().includes(q) ||
+        city.toLowerCase().includes(q) ||
+        area.toLowerCase().includes(q) ||
+        type.toLowerCase().includes(q) ||
+        landlord.toLowerCase().includes(q)
+      );
     });
-    setCurrentPage(1);
+  }, [properties, searchTerm]);
+
+  const handleDelete = (id, name) => {
+    if (window.confirm(`Are you sure you want to delete "${name}"? All associated units will also be deleted.`)) {
+      const updated = deleteProperty(id);
+      setProperties(updated);
+    }
   };
 
-  const handleSearchSubmit = () => {
-    setCurrentPage(1);
-  };
-
-  const handleExportClick = () => {
-    alert(`Exporting ${totalRecords} property records to Excel file...`);
+  const handleExport = async (format) => {
+    try {
+      const endpoint = format === 'csv' ? '/export/properties' : '/export/properties/excel';
+      const ext = format === 'csv' ? 'csv' : 'xlsx';
+      await downloadFileAPI(endpoint, `Properties_Export_${Date.now()}.${ext}`);
+    } catch (e) {
+      exportPropertiesToFile(filteredProperties, format);
+    }
   };
 
   return (
     <AppLayout>
-      <div className="space-y-6 pb-12 text-left">
-        {/* 1. PAGE HEADER */}
+      <div className="space-y-6 text-left pb-12">
+        {/* PAGE HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              Properties
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <span>Properties</span>
+              <Building2 className="w-6 h-6 text-[#04A26F]" />
             </h1>
             <p className="text-xs sm:text-sm font-medium text-slate-500 mt-1">
-              Manage your real estate portfolio, residential units, shops, and commercial buildings.
+              Manage your commercial, residential, and mixed property assets and units.
             </p>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <Link
+              to="/properties/create"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-extrabold text-white bg-[#04A26F] hover:bg-[#038b5e] active:bg-[#02754e] rounded-lg transition-all cursor-pointer shadow-xs focus:ring-2 focus:ring-[#04A26F]"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Add Property</span>
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => handleExport('xlsx')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-extrabold text-white bg-[#04A26F] hover:bg-[#038b5e] rounded-lg transition-all cursor-pointer shadow-xs"
+              title="Export to Excel"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Excel</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleExport('csv')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-extrabold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-all cursor-pointer shadow-2xs"
+              title="Export to CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>CSV</span>
+            </button>
           </div>
         </div>
 
-        {/* 2. FILTER AREA */}
-        <PropertyFilters
-          filters={filters}
-          setFilters={setFilters}
-          onSearch={handleSearchSubmit}
-          onClear={handleClearFilters}
-        />
-
-        {/* 3. ACTION BUTTONS ROW */}
-        <div className="flex flex-wrap items-center justify-end gap-2.5">
-          <Link
-            to="/properties/create"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-extrabold text-white bg-[#00a36f] hover:bg-[#008f61] active:bg-[#007a53] transition-all cursor-pointer shadow-xs focus:ring-2 focus:ring-[#00a36f]"
-          >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Add Property</span>
-          </Link>
-
-          <button
-            type="button"
-            onClick={handleExportClick}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-extrabold text-white bg-[#00a36f] hover:bg-[#008f61] active:bg-[#007a53] transition-all cursor-pointer shadow-xs focus:ring-2 focus:ring-[#00a36f]"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export to Excel</span>
-          </button>
+        {/* SEARCH BAR */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="relative max-w-md">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              placeholder="Search by property name or address..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F]"
+            />
+          </div>
         </div>
 
-        {/* 4. PROPERTY TABLE & PAGINATION CONTAINER */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-          {filteredData.length > 0 ? (
-            <>
-              <PropertyTable properties={currentRecords} />
+        {/* PROPERTIES TABLE */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-700 border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-extrabold uppercase tracking-wider text-[11px]">
+                  <th className="py-3 px-4">Property Name</th>
+                  <th className="py-3 px-4">Landlord</th>
+                  <th className="py-3 px-4">Type</th>
+                  <th className="py-3 px-4">Address</th>
+                  <th className="py-3 px-4 text-center">Total Units</th>
+                  <th className="py-3 px-4 text-center">Occupied</th>
+                  <th className="py-3 px-4 text-center">Available</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredProperties.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-slate-400 font-medium">
+                      No properties found matching your search.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredProperties.map((p) => {
+                    const pid = p._id || p.id;
+                    const propName = p.name || p.propertyName;
+                    const landlordObj = p.landlordId || {};
+                    const landlordName = landlordObj.fullName || p.landlordName || '—';
+                    const metrics = getPropertyMetrics(pid);
 
-              {/* PAGINATION */}
-              <PropertyPagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                pageSize={pageSize}
-                totalRecords={totalRecords}
-                onPageChange={(page) => setCurrentPage(page)}
-                onPageSizeChange={(size) => {
-                  setPageSize(size);
-                  setCurrentPage(1);
-                }}
-              />
-            </>
-          ) : (
-            /* EMPTY STATE */
-            <div className="py-12 px-4 text-center space-y-3 bg-slate-50/60 rounded-xl border border-dashed border-slate-200">
-              <Building className="w-10 h-10 text-slate-400 mx-auto" />
-              <div className="space-y-1">
-                <p className="text-sm font-extrabold text-slate-800">No properties found</p>
-                <p className="text-xs font-medium text-slate-500">
-                  Add your first property to get started.
-                </p>
-              </div>
-              <Link
-                to="/properties/create"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-[#00a36f] hover:bg-[#008f61] transition-all cursor-pointer shadow-xs"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Property</span>
-              </Link>
-            </div>
-          )}
+                    return (
+                      <tr key={pid} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3.5 px-4 font-extrabold text-slate-900">
+                          <Link to={`/properties/${pid}`} className="hover:text-[#04A26F] transition-colors">
+                            {propName}
+                          </Link>
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-[#04A26F]">
+                          {landlordObj._id ? (
+                            <Link to={`/landlords/${landlordObj._id}`} className="hover:underline flex items-center gap-1">
+                              <UserCheck className="w-3.5 h-3.5 text-[#04A26F] shrink-0" />
+                              <span>{landlordName}</span>
+                            </Link>
+                          ) : (
+                            <span>{landlordName}</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 font-semibold text-slate-600">
+                          <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[11px]">
+                            {p.type}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-slate-600">
+                          <div className="flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>{[p.address, p.city].filter(Boolean).join(', ') || '-'}</span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-center font-extrabold text-slate-900">
+                          {metrics.totalUnits}
+                        </td>
+                        <td className="py-3.5 px-4 text-center font-bold text-blue-700">
+                          {metrics.occupiedUnits}
+                        </td>
+                        <td className="py-3.5 px-4 text-center font-bold text-emerald-700">
+                          {metrics.availableUnits}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            {p.status || 'Active'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/properties/${p.id}`)}
+                              className="px-2.5 py-1 text-xs font-bold text-[#04A26F] bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors cursor-pointer inline-flex items-center gap-1 border border-emerald-200/80"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>View</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/properties/${p.id}/edit`)}
+                              className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                              title="Edit Property"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(p.id, p.name)}
+                              className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+                              title="Delete Property"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </AppLayout>

@@ -1,104 +1,59 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { LayoutDashboard, Building2, Users, Wallet, FileText, X } from 'lucide-react';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Building2, Users, Wallet, FileText, Settings, LogOut, X, UserCheck, Briefcase, Landmark } from 'lucide-react';
 import { SidebarItem } from './SidebarItem';
-import { PortfolioSelector } from './PortfolioSelector';
+import { PixxLogo } from '../common/PixxLogo';
+import { useAuth } from '../../context/AuthContext';
 
 export function Sidebar({ isMobileMenuOpen, setIsMobileMenuOpen }) {
-  const location = useLocation();
+  const { logout } = useAuth();
+  const navigate = useNavigate();
 
-  // Accordion state: "property" | "tenant" | null
-  const [activeManager, setActiveManager] = useState(null);
-
-  // Auto-expand accordion based on active URL route
-  useEffect(() => {
-    const path = location.pathname;
-    if (
-      path.startsWith('/properties') ||
-      path.startsWith('/expenses') ||
-      path.startsWith('/income') ||
-      path.startsWith('/payments') ||
-      path.startsWith('/suppliers')
-    ) {
-      setActiveManager('property');
-    } else if (
-      path.startsWith('/tenant-manager') ||
-      path.startsWith('/tenants') ||
-      path.startsWith('/tenancies')
-    ) {
-      setActiveManager('tenant');
-    }
-  }, [location.pathname]);
-
-  const handleToggleManager = (key) => {
-    setActiveManager((prevKey) => (prevKey === key ? null : key));
+  const handleSignOut = () => {
+    logout();
+    navigate('/login');
   };
 
   const menuItems = [
-    {
-      itemKey: 'dashboard',
-      name: 'Portfolio Dashboard',
-      path: '/dashboard',
-      icon: LayoutDashboard,
-    },
-    {
-      itemKey: 'property',
-      name: 'Property Manager',
-      path: '/properties',
-      icon: Building2,
-      subItems: [
-        { name: 'Properties', path: '/properties' },
-        { name: 'Expenses', path: '/expenses' },
-        { name: 'Income', path: '/income' },
-        { name: 'Payments', path: '/payments' },
-      ],
-    },
-    {
-      itemKey: 'tenant',
-      name: 'Tenant Manager',
-      path: '/tenant-manager/tenants',
-      icon: Users,
-      subItems: [
-        { name: 'Tenants', path: '/tenant-manager/tenants' },
-        { name: 'Tenancies', path: '/tenant-manager/tenancies' },
-        { name: 'Payment Schedules', path: '/tenant-manager/payment-schedules' },
-        { name: 'Invoices', path: '/tenant-manager/invoices' },
-        { name: 'Agents Fees', path: '/tenant-manager/agents-fees' },
-        { name: 'Payments', path: '/tenant-manager/payments' },
-      ],
-    },
-    {
-      itemKey: 'account',
-      name: 'Account Manager',
-      path: '/accounts',
-      icon: Wallet,
-    },
-    {
-      itemKey: 'reports',
-      name: 'Reports',
-      path: '/reports',
-      icon: FileText,
-    },
+    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { name: 'Landlords', path: '/landlords', icon: UserCheck },
+    { name: 'Agents', path: '/agents', icon: Briefcase },
+    { name: 'Properties', path: '/properties', icon: Building2 },
+    { name: 'Tenants', path: '/tenants', icon: Users },
+    { name: 'Payments', path: '/payments', icon: Wallet },
+    { name: 'Mortgages', path: '/mortgages', icon: Landmark },
+    { name: 'Reports', path: '/reports', icon: FileText },
+    { name: 'Settings', path: '/settings', icon: Settings },
   ];
 
   return (
     <>
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex flex-col w-60 shrink-0 bg-white border-r border-slate-200/80 min-h-[calc(100vh-7rem)] p-4 space-y-6">
-        <div className="space-y-1">
-          <p className="px-3 text-[11px] font-extrabold uppercase tracking-wider text-slate-400 pb-2 text-left">
+      <aside className="hidden md:flex flex-col w-60 shrink-0 bg-white border-r border-slate-200/80 min-h-[calc(100vh-4rem)] p-4 justify-between">
+        <div className="space-y-4 text-left">
+          <p className="px-3 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
             Main Management
           </p>
+
           <nav className="space-y-1.5">
             {menuItems.map((item) => (
-              <SidebarItem
-                key={item.itemKey || item.name}
-                {...item}
-                activeManager={activeManager}
-                onToggleManager={handleToggleManager}
-              />
+              <SidebarItem key={item.name} {...item} />
             ))}
           </nav>
+        </div>
+
+        {/* BOTTOM LOGOUT BUTTON */}
+        <div className="pt-4 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="w-full h-11 px-3.5 rounded-xl text-xs font-bold text-slate-600 hover:text-red-600 hover:bg-red-50 transition-all flex items-center gap-3 cursor-pointer"
+          >
+            <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+              <LogOut className="w-4 h-4" />
+            </div>
+            <span>Logout</span>
+          </button>
         </div>
       </aside>
 
@@ -112,10 +67,10 @@ export function Sidebar({ isMobileMenuOpen, setIsMobileMenuOpen }) {
             className="w-72 max-w-[80vw] h-full bg-white shadow-2xl p-5 flex flex-col justify-between overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="space-y-5 text-left">
+            <div className="space-y-6 text-left">
               {/* Header inside Mobile Drawer */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <span className="text-sm font-extrabold text-slate-900">LandlordVision Menu</span>
+                <PixxLogo variant="light" />
                 <button
                   type="button"
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -125,36 +80,42 @@ export function Sidebar({ isMobileMenuOpen, setIsMobileMenuOpen }) {
                 </button>
               </div>
 
-              {/* Portfolio Selector in Drawer */}
-              <div className="space-y-1 pt-1">
-                <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-                  Current Portfolio
-                </p>
-                <PortfolioSelector />
-              </div>
-
               {/* Navigation Items */}
-              <div className="space-y-1 pt-3">
+              <div className="space-y-1">
                 <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 pb-1">
                   Navigation
                 </p>
                 <nav className="space-y-1.5">
                   {menuItems.map((item) => (
                     <SidebarItem
-                      key={item.itemKey || item.name}
+                      key={item.name}
                       {...item}
-                      activeManager={activeManager}
-                      onToggleManager={handleToggleManager}
-                      onMobileClick={() => setIsMobileMenuOpen(false)}
+                      onClick={() => setIsMobileMenuOpen(false)}
                     />
                   ))}
                 </nav>
               </div>
             </div>
 
-            {/* Bottom info */}
-            <div className="pt-6 border-t border-slate-100 text-xs text-slate-400 text-center">
-              LandlordVision SaaS &copy; {new Date().getFullYear()}
+            {/* Bottom Logout in Drawer */}
+            <div className="pt-4 border-t border-slate-100 space-y-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  handleSignOut();
+                }}
+                className="w-full h-11 px-3.5 rounded-xl text-xs font-bold text-slate-600 hover:text-red-600 hover:bg-red-50 transition-all flex items-center gap-3 cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                  <LogOut className="w-4 h-4" />
+                </div>
+                <span>Logout</span>
+              </button>
+
+              <div className="text-[11px] font-semibold text-slate-400 text-center">
+                Pixx Technologies &copy; {new Date().getFullYear()}
+              </div>
             </div>
           </div>
         </div>

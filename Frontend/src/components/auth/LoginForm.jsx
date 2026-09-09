@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Mail, CheckCircle2, AlertCircle, KeyRound, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Mail, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
 import { AuthInput } from './AuthInput';
 import { PasswordInput } from './PasswordInput';
 import { AuthButton } from './AuthButton';
 import { useAuth } from '../../context/AuthContext';
 
-export function LoginForm({ isPasskeyMode = false, onTogglePasskeyMode, onOpenPasskeyModal }) {
+export function LoginForm() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [systemVersion, setSystemVersion] = useState('current'); // 'current' | 'legacy'
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -21,7 +21,6 @@ export function LoginForm({ isPasskeyMode = false, onTogglePasskeyMode, onOpenPa
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
 
-  // Email format regex
   const validateEmail = (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   };
@@ -60,54 +59,41 @@ export function LoginForm({ isPasskeyMode = false, onTogglePasskeyMode, onOpenPa
     setErrors((prev) => ({ ...prev, [name]: errorMsg }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setStatusMessage(null);
-
-    const newTouched = { email: true, password: true };
-    setTouched(newTouched);
 
     const emailError = validateField('email', formData.email);
     const passwordError = validateField('password', formData.password);
 
-    const newErrors = {
-      email: emailError,
-      password: passwordError,
-    };
-
-    setErrors(newErrors);
+    setTouched({ email: true, password: true });
+    setErrors({ email: emailError, password: passwordError });
 
     if (emailError || passwordError) {
       return;
     }
 
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      login({
-        name: 'Old Street Holdings Ltd',
-        email: formData.email || 'ftaccountants@hotmail.com',
-        company: 'LandlordVision Property Management',
-        avatarUrl: null,
-      });
+
+    try {
+      await login(formData.email, formData.password);
+
       setStatusMessage({
         type: 'success',
-        text: isPasskeyMode
-          ? 'Logging in to Landlord Vision...'
-          : `Logging in to ${systemVersion === 'legacy' ? 'Legacy' : 'Current'} Landlord Vision...`,
+        text: 'Authenticated! Accessing PixxTechnologies Internal Portal...',
       });
+
       setTimeout(() => {
         navigate('/dashboard');
-      }, 600);
-    }, 800);
-  };
-
-  const handlePasskeyClick = () => {
-    if (!isPasskeyMode && onTogglePasskeyMode) {
-      onTogglePasskeyMode(true);
-    }
-    if (onOpenPasskeyModal) {
-      onOpenPasskeyModal();
+      }, 400);
+    } catch (err) {
+      console.error('[Login Form Error]', err.message);
+      setStatusMessage({
+        type: 'error',
+        text: err.message || 'Invalid email or password. Please try again.',
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -115,14 +101,14 @@ export function LoginForm({ isPasskeyMode = false, onTogglePasskeyMode, onOpenPa
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full text-left" noValidate>
       {statusMessage && (
         <div
-          className={`p-3.5 rounded-lg text-xs font-medium flex items-center gap-2.5 ${
+          className={`p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 ${
             statusMessage.type === 'success'
               ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
               : 'bg-red-50 text-red-800 border border-red-200'
           }`}
         >
           {statusMessage.type === 'success' ? (
-            <CheckCircle2 className="w-4 h-4 text-[#00a36f] shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-[#04A26F] shrink-0" />
           ) : (
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
           )}
@@ -130,69 +116,18 @@ export function LoginForm({ isPasskeyMode = false, onTogglePasskeyMode, onOpenPa
         </div>
       )}
 
-      {/* SYSTEM VERSION SELECTOR PILLS - Only rendered when NOT in passkey mode */}
-      {!isPasskeyMode && (
-        <div className="space-y-3 pb-1">
-          {/* 1. Legacy Landlord Vision Option */}
-          <button
-            type="button"
-            onClick={() => setSystemVersion('legacy')}
-            className={`
-              w-full h-14 rounded-full px-6 flex flex-col items-center justify-center transition-all duration-200 cursor-pointer
-              ${
-                systemVersion === 'legacy'
-                  ? 'bg-[#00a36f] text-white shadow-md shadow-[#00a36f]/20'
-                  : 'bg-white border-2 border-[#00a36f] text-[#00a36f] hover:bg-emerald-50/60'
-              }
-            `}
-          >
-            <span className="text-sm font-extrabold leading-tight">Legacy Landlord Vision</span>
-            <span
-              className={`text-[11px] font-medium ${
-                systemVersion === 'legacy' ? 'text-emerald-100' : 'text-[#00a36f]/80'
-              }`}
-            >
-              (signed up before Sept 2023)
-            </span>
-          </button>
-
-          {/* 2. Current Landlord Vision Option */}
-          <button
-            type="button"
-            onClick={() => setSystemVersion('current')}
-            className={`
-              w-full h-14 rounded-full px-6 flex flex-col items-center justify-center transition-all duration-200 cursor-pointer
-              ${
-                systemVersion === 'current'
-                  ? 'bg-[#00a36f] text-white shadow-md shadow-[#00a36f]/20'
-                  : 'bg-white border-2 border-[#00a36f] text-[#00a36f] hover:bg-emerald-50/60'
-              }
-            `}
-          >
-            <span className="text-sm font-extrabold leading-tight">Current Landlord Vision</span>
-            <span
-              className={`text-[11px] font-medium ${
-                systemVersion === 'current' ? 'text-emerald-100' : 'text-[#00a36f]/80'
-              }`}
-            >
-              (signed up after Sept 2023)
-            </span>
-          </button>
-        </div>
-      )}
-
       {/* Email Field */}
       <AuthInput
         id="email"
-        label={isPasskeyMode ? '' : 'Email address'}
+        label="Email Address"
         type="email"
-        placeholder={isPasskeyMode ? 'Email *' : 'Enter email address *'}
+        placeholder="Enter manager email *"
         value={formData.email}
         onChange={handleChange}
         onBlur={handleBlur}
         error={errors.email}
         required
-        icon={isPasskeyMode ? null : Mail}
+        icon={Mail}
         autoComplete="email"
         disabled={isLoading}
       />
@@ -201,8 +136,8 @@ export function LoginForm({ isPasskeyMode = false, onTogglePasskeyMode, onOpenPa
       <div className="flex flex-col gap-1">
         <PasswordInput
           id="password"
-          label={isPasskeyMode ? '' : 'Password'}
-          placeholder={isPasskeyMode ? 'Password *' : 'Enter password *'}
+          label="Password"
+          placeholder="Enter password *"
           value={formData.password}
           onChange={handleChange}
           onBlur={handleBlur}
@@ -212,7 +147,7 @@ export function LoginForm({ isPasskeyMode = false, onTogglePasskeyMode, onOpenPa
           disabled={isLoading}
         />
 
-        {/* Remember me & Forgot password row */}
+        {/* Remember Me Row */}
         <div className="flex items-center justify-between pt-1.5">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -221,79 +156,24 @@ export function LoginForm({ isPasskeyMode = false, onTogglePasskeyMode, onOpenPa
               checked={formData.rememberMe}
               onChange={handleChange}
               disabled={isLoading}
-              className="w-4 h-4 rounded border-gray-300 text-[#00a36f] focus:ring-[#00a36f] accent-[#00a36f] cursor-pointer"
+              className="w-4 h-4 rounded border-slate-300 text-[#04A26F] focus:ring-[#04A26F] accent-[#04A26F] cursor-pointer"
             />
-            <span className="text-xs font-medium text-gray-600">Remember me</span>
+            <span className="text-xs font-semibold text-slate-600">Remember me</span>
           </label>
-
-          <Link
-            to="/forgot-password"
-            onClick={(e) => {
-              e.preventDefault();
-              alert('Forgot password flow can be connected once backend reset endpoints are ready.');
-            }}
-            className="text-xs font-bold text-gray-800 hover:text-[#00a36f] transition-colors"
-          >
-            {isPasskeyMode ? 'Forgot your password?' : 'Forgot Password?'}
-          </Link>
         </div>
       </div>
 
       {/* Primary Submit Button: LOG IN */}
-      <div className="pt-2">
+      <div className="pt-3">
         <AuthButton
           isLoading={isLoading}
           disabled={isLoading}
-          className="rounded-full tracking-wide uppercase font-extrabold text-base h-12"
+          className="rounded-xl tracking-wide uppercase font-extrabold text-sm h-12 bg-[#04A26F] hover:bg-[#038b5e] shadow-md"
         >
+          <Lock className="w-4 h-4 mr-2" />
           LOG IN
         </AuthButton>
       </div>
-
-      {/* Divider: OR */}
-      <div className="relative flex items-center justify-center my-1">
-        <div className="w-full border-t border-gray-200" />
-        <span className="absolute bg-white px-3 text-xs font-bold text-gray-400">
-          OR
-        </span>
-      </div>
-
-      {/* Secondary Button: LOG IN WITH PASSKEY */}
-      <div>
-        <button
-          type="button"
-          onClick={handlePasskeyClick}
-          disabled={isLoading}
-          className="w-full h-12 rounded-full border-2 border-[#00a36f] text-[#00a36f] hover:bg-emerald-50 font-extrabold text-sm uppercase tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer outline-none focus:ring-2 focus:ring-[#00a36f] focus:ring-offset-2"
-        >
-          <KeyRound className="w-4 h-4 text-[#00a36f]" />
-          <span>LOG IN WITH PASSKEY</span>
-        </button>
-      </div>
-
-      {/* Bottom link text in Passkey Mode matching media_1788781561143.png */}
-      {isPasskeyMode ? (
-        <div className="pt-4 text-center space-y-2">
-          <p className="text-xs font-medium text-gray-600">
-            Don't have an account?{' '}
-            <Link
-              to="/register"
-              className="font-bold text-[#00a36f] hover:text-[#008f61] underline"
-            >
-              Click to register
-            </Link>
-          </p>
-
-          <button
-            type="button"
-            onClick={() => onTogglePasskeyMode && onTogglePasskeyMode(false)}
-            className="text-[11px] font-semibold text-gray-400 hover:text-gray-700 flex items-center justify-center gap-1 mx-auto transition-colors pt-1"
-          >
-            <ArrowLeft className="w-3 h-3" />
-            <span>Switch to standard login with system version selection</span>
-          </button>
-        </div>
-      ) : null}
     </form>
   );
 }

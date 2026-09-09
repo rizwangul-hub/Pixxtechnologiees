@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authService } from '../services/api';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('landlordvision_user');
+    const saved = localStorage.getItem('pixx_user') || localStorage.getItem('landlordvision_user');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -12,31 +13,61 @@ export function AuthProvider({ children }) {
         return null;
       }
     }
-    return null; // Unauthenticated by default so site opens to Login/Registration
+    return null;
   });
 
-  const [selectedPortfolio, setSelectedPortfolio] = useState('My Portfolio');
+  const [token, setToken] = useState(() => {
+    return localStorage.getItem('pixx_auth_token') || null;
+  });
 
-  const portfolios = [
-    { id: 'my-portfolio', name: 'My Portfolio', count: 12 },
-    { id: 'residential', name: 'Residential Portfolio', count: 8 },
-    { id: 'commercial', name: 'Commercial Portfolio', count: 4 },
-    { id: 'development', name: 'Development Portfolio', count: 2 },
-  ];
+  const [loading, setLoading] = useState(true);
 
-  const login = (userData) => {
-    const loggedInUser = userData || {
-      name: 'Old Street Holdings Ltd',
-      email: 'ftaccountants@hotmail.com',
-      company: 'LandlordVision Property Management',
-      avatarUrl: null,
-    };
-    setUser(loggedInUser);
-    localStorage.setItem('landlordvision_user', JSON.stringify(loggedInUser));
+  // Validate session on mount if token exists
+  useEffect(() => {
+    async function initAuth() {
+      const storedToken = localStorage.getItem('pixx_auth_token');
+      if (storedToken) {
+        try {
+          const res = await authService.getMe();
+          if (res.success && res.manager) {
+            setUser(res.manager);
+            localStorage.setItem('pixx_user', JSON.stringify(res.manager));
+          } else {
+            logout();
+          }
+        } catch (err) {
+          console.warn('[Auth Session Expired or Server Unreachable]', err.message);
+          // If server returns 401, clear token
+          if (err.status === 401) {
+            logout();
+          }
+        }
+      }
+      setLoading(false);
+    }
+
+    initAuth();
+  }, []);
+
+  const login = async (email, password) => {
+    const res = await authService.login(email, password);
+    if (res.success && res.token && res.manager) {
+      setToken(res.token);
+      setUser(res.manager);
+      localStorage.setItem('pixx_auth_token', res.token);
+      localStorage.setItem('pixx_user', JSON.stringify(res.manager));
+      return res.manager;
+    } else {
+      throw new Error(res.message || 'Login failed');
+    }
   };
 
   const logout = () => {
+    authService.logout();
+    setToken(null);
     setUser(null);
+    localStorage.removeItem('pixx_auth_token');
+    localStorage.removeItem('pixx_user');
     localStorage.removeItem('landlordvision_user');
   };
 
@@ -45,12 +76,11 @@ export function AuthProvider({ children }) {
       value={{
         user,
         setUser,
-        selectedPortfolio,
-        setSelectedPortfolio,
-        portfolios,
+        token,
         login,
         logout,
-        isAuthenticated: Boolean(user),
+        isAuthenticated: Boolean(user && token),
+        loading,
       }}
     >
       {children}

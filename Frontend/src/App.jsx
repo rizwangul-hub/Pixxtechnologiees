@@ -2,14 +2,12 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
 import { PrivacyNoticePage } from './pages/PrivacyNoticePage';
 import { TermsPage } from './pages/TermsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { PropertiesPage } from './pages/PropertiesPage';
 import { CreatePropertyPage } from './pages/CreatePropertyPage';
 import { PropertyDetailPage } from './pages/PropertyDetailPage';
-import { TenantsPage } from './pages/TenantsPage';
 import { AccountsPage } from './pages/AccountsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { PortfoliosPage } from './pages/PortfoliosPage';
@@ -35,16 +33,30 @@ import { AddIncomePage } from './pages/AddIncomePage';
 import { PaymentsPage } from './pages/PaymentsPage';
 import { AddExpensePaymentPage } from './pages/AddExpensePaymentPage';
 import { AddIncomePaymentPage } from './pages/AddIncomePaymentPage';
+import CustomersPage from './pages/CustomersPage';
+import CreateCustomerPage from './pages/CreateCustomerPage';
+import CustomerDetailPage from './pages/CustomerDetailPage';
+import PaymentSchedulesPage from './pages/PaymentSchedulesPage';
 import { TenantManagerTenantsPage } from './pages/tenant-manager/TenantManagerTenantsPage';
+import { AddTenantPage } from './pages/tenant-manager/AddTenantPage';
 import { TenanciesPage } from './pages/tenant-manager/TenanciesPage';
-import { PaymentSchedulesPage } from './pages/tenant-manager/PaymentSchedulesPage';
 import { TenantInvoicesPage } from './pages/tenant-manager/TenantInvoicesPage';
 import { AgentsFeesPage } from './pages/tenant-manager/AgentsFeesPage';
 import { TenantPaymentsPage } from './pages/tenant-manager/TenantPaymentsPage';
+import LandlordsPage from './pages/LandlordsPage';
+import CreateLandlordPage from './pages/CreateLandlordPage';
+import LandlordDetailPage from './pages/LandlordDetailPage';
+import AgentsPage from './pages/AgentsPage';
+import CreateAgentPage from './pages/CreateAgentPage';
+import AgentDetailPage from './pages/AgentDetailPage';
+import AgentPaymentsPage from './pages/AgentPaymentsPage';
+import AgentExpensesPage from './pages/AgentExpensesPage';
+import { MortgagesPage } from './pages/MortgagesPage';
+import { MortgageDetailPage } from './pages/MortgageDetailPage';
 
 /**
  * ProtectedRoute Wrapper
- * Redirects unauthenticated users to /login page first.
+ * Redirects unauthenticated users to /login.
  */
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -54,18 +66,40 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+/**
+ * PublicRoute Wrapper
+ * Redirects already authenticated users to /dashboard.
+ */
+function PublicRoute({ children }) {
+  const { isAuthenticated } = useAuth();
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+}
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public Authentication & Compliance Routes */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          {/* Public Authentication Route */}
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <LoginPage />
+              </PublicRoute>
+            }
+          />
+          {/* Redirect /register to /login */}
+          <Route path="/register" element={<Navigate to="/login" replace />} />
+
+          {/* Compliance Info Routes */}
           <Route path="/privacy-notice" element={<PrivacyNoticePage />} />
           <Route path="/terms-and-conditions" element={<TermsPage />} />
 
-          {/* Main Authenticated Application Routes (Protected) */}
+          {/* Core Authenticated Management Routes */}
           <Route
             path="/dashboard"
             element={
@@ -74,8 +108,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-
-          {/* Property Manager Routes (Protected) */}
           <Route
             path="/properties"
             element={
@@ -97,6 +129,216 @@ function App() {
             element={
               <ProtectedRoute>
                 <PropertyDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/properties/:propertyId/edit"
+            element={
+              <ProtectedRoute>
+                <CreatePropertyPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Mortgage Management Routes */}
+          <Route
+            path="/mortgages"
+            element={
+              <ProtectedRoute>
+                <MortgagesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/mortgages/:mortgageId"
+            element={
+              <ProtectedRoute>
+                <MortgageDetailPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Landlord Management Routes */}
+          <Route
+            path="/landlords"
+            element={
+              <ProtectedRoute>
+                <LandlordsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/landlords/create"
+            element={
+              <ProtectedRoute>
+                <CreateLandlordPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/landlords/:landlordId"
+            element={
+              <ProtectedRoute>
+                <LandlordDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/landlords/:landlordId/edit"
+            element={
+              <ProtectedRoute>
+                <CreateLandlordPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Agent Management Routes */}
+          <Route
+            path="/agents"
+            element={
+              <ProtectedRoute>
+                <AgentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/agents/create"
+            element={
+              <ProtectedRoute>
+                <CreateAgentPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/agents/:agentId"
+            element={
+              <ProtectedRoute>
+                <AgentDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/agents/:agentId/edit"
+            element={
+              <ProtectedRoute>
+                <CreateAgentPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/agents/payments"
+            element={
+              <ProtectedRoute>
+                <AgentPaymentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/agents/expenses"
+            element={
+              <ProtectedRoute>
+                <AgentExpensesPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Tenants & Customers Unit Assignment Routes */}
+          <Route
+            path="/tenants"
+            element={
+              <ProtectedRoute>
+                <CustomersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tenants/create"
+            element={
+              <ProtectedRoute>
+                <CreateCustomerPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tenants/:customerId"
+            element={
+              <ProtectedRoute>
+                <CustomerDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tenants/:customerId/edit"
+            element={
+              <ProtectedRoute>
+                <CreateCustomerPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/customers"
+            element={
+              <ProtectedRoute>
+                <CustomersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/customers/create"
+            element={
+              <ProtectedRoute>
+                <CreateCustomerPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/customers/:customerId"
+            element={
+              <ProtectedRoute>
+                <CustomerDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/customers/:customerId/edit"
+            element={
+              <ProtectedRoute>
+                <CreateCustomerPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payments/schedules"
+            element={
+              <ProtectedRoute>
+                <PaymentSchedulesPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Payments & Expenses Routes */}
+          <Route
+            path="/payments"
+            element={
+              <ProtectedRoute>
+                <PaymentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payments/expenses/create"
+            element={
+              <ProtectedRoute>
+                <AddExpensePaymentPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payments/income/create"
+            element={
+              <ProtectedRoute>
+                <AddIncomePaymentPage />
               </ProtectedRoute>
             }
           />
@@ -172,87 +414,21 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/payments"
-            element={
-              <ProtectedRoute>
-                <PaymentsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/payments/expenses/create"
-            element={
-              <ProtectedRoute>
-                <AddExpensePaymentPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/payments/income/create"
-            element={
-              <ProtectedRoute>
-                <AddIncomePaymentPage />
-              </ProtectedRoute>
-            }
-          />
 
-          {/* Tenant Manager Routes (Protected) */}
+          {/* Reports & Settings */}
           <Route
-            path="/tenant-manager/tenants"
+            path="/reports"
             element={
               <ProtectedRoute>
-                <TenantManagerTenantsPage />
+                <ReportsPage />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/tenant-manager/tenancies"
+            path="/settings"
             element={
               <ProtectedRoute>
-                <TenanciesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/tenant-manager/payment-schedules"
-            element={
-              <ProtectedRoute>
-                <PaymentSchedulesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/tenant-manager/invoices"
-            element={
-              <ProtectedRoute>
-                <TenantInvoicesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/tenant-manager/agents-fees"
-            element={
-              <ProtectedRoute>
-                <AgentsFeesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/tenant-manager/payments"
-            element={
-              <ProtectedRoute>
-                <TenantPaymentsPage />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Management & Auxiliary Routes (Protected) */}
-          <Route
-            path="/tenants"
-            element={
-              <ProtectedRoute>
-                <TenantManagerTenantsPage />
+                <SettingsPage />
               </ProtectedRoute>
             }
           />
@@ -261,14 +437,6 @@ function App() {
             element={
               <ProtectedRoute>
                 <AccountsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/reports"
-            element={
-              <ProtectedRoute>
-                <ReportsPage />
               </ProtectedRoute>
             }
           />
@@ -285,14 +453,6 @@ function App() {
             element={
               <ProtectedRoute>
                 <ContactsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <SettingsPage />
               </ProtectedRoute>
             }
           />
@@ -328,8 +488,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-
-          {/* Payment & Financial Detail Routes (Protected) */}
           <Route
             path="/payments/overdue"
             element={
@@ -338,6 +496,11 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/tenant-manager/tenants" element={<ProtectedRoute><TenantManagerTenantsPage /></ProtectedRoute>} />
+          <Route path="/tenant-manager/tenants/create" element={<ProtectedRoute><AddTenantPage /></ProtectedRoute>} />
+          <Route path="/tenant-manager/tenancies" element={<ProtectedRoute><TenanciesPage /></ProtectedRoute>} />
+          <Route path="/tenant-manager/invoices" element={<ProtectedRoute><TenantInvoicesPage /></ProtectedRoute>} />
+          <Route path="/tenant-manager/payments" element={<ProtectedRoute><TenantPaymentsPage /></ProtectedRoute>} />
           <Route
             path="/expenses/overdue"
             element={
@@ -363,9 +526,9 @@ function App() {
             }
           />
 
-          {/* Default Redirection to Login */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          {/* Default Route Redirection */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

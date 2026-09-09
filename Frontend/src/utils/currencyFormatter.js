@@ -1,10 +1,10 @@
 /**
  * Reusable Currency Formatter Utility
- * Formats numeric values into currency strings (e.g. £188,231.21).
+ * Formats numeric values into UK GBP currency strings (e.g. £1,250.00).
  *
  * @param {number|string} amount - The numeric amount to format.
- * @param {string} [currencyCode='GBP'] - ISO currency code ('GBP', 'USD', 'EUR', 'PKR').
- * @param {string} [locale='en-GB'] - Locale code for formatting rules.
+ * @param {string} [currencyCode='GBP'] - ISO currency code.
+ * @param {string} [locale='en-GB'] - Locale code for UK formatting rules.
  * @returns {string} Formatted currency string.
  */
 export function formatCurrency(amount, currencyCode = 'GBP', locale = 'en-GB') {
@@ -19,6 +19,6 @@ export function formatCurrency(amount, currencyCode = 'GBP', locale = 'en-GB') {
     }).format(numericAmount);
   } catch (error) {
     // Graceful fallback
-    return `£${numericAmount.toFixed(2)}`;
+    return `£${numericAmount.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 }
