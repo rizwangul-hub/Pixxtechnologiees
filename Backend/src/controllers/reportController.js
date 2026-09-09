@@ -221,9 +221,12 @@ const downloadPropertyReportPDF = async (req, res) => {
   try {
     const { propertyId } = req.params;
     const { fromDate, toDate } = req.query;
-    const data = await generatePropertyReportData(propertyId, fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generatePropertyReportData(propertyId, fromDate, toDate);
     const pdfBuffer = await pdfGenerators.generatePropertyReportPDF(data);
-    sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Property_Report_${data.property.name.replace(/\s+/g, '_')}.pdf`);
+    const propName = data.property?.name || 'Property';
+    sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Property_Report_${propName.replace(/\s+/g, '_')}.pdf`);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -233,13 +236,16 @@ const downloadPropertyReportWord = async (req, res) => {
   try {
     const { propertyId } = req.params;
     const { fromDate, toDate } = req.query;
-    const data = await generatePropertyReportData(propertyId, fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generatePropertyReportData(propertyId, fromDate, toDate);
     const wordBuffer = await wordGenerators.generatePropertyReportWord(data);
+    const propName = data.property?.name || 'Property';
     sendDownloadBuffer(
       res,
       wordBuffer,
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      `Property_Report_${data.property.name.replace(/\s+/g, '_')}.docx`
+      `Property_Report_${propName.replace(/\s+/g, '_')}.docx`
     );
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -250,13 +256,16 @@ const downloadPropertyReportExcel = async (req, res) => {
   try {
     const { propertyId } = req.params;
     const { fromDate, toDate } = req.query;
-    const data = await generatePropertyReportData(propertyId, fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generatePropertyReportData(propertyId, fromDate, toDate);
     const excelBuffer = await excelGenerators.generatePropertyExcelWorkbook(data);
+    const propName = data.property?.name || 'Property';
     sendDownloadBuffer(
       res,
       excelBuffer,
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      `Property_Report_${data.property.name.replace(/\s+/g, '_')}.xlsx`
+      `Property_Report_${propName.replace(/\s+/g, '_')}.xlsx`
     );
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -281,9 +290,12 @@ const downloadUnitReportPDF = async (req, res) => {
   try {
     const { unitId } = req.params;
     const { fromDate, toDate } = req.query;
-    const data = await generateUnitReportData(unitId, fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateUnitReportData(unitId, fromDate, toDate);
     const pdfBuffer = await pdfGenerators.generateUnitReportPDF(data);
-    sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Unit_Report_${data.unit.name.replace(/\s+/g, '_')}.pdf`);
+    const uName = data.unit?.name || 'Unit';
+    sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Unit_Report_${uName.replace(/\s+/g, '_')}.pdf`);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -293,13 +305,36 @@ const downloadUnitReportWord = async (req, res) => {
   try {
     const { unitId } = req.params;
     const { fromDate, toDate } = req.query;
-    const data = await generateUnitReportData(unitId, fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateUnitReportData(unitId, fromDate, toDate);
     const wordBuffer = await wordGenerators.generateUnitReportWord(data);
+    const uName = data.unit?.name || 'Unit';
     sendDownloadBuffer(
       res,
       wordBuffer,
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      `Unit_Report_${data.unit.name.replace(/\s+/g, '_')}.docx`
+      `Unit_Report_${uName.replace(/\s+/g, '_')}.docx`
+    );
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const downloadUnitReportExcel = async (req, res) => {
+  try {
+    const { unitId } = req.params;
+    const { fromDate, toDate } = req.query;
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateUnitReportData(unitId, fromDate, toDate);
+    const excelBuffer = await excelGenerators.generateUnitExcelWorkbook(data);
+    const uName = data.unit?.name || 'Unit';
+    sendDownloadBuffer(
+      res,
+      excelBuffer,
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      `Unit_Report_${uName.replace(/\s+/g, '_')}.xlsx`
     );
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

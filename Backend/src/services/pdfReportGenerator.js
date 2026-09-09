@@ -1,3 +1,10 @@
+try {
+  require('pdfkit/js/standard-fonts/Helvetica.cjs');
+  require('pdfkit/js/standard-fonts/Helvetica-Bold.cjs');
+  require('pdfkit/js/standard-fonts/Helvetica-Oblique.cjs');
+  require('pdfkit/js/standard-fonts/Helvetica-BoldOblique.cjs');
+} catch (e) {}
+
 const PDFDocument = require('pdfkit');
 const https = require('https');
 const http = require('http');
@@ -9,6 +16,11 @@ if (PDFDocument && PDFDocument.prototype && PDFDocument.prototype.font) {
   const originalFont = PDFDocument.prototype.font;
   PDFDocument.prototype.font = function (src, family, size) {
     try {
+      if (typeof src === 'string' && (src.includes('Helvetica') || src.includes('.cjs'))) {
+        try {
+          return originalFont.call(this, 'Helvetica', family, size);
+        } catch (err) {}
+      }
       return originalFont.call(this, src, family, size);
     } catch (e) {
       console.warn(`[PDFKit Font Patch] Notice loading font '${src}': ${e.message}. Using default.`);

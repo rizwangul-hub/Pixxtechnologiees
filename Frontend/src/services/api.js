@@ -66,13 +66,21 @@ export const authService = {
   },
 };
 
-export async function downloadFileAPI(endpoint, defaultFilename = 'download') {
+export async function downloadFileAPI(endpoint, defaultFilename = 'download', options = {}) {
   const token = localStorage.getItem('pixx_auth_token');
   const headers = {
+    ...(options.body && { 'Content-Type': 'application/json' }),
     ...(token && { Authorization: `Bearer ${token}` }),
+    ...(options.headers || {}),
   };
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, { headers });
+  const fetchOpts = {
+    method: options.method || (options.body ? 'POST' : 'GET'),
+    headers,
+    ...(options.body && { body: typeof options.body === 'string' ? options.body : JSON.stringify(options.body) }),
+  };
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, fetchOpts);
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.message || `Download failed (HTTP ${response.status})`);

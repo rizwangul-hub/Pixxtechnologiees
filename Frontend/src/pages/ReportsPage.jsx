@@ -912,7 +912,12 @@ export function ReportsPage() {
                   type="button"
                   onClick={() => {
                     const info = getDownloadEndpoint(selectedReportType, 'pdf');
-                    if (info) downloadFileAPI(info.url, info.filename).catch((err) => alert(err.message));
+                    if (info) {
+                      downloadFileAPI(info.url, info.filename, {
+                        method: 'POST',
+                        body: { reportData },
+                      }).catch((err) => alert(err.message));
+                    }
                   }}
                   className="inline-flex items-center px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-50 transition shadow-sm cursor-pointer"
                   title="Download PDF Document"
@@ -925,7 +930,12 @@ export function ReportsPage() {
                   type="button"
                   onClick={() => {
                     const info = getDownloadEndpoint(selectedReportType, 'word');
-                    if (info) downloadFileAPI(info.url, info.filename).catch((err) => alert(err.message));
+                    if (info) {
+                      downloadFileAPI(info.url, info.filename, {
+                        method: 'POST',
+                        body: { reportData },
+                      }).catch((err) => alert(err.message));
+                    }
                   }}
                   className="inline-flex items-center px-3.5 py-2 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-50 transition shadow-sm cursor-pointer"
                   title="Download Word Document (.docx)"
@@ -938,7 +948,12 @@ export function ReportsPage() {
                   type="button"
                   onClick={() => {
                     const info = getDownloadEndpoint(selectedReportType, 'excel');
-                    if (info) downloadFileAPI(info.url, info.filename).catch((err) => alert(err.message));
+                    if (info) {
+                      downloadFileAPI(info.url, info.filename, {
+                        method: 'POST',
+                        body: { reportData },
+                      }).catch((err) => alert(err.message));
+                    }
                   }}
                   className="inline-flex items-center px-3.5 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition shadow-sm cursor-pointer"
                   title="Download Excel Workbook (.xlsx)"
