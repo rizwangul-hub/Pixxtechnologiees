@@ -113,10 +113,11 @@ const seedInitialManager = async () => {
     const count = await Manager.countDocuments();
     if (count === 0) {
       const defaultManager = await Manager.create({
-        name: 'Pixx Manager',
+        name: 'Fahad Rasheed',
         email: 'manager@pixxtechnologies.com',
         password: 'admin123',
         phone: '+92 300 0000000',
+        role: 'Manager Accounts',
       });
       console.log(`[Seed Success] Created default manager: ${defaultManager.email} / admin123`);
     }

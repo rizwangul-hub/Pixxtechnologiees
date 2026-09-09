@@ -18,7 +18,7 @@ export function DashboardHeader() {
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Welcome back, {user?.name || 'Pixx Manager'}
+            Welcome back, {user?.name || 'Fahad Rasheed'}
           </h1>
           <Sparkles className="w-5 h-5 text-amber-500 fill-amber-400" />
         </div>

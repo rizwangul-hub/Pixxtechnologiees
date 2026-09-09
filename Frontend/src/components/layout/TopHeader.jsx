@@ -255,11 +255,11 @@ export function TopHeader({ onToggleMobileMenu }) {
 
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs text-left">
             <div className="w-7 h-7 rounded-lg bg-[#04A26F] text-white flex items-center justify-center font-black text-xs shrink-0">
-              {(user?.name || 'Pixx')[0]}
+              {(user?.name || 'Fahad Rasheed')[0]}
             </div>
             <div className="hidden md:flex flex-col leading-tight">
-              <span className="font-bold text-slate-200">{user?.name || 'Pixx Manager'}</span>
-              <span className="text-[10px] text-slate-400 font-medium">Administrator</span>
+              <span className="font-bold text-slate-200">{user?.name || 'Fahad Rasheed'}</span>
+              <span className="text-[10px] text-slate-400 font-medium">{user?.role || 'Manager Accounts'}</span>
             </div>
           </div>
 
