@@ -1,7 +1,4 @@
-/**
- * Sample Landlords Data & Local Storage Persistence Service
- * Project: PixxTechnologies Property Management System
- */
+import { PRESET_LANDLORD_LOGOS } from './presetLandlordLogos';
 
 const STORAGE_KEY = 'pixx_landlords_data';
 
@@ -16,8 +13,8 @@ export const initialLandlords = [
     country: 'United Kingdom',
     region: 'Greater London',
     logo: {
-      url: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
-      publicId: '',
+      url: PRESET_LANDLORD_LOGOS[0].url,
+      publicId: 'best-standard',
     },
     notes: 'Primary landlord for commercial plazas in London.',
     createdAt: '2026-01-10',
@@ -33,8 +30,8 @@ export const initialLandlords = [
     country: 'United Kingdom',
     region: 'Greater Manchester',
     logo: {
-      url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
-      publicId: '',
+      url: PRESET_LANDLORD_LOGOS[1].url,
+      publicId: 'globle-standard',
     },
     notes: 'Owns residential complexes and city offices.',
     createdAt: '2026-01-15',
@@ -50,8 +47,8 @@ export const initialLandlords = [
     country: 'United Kingdom',
     region: 'London',
     logo: {
-      url: '',
-      publicId: '',
+      url: PRESET_LANDLORD_LOGOS[2].url,
+      publicId: 'homewards',
     },
     notes: 'Overseas investor for luxury heights.',
     createdAt: '2026-02-01',

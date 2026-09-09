@@ -13,8 +13,10 @@ import {
   X,
   Loader2,
   Image as ImageIcon,
+  Check,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout/AppLayout';
+import { PRESET_LANDLORD_LOGOS } from '../data/presetLandlordLogos';
 import {
   getSavedLandlords,
   saveLandlord as saveLocalLandlord,
@@ -242,6 +244,49 @@ export default function CreateLandlordPage() {
                 <p className="text-[11px] text-gray-500">
                   Supported formats: JPG, PNG, WEBP. Uploads directly to Cloudinary.
                 </p>
+              </div>
+            </div>
+
+            {/* PRESET LOGOS SELECTOR GALLERY */}
+            <div className="mt-5 pt-4 border-t border-gray-100">
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                Or Select from Pre-set Landlord Logos:
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                {PRESET_LANDLORD_LOGOS.map((preset) => {
+                  const isSelected = formData.logo?.url === preset.url;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          logo: { url: preset.url, publicId: preset.id },
+                        }))
+                      }
+                      className={`relative flex flex-col items-center p-2.5 rounded-xl border transition-all cursor-pointer bg-white hover:shadow-md ${
+                        isSelected
+                          ? 'border-[#04A26F] ring-2 ring-[#04A26F]/30 bg-emerald-50/40 shadow-xs'
+                          : 'border-gray-200 hover:border-emerald-300'
+                      }`}
+                    >
+                      <img
+                        src={preset.url}
+                        alt={preset.name}
+                        className="w-16 h-16 object-contain rounded-lg mb-1.5"
+                      />
+                      <span className="text-[11px] font-extrabold text-gray-800 truncate w-full text-center">
+                        {preset.name}
+                      </span>
+                      {isSelected && (
+                        <div className="absolute -top-1.5 -right-1.5 bg-[#04A26F] text-white p-1 rounded-full shadow-md">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
