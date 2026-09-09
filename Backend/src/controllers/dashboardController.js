@@ -1,5 +1,4 @@
 const Property = require('../models/Property');
-const Unit = require('../models/Unit');
 const Customer = require('../models/Customer');
 const Tenancy = require('../models/Tenancy');
 const Payment = require('../models/Payment');
@@ -19,40 +18,40 @@ const { generateMonthlyAgentSettlements } = require('../services/agentSettlement
  */
 const getUnifiedDashboard = async (req, res) => {
   try {
-    await generateMonthlyPayments();
+    try {
+      await generateMonthlyPayments();
+    } catch (gErr) {
+      console.warn('[Dashboard Payment Generator Notice]', gErr.message);
+    }
 
     const { propertyId, landlordId } = req.query;
 
-    let propertyFilter = {};
-    let unitFilter = {};
-    let tenancyFilter = {};
+    let propertyFilter = { isArchived: { $ne: true } };
+    let tenancyFilter = { isArchived: { $ne: true } };
     let paymentFilter = {};
     let expenseFilter = {};
 
     if (propertyId) {
-      propertyFilter = { _id: propertyId };
-      unitFilter = { propertyId };
-      tenancyFilter = { propertyId };
+      propertyFilter = { _id: propertyId, isArchived: { $ne: true } };
+      tenancyFilter = { propertyId, isArchived: { $ne: true } };
       paymentFilter = { propertyId };
       expenseFilter = { propertyId };
     } else if (landlordId) {
+      propertyFilter = { landlordId, isArchived: { $ne: true } };
       const landlordProps = await Property.find({ landlordId }).select('_id');
       const propIds = landlordProps.map((p) => p._id);
-      propertyFilter = { _id: { $in: propIds } };
-      unitFilter = { propertyId: { $in: propIds } };
-      tenancyFilter = { propertyId: { $in: propIds } };
+      tenancyFilter = { propertyId: { $in: propIds }, isArchived: { $ne: true } };
       paymentFilter = { propertyId: { $in: propIds } };
       expenseFilter = { propertyId: { $in: propIds } };
     }
 
-    // 1. LANDLORD & PROPERTY INFORMATION
-    const totalLandlords = await Landlord.countDocuments();
+    // 1. LANDLORD & INDIVIDUAL PROPERTY INFORMATION
+    const totalLandlords = await Landlord.countDocuments({ isArchived: { $ne: true } });
     const totalProperties = await Property.countDocuments(propertyFilter);
-    const totalUnits = await Unit.countDocuments(unitFilter);
-    const occupiedUnits = await Unit.countDocuments({ ...unitFilter, status: 'Occupied' });
-    const availableUnits = await Unit.countDocuments({ ...unitFilter, status: 'Available' });
-    const reservedUnits = await Unit.countDocuments({ ...unitFilter, status: 'Reserved' });
-    const maintenanceUnits = await Unit.countDocuments({ ...unitFilter, status: 'Maintenance' });
+    const occupiedProperties = await Property.countDocuments({ ...propertyFilter, status: 'Occupied' });
+    const availableProperties = await Property.countDocuments({ ...propertyFilter, status: 'Available' });
+    const reservedProperties = await Property.countDocuments({ ...propertyFilter, status: 'Reserved' });
+    const maintenanceProperties = await Property.countDocuments({ ...propertyFilter, status: 'Maintenance' });
 
     // 2. TENANT INFORMATION
     const totalCustomers = await Customer.countDocuments();
@@ -131,7 +130,6 @@ const getUnifiedDashboard = async (req, res) => {
           status: 'Active',
         })
           .populate('propertyId')
-          .populate('unitId')
           .populate('agentId');
 
         const agent = activeTenancy?.agentId || null;
@@ -146,13 +144,14 @@ const getUnifiedDashboard = async (req, res) => {
         expDate.setHours(0, 0, 0, 0);
         const daysRemaining = Math.ceil((expDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
 
+        const propName = activeTenancy?.propertyId?.name || activeTenancy?.propertyId?.propertyName || 'Unassigned Property';
         return {
           ...obj,
           tenantName: doc.tenantId?.fullName || doc.tenantId?.name || 'Unknown Tenant',
           tenantId: doc.tenantId?._id || doc.tenantId,
-          propertyName: activeTenancy?.propertyId?.title || activeTenancy?.propertyId?.name || 'Unassigned Property',
-          unitName: activeTenancy?.unitId?.name || 'Unassigned Unit',
-          agentName: agent?.fullName || 'No Agent',
+          propertyName: propName,
+          unitName: propName,
+          agentName: agent?.fullName || agent?.name || 'No Agent',
           agentEmail: agent?.email || '',
           hasAgent: !!(agent && agent.email),
           recipientEmail: doc.expiryReminder30Recipient || recipientEmail,
@@ -170,20 +169,20 @@ const getUnifiedDashboard = async (req, res) => {
           status: 'Active',
         })
           .populate('propertyId')
-          .populate('unitId')
           .populate('agentId');
 
         const expDate = new Date(doc.expiryDate);
         expDate.setHours(0, 0, 0, 0);
         const daysRemaining = Math.ceil((expDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
 
+        const propName = activeTenancy?.propertyId?.name || activeTenancy?.propertyId?.propertyName || 'Unassigned Property';
         return {
           ...obj,
           tenantName: doc.tenantId?.fullName || doc.tenantId?.name || 'Unknown Tenant',
           tenantId: doc.tenantId?._id || doc.tenantId,
-          propertyName: activeTenancy?.propertyId?.title || activeTenancy?.propertyId?.name || 'Unassigned Property',
-          unitName: activeTenancy?.unitId?.name || 'Unassigned Unit',
-          agentName: activeTenancy?.agentId?.fullName || 'No Agent',
+          propertyName: propName,
+          unitName: propName,
+          agentName: activeTenancy?.agentId?.fullName || activeTenancy?.agentId?.name || 'No Agent',
           daysRemaining,
         };
       })
@@ -194,8 +193,7 @@ const getUnifiedDashboard = async (req, res) => {
     // 6. LISTS
     const recentPayments = await Payment.find({ ...paymentFilter, paidAmount: { $gt: 0 } })
       .populate('customerId', 'fullName phone email name')
-      .populate('propertyId', 'propertyName name')
-      .populate('unitId', 'unitName name')
+      .populate('propertyId', 'propertyName name address')
       .sort({ paidDate: -1, updatedAt: -1 })
       .limit(5);
 
@@ -207,8 +205,7 @@ const getUnifiedDashboard = async (req, res) => {
       ]
     })
       .populate('customerId', 'fullName phone email name')
-      .populate('propertyId', 'propertyName name')
-      .populate('unitId', 'unitName name')
+      .populate('propertyId', 'propertyName name address')
       .sort({ dueDate: 1 })
       .limit(10);
 
@@ -227,8 +224,7 @@ const getUnifiedDashboard = async (req, res) => {
       status: { $ne: 'Paid' }
     })
       .populate('customerId', 'fullName phone email name')
-      .populate('propertyId', 'propertyName name')
-      .populate('unitId', 'unitName name')
+      .populate('propertyId', 'propertyName name address')
       .sort({ dueDate: 1 })
       .limit(5);
 
@@ -244,11 +240,15 @@ const getUnifiedDashboard = async (req, res) => {
         propertyInfo: {
           totalLandlords,
           totalProperties,
-          totalUnits,
-          occupiedUnits,
-          availableUnits,
-          reservedUnits,
-          maintenanceUnits,
+          occupiedProperties,
+          availableProperties,
+          reservedProperties,
+          maintenanceProperties,
+          totalUnits: totalProperties,
+          occupiedUnits: occupiedProperties,
+          availableUnits: availableProperties,
+          reservedUnits: reservedProperties,
+          maintenanceUnits: maintenanceProperties,
         },
         tenantInfo: {
           totalCustomers,
@@ -300,15 +300,22 @@ const getUnifiedDashboard = async (req, res) => {
  */
 const getPropertyDashboard = async (req, res) => {
   try {
-    await generateMonthlyPayments();
+    try {
+      await generateMonthlyPayments();
+    } catch (gErr) {
+      console.warn('[Dashboard Payment Generator Notice]', gErr.message);
+    }
 
-    const properties = await Property.find().sort({ name: 1 });
+    const properties = await Property.find({ isArchived: { $ne: true } })
+      .populate('landlordId', 'fullName')
+      .sort({ name: 1 });
 
     const propertySummaries = await Promise.all(
       properties.map(async (prop) => {
-        const totalUnits = await Unit.countDocuments({ propertyId: prop._id });
-        const occupiedUnits = await Unit.countDocuments({ propertyId: prop._id, status: 'Occupied' });
-        const availableUnits = await Unit.countDocuments({ propertyId: prop._id, status: 'Available' });
+        const isOccupied = prop.status === 'Occupied';
+        const totalUnits = 1;
+        const occupiedUnits = isOccupied ? 1 : 0;
+        const availableUnits = prop.status === 'Available' ? 1 : 0;
 
         const payments = await Payment.find({ propertyId: prop._id });
         let monthlyExpectedRent = 0;
@@ -325,6 +332,8 @@ const getPropertyDashboard = async (req, res) => {
           propertyId: prop._id,
           propertyName: prop.propertyName || prop.name,
           propertyType: prop.type,
+          landlordName: prop.landlordId?.fullName || 'No Landlord',
+          status: prop.status,
           totalUnits,
           occupiedUnits,
           availableUnits,
@@ -400,6 +409,7 @@ const getAgentDashboardSummary = async (req, res) => {
       message: 'Agent dashboard summary retrieved successfully',
       data: {
         activeAgents: activeAgentsCount,
+        assignedProperties: assignedUnitsCount,
         assignedUnits: assignedUnitsCount,
         overdueCount,
         totalExpected,

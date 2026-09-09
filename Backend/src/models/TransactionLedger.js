@@ -37,11 +37,6 @@ const transactionLedgerSchema = new mongoose.Schema(
       ref: 'Property',
       index: true,
     },
-    unitId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Unit',
-      index: true,
-    },
     tenantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Customer',

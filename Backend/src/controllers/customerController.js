@@ -160,7 +160,7 @@ const archiveCustomer = async (req, res) => {
   try {
     const CustomerModel = require('../models/Customer');
     const TenancyModel = require('../models/Tenancy');
-    const UnitModel = require('../models/Unit');
+    const PropertyModel = require('../models/Property');
 
     const customer = await CustomerModel.findById(req.params.id);
     if (!customer) {
@@ -176,26 +176,27 @@ const archiveCustomer = async (req, res) => {
     customer.archiveReason = archiveReason;
     await customer.save();
 
-    // End active tenancies and release units
+    // End active tenancies and release properties
     const activeTenancies = await TenancyModel.find({ customerId: customer._id, status: 'Active' });
     for (const tenancy of activeTenancies) {
       tenancy.status = 'Ended';
       tenancy.endDate = tenancy.endDate || new Date().toISOString().split('T')[0];
       await tenancy.save();
 
-      if (tenancy.unitId) {
-        const unit = await UnitModel.findById(tenancy.unitId);
-        if (unit && unit.status !== 'Maintenance') {
-          unit.status = 'Available';
-          unit.customerName = null;
-          await unit.save();
+      const targetPropertyId = tenancy.propertyId || tenancy.unitId;
+      if (targetPropertyId) {
+        const prop = await PropertyModel.findById(targetPropertyId);
+        if (prop && prop.status !== 'Maintenance') {
+          prop.status = 'Available';
+          prop.customerName = null;
+          await prop.save();
         }
       }
     }
 
     res.status(200).json({
       success: true,
-      message: 'Tenant archived successfully. Active tenancy ended and unit released.',
+      message: 'Tenant archived successfully. Active tenancy ended and property released.',
       data: customer,
     });
   } catch (error) {
@@ -223,26 +224,28 @@ const restoreCustomer = async (req, res) => {
     customer.archiveReason = '';
     await customer.save();
 
-    // Check if previous unit is currently occupied by another active tenancy
+    // Check if previous property is currently occupied by another active tenancy
     const lastTenancy = await TenancyModel.findOne({ customerId: customer._id }).sort({ createdAt: -1 });
     let noticeMessage = 'Customer restored successfully.';
-    let isUnitOccupied = false;
+    let isPropertyOccupied = false;
 
-    if (lastTenancy && lastTenancy.unitId) {
-      const activeUnitTenancy = await TenancyModel.findOne({
-        unitId: lastTenancy.unitId,
+    const targetPropId = lastTenancy?.propertyId || lastTenancy?.unitId;
+    if (targetPropId) {
+      const activePropTenancy = await TenancyModel.findOne({
+        propertyId: targetPropId,
         status: 'Active',
       });
-      if (activeUnitTenancy) {
-        isUnitOccupied = true;
-        noticeMessage = "Tenant restored successfully. Note: The tenant's previous unit is currently occupied by another active tenant, so the previous tenancy was not automatically reactivated.";
+      if (activePropTenancy) {
+        isPropertyOccupied = true;
+        noticeMessage = "Tenant restored successfully. Note: The tenant's previous property is currently occupied by another active tenant, so the previous tenancy was not automatically reactivated.";
       }
     }
 
     res.status(200).json({
       success: true,
       message: noticeMessage,
-      isUnitOccupied,
+      isPropertyOccupied,
+      isUnitOccupied: isPropertyOccupied, // backward compatibility
       data: customer,
     });
   } catch (error) {

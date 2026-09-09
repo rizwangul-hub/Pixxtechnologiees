@@ -20,14 +20,12 @@ import {
 import { AppLayout } from '../components/layout/AppLayout';
 import { EntityReportDownloadBar } from '../components/common/EntityReportDownloadBar';
 import { getSavedLandlords } from '../data/landlordsData';
-import { getSavedProperties, getSavedUnits } from '../data/propertiesData';
-import { fetchLandlordByIdAPI, fetchLandlordPropertiesAPI, fetchMortgagesAPI, fetchUnitsFromAPI } from '../services/apiData';
+import { getSavedProperties } from '../data/propertiesData';
+import { fetchLandlordByIdAPI, fetchLandlordPropertiesAPI, fetchMortgagesAPI } from '../services/apiData';
 
 export default function LandlordDetailPage() {
   const { landlordId } = useParams();
   const navigate = useNavigate();
-
-  const [units, setUnits] = useState(() => getSavedUnits());
 
   const [landlord, setLandlord] = useState(() => {
     const localLandlords = getSavedLandlords();
@@ -44,16 +42,11 @@ export default function LandlordDetailPage() {
 
   const loadData = async () => {
     try {
-      const [apiLandlord, apiProperties, apiMortgages, apiUnits] = await Promise.all([
+      const [apiLandlord, apiProperties, apiMortgages] = await Promise.all([
         fetchLandlordByIdAPI(landlordId),
         fetchLandlordPropertiesAPI(landlordId),
         fetchMortgagesAPI({ landlordId }),
-        fetchUnitsFromAPI(),
       ]);
-
-      if (Array.isArray(apiUnits) && apiUnits.length > 0) {
-        setUnits(apiUnits);
-      }
 
       if (apiLandlord) {
         setLandlord(apiLandlord);
@@ -232,18 +225,15 @@ export default function LandlordDetailPage() {
               properties.map((prop) => {
                 const pid = prop._id || prop.id;
                 const propName = prop.propertyName || prop.name;
-
-                const propUnits = units.filter((u) => {
-                  const uPid = u.propertyId?._id || u.propertyId?.id || u.propertyId;
-                  return String(uPid) === String(pid);
-                });
-                const totalCount = prop.totalUnits || propUnits.length;
-                const occupiedCount =
-                  prop.occupiedUnits ??
-                  propUnits.filter((u) => u.status === 'Occupied' || u.customerId || u.customerName || u.tenantName).length;
-                const availableCount =
-                  prop.availableUnits ??
-                  Math.max(0, totalCount - occupiedCount);
+                const rent = prop.monthlyRent || prop.price || 0;
+                const status = prop.status || 'Available';
+                const statusColor = status === 'Occupied'
+                  ? 'bg-blue-50 text-blue-800 border-blue-200'
+                  : status === 'Available'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : status === 'Maintenance'
+                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                  : 'bg-slate-50 text-slate-800 border-slate-200';
 
                 return (
                   <div
@@ -263,19 +253,17 @@ export default function LandlordDetailPage() {
                       </p>
                     </div>
 
-                    {/* Unit Counts Grid */}
-                    <div className="grid grid-cols-3 gap-2 bg-gray-50 p-2.5 rounded-lg text-center text-xs">
+                    {/* Rent & Status Info */}
+                    <div className="grid grid-cols-2 gap-2 bg-gray-50 p-2.5 rounded-lg text-center text-xs">
                       <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Units</span>
-                        <span className="font-extrabold text-gray-900">{totalCount}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Monthly Rent</span>
+                        <span className="font-extrabold text-gray-900">£{Number(rent).toLocaleString()}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] font-bold text-blue-500 uppercase block">Occupied</span>
-                        <span className="font-extrabold text-blue-700">{occupiedCount}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-emerald-500 uppercase block">Available</span>
-                        <span className="font-extrabold text-emerald-700">{availableCount}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Status</span>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-extrabold border ${statusColor} mt-0.5`}>
+                          {status}
+                        </span>
                       </div>
                     </div>
 
@@ -283,7 +271,7 @@ export default function LandlordDetailPage() {
                       to={`/properties/${pid}`}
                       className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-[#04A26F] text-xs font-bold rounded-lg transition-colors flex items-center justify-center space-x-1.5"
                     >
-                      <span>View Property Units</span>
+                      <span>View Property Details</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   </div>

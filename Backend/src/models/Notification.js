@@ -31,11 +31,6 @@ const notificationSchema = new mongoose.Schema(
       ref: 'Property',
       default: null,
     },
-    unitId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Unit',
-      default: null,
-    },
     agentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Agent',

@@ -22,11 +22,18 @@ export function CreatePropertyPage() {
   const [landlords, setLandlords] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
-    type: 'Commercial',
+    type: 'Shop',
     landlordId: initialLandlordId,
     address: '',
     city: '',
     area: '',
+    county: '',
+    postcode: '',
+    floor: '',
+    size: '',
+    price: '',
+    monthlyRent: '',
+    status: 'Available',
     description: '',
     notes: '',
   });
@@ -55,11 +62,18 @@ export function CreatePropertyPage() {
       if (existing) {
         setFormData({
           name: existing.name || existing.propertyName || '',
-          type: existing.type || 'Commercial',
+          type: existing.type || 'Shop',
           landlordId: existing.landlordId?._id || existing.landlordId || '',
           address: existing.address || '',
           city: existing.city || '',
           area: existing.area || '',
+          county: existing.county || '',
+          postcode: existing.postcode || '',
+          floor: existing.floor || '',
+          size: existing.size || '',
+          price: existing.price || '',
+          monthlyRent: existing.monthlyRent || existing.price || '',
+          status: existing.status || 'Available',
           description: existing.description || '',
           notes: existing.notes || '',
         });
@@ -83,30 +97,30 @@ export function CreatePropertyPage() {
     setError('');
 
     try {
+      const payload = {
+        name: formData.name.trim(),
+        type: formData.type,
+        landlordId: formData.landlordId,
+        address: formData.address.trim(),
+        city: formData.city.trim(),
+        area: formData.area.trim(),
+        county: formData.county.trim(),
+        postcode: formData.postcode.trim(),
+        floor: formData.floor.trim(),
+        size: formData.size.trim(),
+        price: Number(formData.monthlyRent || formData.price) || 0,
+        monthlyRent: Number(formData.monthlyRent || formData.price) || 0,
+        status: formData.status || 'Available',
+        description: formData.description.trim(),
+        notes: formData.notes.trim(),
+      };
+
       if (isEditing) {
-        updateProperty(propertyId, {
-          name: formData.name.trim(),
-          type: formData.type,
-          landlordId: formData.landlordId,
-          address: formData.address.trim(),
-          city: formData.city.trim(),
-          area: formData.area.trim(),
-          description: formData.description.trim(),
-          notes: formData.notes.trim(),
-        });
+        updateProperty(propertyId, payload);
         navigate(`/properties/${propertyId}`);
       } else {
         try {
-          const resData = await createPropertyAPI({
-            name: formData.name.trim(),
-            type: formData.type,
-            landlordId: formData.landlordId,
-            address: formData.address.trim(),
-            city: formData.city.trim(),
-            area: formData.area.trim(),
-            description: formData.description.trim(),
-            notes: formData.notes.trim(),
-          });
+          const resData = await createPropertyAPI(payload);
           if (resData) {
             saveProperty(resData);
           }
@@ -116,16 +130,8 @@ export function CreatePropertyPage() {
           const newProp = {
             id: `prop-${Date.now()}`,
             _id: `prop-${Date.now()}`,
-            name: formData.name.trim(),
-            type: formData.type,
-            landlordId: formData.landlordId,
+            ...payload,
             landlordName: selectedL?.fullName || selectedL?.name || '',
-            address: formData.address.trim(),
-            city: formData.city.trim(),
-            area: formData.area.trim(),
-            description: formData.description.trim(),
-            notes: formData.notes.trim(),
-            status: 'Active',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
@@ -172,7 +178,7 @@ export function CreatePropertyPage() {
               <span>{isEditing ? 'Edit Property' : 'Add Property'}</span>
             </h1>
             <p className="text-xs text-slate-500 font-medium mt-1">
-              Select the owning landlord and enter core property details. You can add units inside this property after saving.
+              Register an individual rentable property asset (Shop, Flat, Office, House, etc.) directly under a Landlord.
             </p>
           </div>
 
@@ -214,12 +220,12 @@ export function CreatePropertyPage() {
               {/* PROPERTY NAME */}
               <div className="space-y-1.5 md:col-span-1">
                 <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
-                  Property Name *
+                  Property Name / Number *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Main Shopping Plaza, City Office Building"
+                  placeholder="e.g. Shop 1, Flat 4B, Office 201, 14 High Street"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F] font-extrabold text-slate-900"
@@ -244,28 +250,88 @@ export function CreatePropertyPage() {
                 </select>
               </div>
 
-              {/* ADDRESS */}
-              <div className="space-y-1.5 md:col-span-2">
+              {/* MONTHLY RENT */}
+              <div className="space-y-1.5 md:col-span-1">
                 <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
-                  Address
+                  Monthly Rent (£) *
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="e.g. 1200"
+                  value={formData.monthlyRent}
+                  onChange={(e) => setFormData({ ...formData, monthlyRent: e.target.value, price: e.target.value })}
+                  className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F] font-bold text-slate-900"
+                />
+              </div>
+
+              {/* STATUS */}
+              <div className="space-y-1.5 md:col-span-1">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
+                  Status
+                </label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F] bg-white cursor-pointer font-bold"
+                >
+                  <option value="Available">Available</option>
+                  <option value="Occupied">Occupied</option>
+                  <option value="Reserved">Reserved</option>
+                  <option value="Maintenance">Maintenance</option>
+                </select>
+              </div>
+
+              {/* FLOOR & SIZE */}
+              <div className="space-y-1.5 md:col-span-1">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
+                  Floor / Level
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Main Boulevard, Peshawar Road"
+                  placeholder="e.g. Ground, 1st Floor, Basement"
+                  value={formData.floor}
+                  onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
+                  className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F]"
+                />
+              </div>
+
+              <div className="space-y-1.5 md:col-span-1">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
+                  Size (e.g. sq ft)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 750 sq ft, 2 Beds"
+                  value={formData.size}
+                  onChange={(e) => setFormData({ ...formData, size: e.target.value })}
+                  className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F]"
+                />
+              </div>
+
+              {/* ADDRESS */}
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
+                  Street Address
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 12 Oxford Road"
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F]"
                 />
               </div>
 
-              {/* CITY & AREA */}
+              {/* CITY & POSTCODE */}
               <div className="space-y-1.5 md:col-span-1">
                 <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
                   City
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. London, Manchester, Birmingham"
+                  placeholder="e.g. London, Manchester, Leeds"
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F]"
@@ -274,13 +340,40 @@ export function CreatePropertyPage() {
 
               <div className="space-y-1.5 md:col-span-1">
                 <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
-                  Area / Region
+                  Postcode
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Gulberg III, DHA Phase 5"
+                  placeholder="e.g. M1 4BT, SW1A 1AA"
+                  value={formData.postcode}
+                  onChange={(e) => setFormData({ ...formData, postcode: e.target.value })}
+                  className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F]"
+                />
+              </div>
+
+              {/* AREA & COUNTY */}
+              <div className="space-y-1.5 md:col-span-1">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
+                  Area / Neighborhood
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. City Centre, Camden"
                   value={formData.area}
                   onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                  className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F]"
+                />
+              </div>
+
+              <div className="space-y-1.5 md:col-span-1">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
+                  County
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Greater Manchester"
+                  value={formData.county}
+                  onChange={(e) => setFormData({ ...formData, county: e.target.value })}
                   className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F]"
                 />
               </div>

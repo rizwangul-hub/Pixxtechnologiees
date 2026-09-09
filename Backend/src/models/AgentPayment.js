@@ -20,12 +20,6 @@ const agentPaymentSchema = new mongoose.Schema(
       required: [true, 'Property reference is required'],
       index: true,
     },
-    unitId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Unit',
-      required: [true, 'Unit reference is required'],
-      index: true,
-    },
     tenantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Customer',

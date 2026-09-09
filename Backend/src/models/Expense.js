@@ -7,6 +7,12 @@ const expenseSchema = new mongoose.Schema(
       ref: 'Property',
       required: [true, 'Property reference is required'],
     },
+    landlordId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Landlord',
+      default: null,
+      index: true,
+    },
     supplier: {
       type: String,
       default: '',
@@ -72,6 +78,7 @@ const expenseSchema = new mongoose.Schema(
 );
 
 expenseSchema.index({ propertyId: 1 });
+expenseSchema.index({ landlordId: 1 });
 expenseSchema.index({ category: 1 });
 expenseSchema.index({ status: 1 });
 expenseSchema.index({ date: 1 });

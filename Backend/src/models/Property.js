@@ -2,6 +2,11 @@ const mongoose = require('mongoose');
 
 const propertySchema = new mongoose.Schema(
   {
+    landlordId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Landlord',
+      required: [true, 'Landlord is required for every property'],
+    },
     name: {
       type: String,
       required: [true, 'Property name is required'],
@@ -9,8 +14,42 @@ const propertySchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['Residential', 'Commercial', 'Mixed', 'Other'],
-      default: 'Mixed',
+      enum: ['Building', 'House', 'Shop', 'Office', 'Flat', 'Apartment', 'Room', 'Other'],
+      default: 'Shop',
+    },
+    floor: {
+      type: String,
+      default: 'Ground',
+      trim: true,
+    },
+    size: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    sizeUnit: {
+      type: String,
+      default: 'sq ft',
+    },
+    price: {
+      type: Number,
+      required: [true, 'Price is required'],
+      min: 0,
+    },
+    monthlyRent: {
+      type: Number,
+      default: function () {
+        return this.price || 0;
+      },
+    },
+    salePrice: {
+      type: Number,
+      default: 0,
+    },
+    priceType: {
+      type: String,
+      enum: ['monthly_rent', 'sale', 'other'],
+      default: 'monthly_rent',
     },
     address: {
       type: String,
@@ -27,13 +66,28 @@ const propertySchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    county: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    postcode: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     description: {
       type: String,
       default: '',
     },
-    totalUnits: {
-      type: Number,
-      default: 0,
+    status: {
+      type: String,
+      enum: ['Available', 'Occupied', 'Reserved', 'Maintenance', 'Archived'],
+      default: 'Available',
+    },
+    customerName: {
+      type: String,
+      default: null,
     },
     images: [
       {
@@ -44,11 +98,6 @@ const propertySchema = new mongoose.Schema(
     notes: {
       type: String,
       default: '',
-    },
-    status: {
-      type: String,
-      enum: ['Active', 'Inactive', 'Under Construction', 'Archived'],
-      default: 'Active',
     },
     isArchived: {
       type: Boolean,
@@ -67,11 +116,6 @@ const propertySchema = new mongoose.Schema(
       type: String,
       default: '',
     },
-    landlordId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Landlord',
-      required: [true, 'Landlord is required for every property'],
-    },
     managerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Manager',
@@ -84,14 +128,30 @@ const propertySchema = new mongoose.Schema(
   }
 );
 
+propertySchema.index({ landlordId: 1 });
 propertySchema.index({ name: 1 });
 propertySchema.index({ status: 1 });
 propertySchema.index({ type: 1 });
-propertySchema.index({ landlordId: 1 });
 
-// Virtual alias for propertyName
+// Virtual aliases for backward compatibility
 propertySchema.virtual('propertyName').get(function () {
   return this.name;
+});
+
+propertySchema.virtual('propertyType').get(function () {
+  return this.type;
+});
+
+propertySchema.virtual('unitName').get(function () {
+  return this.name;
+});
+
+propertySchema.virtual('unitNumber').get(function () {
+  return this.name;
+});
+
+propertySchema.virtual('unitType').get(function () {
+  return this.type;
 });
 
 const Property = mongoose.model('Property', propertySchema);

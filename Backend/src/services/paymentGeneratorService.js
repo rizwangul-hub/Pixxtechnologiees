@@ -88,7 +88,6 @@ async function generateMonthlyPayments() {
               const newPayment = await Payment.create({
                 customerId: tenancy.customerId,
                 propertyId: tenancy.propertyId,
-                unitId: tenancy.unitId,
                 tenancyId: tenancy._id,
                 amount: tenancy.monthlyRent,
                 paidAmount: 0,
@@ -110,7 +109,6 @@ async function generateMonthlyPayments() {
                 paymentId: newPayment._id,
                 customerId: tenancy.customerId,
                 propertyId: tenancy.propertyId,
-                unitId: tenancy.unitId,
                 tenancyId: tenancy._id,
                 billingPeriod: `${getMonthName(m)} ${y}`,
                 amount: tenancy.monthlyRent,

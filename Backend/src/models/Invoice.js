@@ -21,11 +21,6 @@ const invoiceSchema = new mongoose.Schema(
       ref: 'Property',
       required: true,
     },
-    unitId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Unit',
-      required: true,
-    },
     tenancyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Tenancy',

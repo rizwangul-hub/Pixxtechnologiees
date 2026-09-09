@@ -145,34 +145,31 @@ export async function createPropertyAPI(propertyData) {
   }
 }
 
-// --- UNITS API ---
+// --- UNITS API (Redirected to Properties for backward compatibility) ---
 
 export async function fetchUnitsFromAPI(propertyId, params = {}) {
   try {
     const query = new URLSearchParams(params).toString();
-    const endpoint = propertyId
-      ? `/properties/${propertyId}/units${query ? `?${query}` : ''}`
-      : `/units${query ? `?${query}` : ''}`;
+    const endpoint = `/properties${query ? `?${query}` : ''}`;
     const res = await fetchAPI(endpoint);
     if (res.success && Array.isArray(res.data)) {
       return res.data;
     }
   } catch (e) {
-    console.warn('[API Warning] Falling back to local units:', e.message);
+    console.warn('[API Warning] Falling back to local properties:', e.message);
   }
   return null;
 }
 
 export async function createUnitAPI(unitData) {
   try {
-    const endpoint = unitData.propertyId ? `/properties/${unitData.propertyId}/units` : '/units';
-    const res = await fetchAPI(endpoint, {
+    const res = await fetchAPI('/properties', {
       method: 'POST',
       body: JSON.stringify(unitData),
     });
     return res.data;
   } catch (e) {
-    console.warn('[API Warning] Save unit error:', e.message);
+    console.warn('[API Warning] Save property error:', e.message);
     throw e;
   }
 }

@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 
 const authRoutes = require('./routes/authRoutes');
 const propertyRoutes = require('./routes/propertyRoutes');
-const unitRoutes = require('./routes/unitRoutes');
+// unitRoutes removed - aliased to propertyRoutes for backward compatibility
 const customerRoutes = require('./routes/customerRoutes');
 const agreementRoutes = require('./routes/agreementRoutes');
 const tenancyRoutes = require('./routes/tenancyRoutes');
@@ -116,7 +116,7 @@ app.use('/api/export', uploadExportLimiter);
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/landlords', landlordRoutes);
 app.use('/api/properties', propertyRoutes);
-app.use('/api/units', unitRoutes);
+app.use('/api/units', propertyRoutes); // Backward compatibility alias
 app.use('/api/customers', customerRoutes);
 app.use('/api/agreements', agreementRoutes);
 app.use('/api/tenancies', tenancyRoutes);

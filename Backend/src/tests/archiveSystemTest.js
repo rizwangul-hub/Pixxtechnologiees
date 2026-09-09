@@ -8,7 +8,7 @@ const Customer = require('../models/Customer');
 const Agent = require('../models/Agent');
 const Landlord = require('../models/Landlord');
 const Property = require('../models/Property');
-const Unit = require('../models/Unit');
+const Unit = Property; // Architecture refactor: individual property IS the unit
 const Tenancy = require('../models/Tenancy');
 
 const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/pixxtechnologies';

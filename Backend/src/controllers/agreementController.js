@@ -1,5 +1,5 @@
 const Agreement = require('../models/Agreement');
-const Unit = require('../models/Unit');
+const Property = require('../models/Property');
 const PaymentSchedule = require('../models/PaymentSchedule');
 
 // @desc    Get all agreements
@@ -7,29 +7,43 @@ const PaymentSchedule = require('../models/PaymentSchedule');
 // @access  Private
 const getAgreements = async (req, res) => {
   try {
-    const { customerId, unitId, status } = req.query;
+    const { customerId, propertyId, unitId, status } = req.query;
     const filter = {};
     if (customerId) filter.customerId = customerId;
-    if (unitId) filter.unitId = unitId;
+    const targetPropId = propertyId || unitId;
+    if (targetPropId) filter.propertyId = targetPropId;
     if (status) filter.status = status;
 
-    const agreements = await Agreement.find(filter).sort({ createdAt: -1 });
+    const agreements = await Agreement.find(filter)
+      .populate('propertyId', 'name address city')
+      .populate('customerId', 'fullName name phone email')
+      .sort({ createdAt: -1 });
+
     res.status(200).json({ success: true, count: agreements.length, data: agreements });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Create agreement, update unit to Occupied, and generate payment schedules
+// @desc    Create agreement, update property to Occupied, and generate payment schedules
 // @route   POST /api/agreements
 // @access  Private
 const createAgreement = async (req, res) => {
   try {
-    const agreement = await Agreement.create(req.body);
+    const targetPropertyId = req.body.propertyId || req.body.unitId;
+    const property = await Property.findById(targetPropertyId);
 
-    // Update Unit status to Occupied
-    if (agreement.unitId) {
-      await Unit.findByIdAndUpdate(agreement.unitId, {
+    const agreementData = {
+      ...req.body,
+      propertyId: targetPropertyId,
+      propertyName: property?.name || req.body.propertyName || req.body.unitName || 'Property',
+    };
+
+    const agreement = await Agreement.create(agreementData);
+
+    // Update Property status to Occupied
+    if (targetPropertyId) {
+      await Property.findByIdAndUpdate(targetPropertyId, {
         status: 'Occupied',
         customerName: agreement.customerName,
       });
@@ -43,8 +57,6 @@ const createAgreement = async (req, res) => {
       customerName,
       propertyId,
       propertyName,
-      unitId,
-      unitName,
       agreementType,
       startDate,
       endDate,
@@ -63,8 +75,6 @@ const createAgreement = async (req, res) => {
         customerName,
         propertyId,
         propertyName,
-        unitId,
-        unitName,
         periodName: 'Security Deposit',
         dueDate: startDate,
         expectedAmount: Number(securityDeposit),
@@ -96,8 +106,6 @@ const createAgreement = async (req, res) => {
           customerName,
           propertyId,
           propertyName,
-          unitId,
-          unitName,
           periodName: `${monthLabel} Rent`,
           dueDate: dueDateStr,
           expectedAmount: price,
@@ -118,8 +126,6 @@ const createAgreement = async (req, res) => {
         customerName,
         propertyId,
         propertyName,
-        unitId,
-        unitName,
         periodName: 'Property Sale Price',
         dueDate: startDate,
         expectedAmount: price,
@@ -141,7 +147,7 @@ const createAgreement = async (req, res) => {
   }
 };
 
-// @desc    Terminate agreement and revert unit status to Available
+// @desc    Terminate agreement and revert property status to Available
 // @route   POST /api/agreements/:id/terminate
 // @access  Private
 const terminateAgreement = async (req, res) => {
@@ -154,9 +160,10 @@ const terminateAgreement = async (req, res) => {
     agreement.status = 'Terminated';
     await agreement.save();
 
-    // Revert Unit status to Available
-    if (agreement.unitId) {
-      await Unit.findByIdAndUpdate(agreement.unitId, {
+    // Revert Property status to Available
+    const targetPropId = agreement.propertyId || agreement.unitId;
+    if (targetPropId) {
+      await Property.findByIdAndUpdate(targetPropId, {
         status: 'Available',
         customerName: null,
       });

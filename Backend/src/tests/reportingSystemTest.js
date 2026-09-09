@@ -8,7 +8,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 const app = require('../app');
 const Landlord = require('../models/Landlord');
 const Property = require('../models/Property');
-const Unit = require('../models/Unit');
+const Unit = Property; // Architecture refactor: individual property IS the unit
 const Customer = require('../models/Customer');
 const Tenancy = require('../models/Tenancy');
 const Payment = require('../models/Payment');

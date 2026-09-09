@@ -17,28 +17,11 @@ const loginManager = async (req, res) => {
       });
     }
 
-    const cleanEmail = email.toLowerCase().trim();
-
-    // Auto-seed initial admin manager if database has 0 managers
-    try {
-      const managerCount = await Manager.countDocuments();
-      if (managerCount === 0) {
-        await Manager.create({
-          name: 'System Admin',
-          email: cleanEmail,
-          password: password,
-        });
-      }
-    } catch (seedErr) {
-      console.warn('[Auto-seed Warning]', seedErr.message);
-    }
-
-    let manager = await Manager.findOne({ email: cleanEmail });
+    // Find manager by email (case-insensitive)
+    const manager = await Manager.findOne({ email: email.toLowerCase().trim() });
 
     if (manager && (await manager.matchPassword(password))) {
       const token = generateToken(manager._id);
-      const managerName = (!manager.name || manager.name === 'Pixx Manager' || manager.name === 'System Admin') ? 'Fahad Rasheed' : manager.name;
-      const managerRole = (!manager.role || manager.role === 'Administrator') ? 'Manager Accounts' : manager.role;
 
       return res.status(200).json({
         success: true,
@@ -46,8 +29,7 @@ const loginManager = async (req, res) => {
         token,
         manager: {
           id: manager._id,
-          name: managerName,
-          role: managerRole,
+          name: manager.name,
           email: manager.email,
           phone: manager.phone || '',
           profileImage: manager.profileImage || '',
@@ -64,7 +46,7 @@ const loginManager = async (req, res) => {
     console.error('[Login Controller Error]', error.message);
     return res.status(500).json({
       success: false,
-      message: error.message || 'Server error during login',
+      message: 'Server error during login',
     });
   }
 };
@@ -77,15 +59,11 @@ const loginManager = async (req, res) => {
 const getMe = async (req, res) => {
   try {
     const manager = req.manager;
-    const managerName = (!manager.name || manager.name === 'Pixx Manager' || manager.name === 'System Admin') ? 'Fahad Rasheed' : manager.name;
-    const managerRole = (!manager.role || manager.role === 'Administrator') ? 'Manager Accounts' : manager.role;
-
     return res.status(200).json({
       success: true,
       manager: {
         id: manager._id,
-        name: managerName,
-        role: managerRole,
+        name: manager.name,
         email: manager.email,
         phone: manager.phone || '',
         profileImage: manager.profileImage || '',
@@ -121,10 +99,9 @@ const seedInitialManager = async () => {
     if (count === 0) {
       const defaultManager = await Manager.create({
         name: 'Fahad Rasheed',
-        email: 'manager@pixxtechnologies.com',
+        email: 'ftaccountants@hotmal.com',
         password: 'admin123',
-        phone: '+92 300 0000000',
-        role: 'Manager Accounts',
+        phone: '+92 03180442055',
       });
       console.log(`[Seed Success] Created default manager: ${defaultManager.email} / admin123`);
     }

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
-const Unit = require('../models/Unit');
+const Property = require('../models/Property');
 
-// @desc    Get all units (optionally filtered by propertyId)
+// @desc    Get all units / properties (backward compatibility)
 // @route   GET /api/units
 // @access  Private
 const getUnits = async (req, res) => {
@@ -9,7 +9,7 @@ const getUnits = async (req, res) => {
     const { propertyId, status, archived, includeArchived } = req.query;
     const filter = {};
     if (propertyId && propertyId !== 'All' && propertyId !== 'all' && mongoose.Types.ObjectId.isValid(propertyId)) {
-      filter.propertyId = propertyId;
+      filter._id = propertyId;
     }
 
     if (archived === 'true' || status === 'Archived') {
@@ -21,40 +21,40 @@ const getUnits = async (req, res) => {
       if (status) filter.status = status;
     }
 
-    const units = await Unit.find(filter).sort({ createdAt: -1 });
+    const units = await Property.find(filter).sort({ createdAt: -1 });
     res.status(200).json({ success: true, count: units.length, data: units });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Create new unit
+// @desc    Create new unit / property (backward compatibility)
 // @route   POST /api/units
 // @access  Private
 const createUnit = async (req, res) => {
   try {
     const unitData = {
       ...req.body,
-      name: req.body.name || req.body.unitName || req.body.unitNumber,
+      name: req.body.name || req.body.unitName || req.body.unitNumber || 'Property',
       type: req.body.type || req.body.unitType || 'Shop',
       price: Number(req.body.price || req.body.monthlyRent) || 0,
       monthlyRent: Number(req.body.monthlyRent || req.body.price) || 0,
     };
-    const unit = await Unit.create(unitData);
+    const unit = await Property.create(unitData);
     res.status(201).json({ success: true, data: unit });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get unit by ID
+// @desc    Get unit / property by ID (backward compatibility)
 // @route   GET /api/units/:id
 // @access  Private
 const getUnitById = async (req, res) => {
   try {
-    const unit = await Unit.findById(req.params.id);
+    const unit = await Property.findById(req.params.id);
     if (!unit) {
-      return res.status(404).json({ success: false, message: 'Unit not found' });
+      return res.status(404).json({ success: false, message: 'Property not found' });
     }
     res.status(200).json({ success: true, data: unit });
   } catch (error) {
@@ -62,17 +62,17 @@ const getUnitById = async (req, res) => {
   }
 };
 
-// @desc    Update unit
+// @desc    Update unit / property
 // @route   PUT /api/units/:id
 // @access  Private
 const updateUnit = async (req, res) => {
   try {
-    const unit = await Unit.findByIdAndUpdate(req.params.id, req.body, {
+    const unit = await Property.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
     });
     if (!unit) {
-      return res.status(404).json({ success: false, message: 'Unit not found' });
+      return res.status(404).json({ success: false, message: 'Property not found' });
     }
     res.status(200).json({ success: true, data: unit });
   } catch (error) {
@@ -80,14 +80,14 @@ const updateUnit = async (req, res) => {
   }
 };
 
-// @desc    Archive / Soft Delete unit
+// @desc    Archive / Soft Delete unit / property
 // @route   DELETE /api/units/:id or PUT /api/units/:id/archive
 // @access  Private
 const archiveUnit = async (req, res) => {
   try {
-    const unit = await Unit.findById(req.params.id);
+    const unit = await Property.findById(req.params.id);
     if (!unit) {
-      return res.status(404).json({ success: false, message: 'Unit not found' });
+      return res.status(404).json({ success: false, message: 'Property not found' });
     }
 
     unit.isArchived = true;
@@ -97,20 +97,20 @@ const archiveUnit = async (req, res) => {
     unit.archiveReason = req.body?.reason || req.body?.archiveReason || 'Manager requested archival';
     await unit.save();
 
-    res.status(200).json({ success: true, message: 'Unit archived successfully', data: unit });
+    res.status(200).json({ success: true, message: 'Property archived successfully', data: unit });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Restore archived unit
+// @desc    Restore archived unit / property
 // @route   PUT /api/units/:id/restore
 // @access  Private
 const restoreUnit = async (req, res) => {
   try {
-    const unit = await Unit.findById(req.params.id);
+    const unit = await Property.findById(req.params.id);
     if (!unit) {
-      return res.status(404).json({ success: false, message: 'Unit not found' });
+      return res.status(404).json({ success: false, message: 'Property not found' });
     }
 
     unit.isArchived = false;
@@ -120,7 +120,7 @@ const restoreUnit = async (req, res) => {
     unit.archiveReason = '';
     await unit.save();
 
-    res.status(200).json({ success: true, message: 'Unit restored successfully', data: unit });
+    res.status(200).json({ success: true, message: 'Property restored successfully', data: unit });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -25,15 +25,6 @@ const paymentScheduleSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    unitId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Unit',
-      required: true,
-    },
-    unitName: {
-      type: String,
-      required: true,
-    },
     periodName: {
       type: String,
       required: true,

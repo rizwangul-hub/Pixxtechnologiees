@@ -20,15 +20,6 @@ const agreementSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    unitId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Unit',
-      required: true,
-    },
-    unitName: {
-      type: String,
-      required: true,
-    },
     agreementType: {
       type: String,
       enum: ['Rent', 'Sale'],

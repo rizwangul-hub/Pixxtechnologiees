@@ -1,8 +1,6 @@
 import * as XLSX from 'xlsx';
 
-export const propertyTypes = ['Residential', 'Commercial', 'Mixed', 'Other'];
-
-export const unitTypes = [
+export const propertyTypes = [
   'Building',
   'House',
   'Shop',
@@ -13,7 +11,11 @@ export const unitTypes = [
   'Other',
 ];
 
+// Alias for backward compatibility - individual rentable asset types
+export const unitTypes = propertyTypes;
+
 export const unitStatuses = ['Available', 'Occupied', 'Reserved', 'Maintenance'];
+export const propertyStatuses = ['Available', 'Occupied', 'Reserved', 'Maintenance'];
 
 export const priceTypes = ['monthly_rent', 'sale', 'other'];
 
@@ -350,31 +352,38 @@ export function updateProperty(propertyId, updatedFields) {
 
 export function deleteProperty(propertyId) {
   const existing = getSavedProperties();
-  const updated = existing.filter((p) => p.id !== propertyId);
+  const updated = existing.filter((p) => p.id !== propertyId && p._id !== propertyId);
   localStorage.setItem(PROPERTIES_KEY, JSON.stringify(updated));
 
   // Also delete associated units
   const units = getSavedUnits();
-  const updatedUnits = units.filter((u) => u.propertyId !== propertyId);
+  const updatedUnits = units.filter((u) => u.propertyId !== propertyId && u.propertyId?._id !== propertyId);
   localStorage.setItem(UNITS_KEY, JSON.stringify(updatedUnits));
 
   return updated;
 }
 
 // --- UNIT STORAGE & QUERIES ---
+// NOTE: "Units" are now individual Properties. These functions are kept for
+// backward compatibility with legacy frontend code that references "units".
 
 export function getSavedUnits() {
-  try {
-    const data = localStorage.getItem(UNITS_KEY);
-    return data ? JSON.parse(data) : demoUnits;
-  } catch (e) {
-    return demoUnits;
-  }
+  // Redirect to properties — each property IS a rentable unit in the new model
+  return getSavedProperties();
 }
 
 export function getUnitsByProperty(propertyId) {
-  const units = getSavedUnits();
-  return units.filter((u) => u.propertyId === propertyId);
+  // In the new model, properties belong directly to a landlord.
+  // For legacy calls that tried to get units of a parent container property,
+  // we return properties that match the given propertyId (self or parent match).
+  const properties = getSavedProperties();
+  return properties.filter(
+    (p) =>
+      p.id === propertyId ||
+      p._id === propertyId ||
+      p.landlordId === propertyId ||
+      p.landlordId?._id === propertyId
+  );
 }
 
 export function saveUnit(unit) {
@@ -401,29 +410,26 @@ export function deleteUnit(unitId) {
 // --- HELPER METRICS COMPUTATION ---
 
 export function getPropertyMetrics(propertyId) {
-  const units = getUnitsByProperty(propertyId);
-  const totalUnits = units.length;
-  const occupiedUnits = units.filter((u) => u.status === 'Occupied').length;
-  const availableUnits = units.filter((u) => u.status === 'Available').length;
-  const reservedUnits = units.filter((u) => u.status === 'Reserved').length;
-  const maintenanceUnits = units.filter((u) => u.status === 'Maintenance').length;
+  // In the new model, a property IS the individual unit.
+  // So we look up the property itself for its status.
+  const properties = getSavedProperties();
+  const property = properties.find((p) => p.id === propertyId || p._id === propertyId);
 
-  const expectedMonthlyRent = units
-    .filter((u) => u.priceType === 'monthly_rent')
-    .reduce((sum, u) => sum + (Number(u.price) || 0), 0);
-
-  const expectedPropertyValue = units
-    .filter((u) => u.priceType === 'sale')
-    .reduce((sum, u) => sum + (Number(u.price) || 0), 0);
+  // For backward compat, provide unit-like metrics based on the single property
+  const isOccupied = property?.status === 'Occupied';
+  const isAvailable = property?.status === 'Available';
+  const isReserved = property?.status === 'Reserved';
+  const isMaintenance = property?.status === 'Maintenance';
 
   return {
-    totalUnits,
-    occupiedUnits,
-    availableUnits,
-    reservedUnits,
-    maintenanceUnits,
-    expectedMonthlyRent,
-    expectedPropertyValue,
+    totalUnits: property ? 1 : 0,
+    totalProperties: property ? 1 : 0,
+    occupiedUnits: isOccupied ? 1 : 0,
+    availableUnits: isAvailable ? 1 : 0,
+    reservedUnits: isReserved ? 1 : 0,
+    maintenanceUnits: isMaintenance ? 1 : 0,
+    expectedMonthlyRent: property?.monthlyRent || property?.price || 0,
+    expectedPropertyValue: property?.salePrice || 0,
   };
 }
 

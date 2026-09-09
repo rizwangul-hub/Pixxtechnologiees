@@ -12,10 +12,11 @@ const tenancySchema = new mongoose.Schema(
       ref: 'Property',
       required: [true, 'Property reference is required'],
     },
-    unitId: {
+    landlordId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Unit',
-      required: [true, 'Unit reference is required'],
+      ref: 'Landlord',
+      default: null,
+      index: true,
     },
     startDate: {
       type: String,

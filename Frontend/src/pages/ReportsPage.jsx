@@ -70,15 +70,15 @@ const REPORT_TYPES = [
   },
   {
     id: 'property-report',
-    name: 'Property Report',
-    description: 'View property occupancy, unit breakdown, rent, payments, and expenses.',
+    name: 'Property Portfolio Report',
+    description: 'View property occupancy, property breakdown, rent, payments, and expenses.',
     icon: Building2,
     color: 'indigo',
   },
   {
     id: 'unit-report',
-    name: 'Unit Report',
-    description: 'View unit status, rent history, active tenant, and financial records.',
+    name: 'Individual Property Report',
+    description: 'View individual property status, rent history, active tenant, and financial records.',
     icon: Layers,
     color: 'cyan',
   },
@@ -822,11 +822,11 @@ export function ReportsPage() {
                 </div>
               )}
 
-              {/* Unit Selection */}
+              {/* Property / Unit Selection */}
               {selectedReportType === 'unit-report' && (
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                    Select Unit *
+                    Select Property (Rentable Asset) *
                   </label>
                   <select
                     value={selectedUnitId}

@@ -341,23 +341,6 @@ const downloadUnitReportExcel = async (req, res) => {
   }
 };
 
-const downloadUnitReportExcel = async (req, res) => {
-  try {
-    const { unitId } = req.params;
-    const { fromDate, toDate } = req.query;
-    const data = await generateUnitReportData(unitId, fromDate, toDate);
-    const excelBuffer = await excelGenerators.generateUnitExcelWorkbook(data);
-    sendDownloadBuffer(
-      res,
-      excelBuffer,
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      `Unit_Report_${data.unit.name.replace(/\s+/g, '_')}.xlsx`
-    );
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
 // ----------------------------------------------------
 // 6. PAYMENT REPORT
 // ----------------------------------------------------

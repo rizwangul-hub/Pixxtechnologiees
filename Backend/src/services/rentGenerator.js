@@ -12,8 +12,7 @@ const getDueDate = (year, month, day) => {
 const generateRentPayments = async ({ monthsAhead = 3 } = {}) => {
   const tenancies = await Tenancy.find({ status: 'Active' })
     .populate('customerId', 'name')
-    .populate('propertyId', 'name')
-    .populate('unitId', 'name');
+    .populate('propertyId', 'name');
   const today = new Date();
   const finalMonth = new Date(today.getFullYear(), today.getMonth() + monthsAhead, 1);
   let created = 0;
@@ -32,7 +31,6 @@ const generateRentPayments = async ({ monthsAhead = 3 } = {}) => {
           const payment = await RentPayment.create({
             customerId: tenancy.customerId._id || tenancy.customerId,
             propertyId: tenancy.propertyId._id || tenancy.propertyId,
-            unitId: tenancy.unitId._id || tenancy.unitId,
             tenancyId: tenancy._id,
             amount: tenancy.monthlyRent,
             remainingAmount: tenancy.monthlyRent,
@@ -46,7 +44,6 @@ const generateRentPayments = async ({ monthsAhead = 3 } = {}) => {
             paymentId: payment._id,
             customerId: payment.customerId,
             propertyId: payment.propertyId,
-            unitId: payment.unitId,
             tenancyId: payment.tenancyId,
             billingPeriod: `${billingYear}-${String(billingMonth).padStart(2, '0')}`,
             amount: payment.amount,

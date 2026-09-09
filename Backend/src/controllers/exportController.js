@@ -34,13 +34,11 @@ exports.exportPayments = async (req, res) => {
     const payments = await Payment.find(filter)
       .populate('customerId', 'name fullName')
       .populate('propertyId', 'name propertyName')
-      .populate('unitId', 'name unitName')
       .sort({ dueDate: -1 });
 
     const rows = payments.map((p) => ({
       Customer: p.customerId?.fullName || p.customerId?.name || 'N/A',
       Property: p.propertyId?.propertyName || p.propertyId?.name || 'N/A',
-      Unit: p.unitId?.unitName || p.unitId?.name || 'N/A',
       'Billing Month': getMonthName(p.billingMonth),
       'Billing Year': p.billingYear,
       'Rent Amount': p.amount || 0,
@@ -81,15 +79,17 @@ exports.exportProperties = async (req, res) => {
     if (status) filter.status = status;
     if (type) filter.type = type;
 
-    const properties = await Property.find(filter).sort({ name: 1 });
+    const properties = await Property.find(filter).populate('landlordId', 'fullName').sort({ name: 1 });
 
     const rows = properties.map((p) => ({
       'Property Name': p.name || p.propertyName,
-      Type: p.type || '',
+      Type: p.type || 'Shop',
+      Landlord: p.landlordId?.fullName || 'N/A',
       Address: p.address || '',
       City: p.city || '',
-      'Total Units': p.totalUnits || 0,
-      Status: p.status || 'Active',
+      Postcode: p.postcode || '',
+      'Monthly Rent (£)': p.monthlyRent || p.price || 0,
+      Status: p.status || 'Available',
     }));
 
     const isExcel = format === 'excel' || req.path.includes('/excel');
@@ -125,8 +125,7 @@ exports.exportCustomers = async (req, res) => {
     const rows = await Promise.all(
       customers.map(async (c) => {
         const activeTenancy = await Tenancy.findOne({ customerId: c._id, status: 'Active' })
-          .populate('propertyId', 'name propertyName')
-          .populate('unitId', 'name unitName');
+          .populate('propertyId', 'name propertyName');
 
         const payments = await Payment.find({ customerId: c._id });
         const totalBilled = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
@@ -139,7 +138,6 @@ exports.exportCustomers = async (req, res) => {
           Phone: c.phone || '',
           Email: c.email || '',
           Property: activeTenancy?.propertyId?.propertyName || activeTenancy?.propertyId?.name || 'Unassigned',
-          'Unit / Flat': activeTenancy?.unitId?.unitName || activeTenancy?.unitId?.name || 'Unassigned',
           'Start Date': activeTenancy?.startDate || '',
           'Monthly Rent (£)': activeTenancy?.monthlyRent || 0,
           'Security Deposit (£)': activeTenancy?.securityDeposit || 0,
@@ -182,13 +180,11 @@ exports.exportTenancies = async (req, res) => {
     const tenancies = await Tenancy.find(filter)
       .populate('customerId', 'name fullName')
       .populate('propertyId', 'name propertyName')
-      .populate('unitId', 'name unitName')
       .sort({ createdAt: -1 });
 
     const rows = tenancies.map((t) => ({
       Customer: t.customerId?.fullName || t.customerId?.name || 'N/A',
       Property: t.propertyId?.propertyName || t.propertyId?.name || 'N/A',
-      Unit: t.unitId?.unitName || t.unitId?.name || 'N/A',
       'Start Date': t.startDate || '',
       'End Date': t.endDate || 'Ongoing',
       'Monthly Rent': t.monthlyRent || 0,
@@ -400,14 +396,12 @@ exports.exportAgentPayments = async (req, res) => {
     const payments = await AgentPayment.find(filter)
       .populate('agentId', 'fullName phone')
       .populate('propertyId', 'propertyName name')
-      .populate('unitId', 'unitName name')
       .populate('tenantId', 'fullName name')
       .sort({ billingYear: -1, billingMonth: -1 });
 
     const rows = payments.map((p) => ({
       Agent: p.agentId?.fullName || 'N/A',
       Property: p.propertyId?.propertyName || p.propertyId?.name || 'N/A',
-      Unit: p.unitId?.unitName || p.unitId?.name || 'N/A',
       Tenant: p.tenantId?.fullName || p.tenantId?.name || 'N/A',
       'Billing Month': getMonthName(p.billingMonth),
       'Billing Year': p.billingYear,
@@ -455,7 +449,6 @@ exports.exportAgentExpenses = async (req, res) => {
     const expenses = await AgentExpense.find(filter)
       .populate('agentId', 'fullName phone')
       .populate('propertyId', 'propertyName name')
-      .populate('unitId', 'unitName name')
       .populate('tenantId', 'fullName name')
       .sort({ date: -1 });
 
@@ -463,7 +456,6 @@ exports.exportAgentExpenses = async (req, res) => {
       Date: e.date || '',
       Agent: e.agentId?.fullName || 'N/A',
       Property: e.propertyId?.propertyName || e.propertyId?.name || 'N/A',
-      Unit: e.unitId?.unitName || e.unitId?.name || 'N/A',
       Tenant: e.tenantId?.fullName || e.tenantId?.name || 'N/A',
       Category: e.expenseCategory || '',
       Description: e.description || '',

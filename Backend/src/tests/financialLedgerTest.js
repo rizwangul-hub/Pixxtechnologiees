@@ -5,7 +5,7 @@ dotenv.config();
 const Tenancy = require('../models/Tenancy');
 const Customer = require('../models/Customer');
 const Property = require('../models/Property');
-const Unit = require('../models/Unit');
+const Unit = Property; // Architecture refactor: individual property IS the unit
 const Landlord = require('../models/Landlord');
 const Agent = require('../models/Agent');
 const AgentPayment = require('../models/AgentPayment');

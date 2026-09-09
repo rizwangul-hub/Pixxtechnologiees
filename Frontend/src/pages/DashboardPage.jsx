@@ -256,7 +256,7 @@ export function DashboardPage() {
               <Layers className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Units</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Properties</p>
               <h3 className="text-2xl font-bold text-gray-900 mt-0.5">{unitsCount}</h3>
             </div>
           </div>
@@ -267,7 +267,7 @@ export function DashboardPage() {
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Occupied Units</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Occupied</p>
               <h3 className="text-2xl font-bold text-emerald-800 mt-0.5">{occupiedCount}</h3>
             </div>
           </div>
@@ -278,7 +278,7 @@ export function DashboardPage() {
               <Home className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Available Units</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Available</p>
               <h3 className="text-2xl font-bold text-amber-700 mt-0.5">{availableCount}</h3>
             </div>
           </div>

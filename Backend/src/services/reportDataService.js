@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const Customer = require('../models/Customer');
 const Property = require('../models/Property');
-const Unit = require('../models/Unit');
 const Landlord = require('../models/Landlord');
 const Tenancy = require('../models/Tenancy');
 const Agent = require('../models/Agent');
@@ -130,12 +129,11 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
 
   const tenancies = await Tenancy.find(tenancyQuery)
     .populate('propertyId')
-    .populate('unitId')
     .populate('agentId');
 
   const primaryTenancy = tenancies[0] || null;
   let property = primaryTenancy?.propertyId || null;
-  let unit = primaryTenancy?.unitId || null;
+  let unit = property;
   let landlord = null;
 
   if (property && property.landlordId && mongoose.Types.ObjectId.isValid(property.landlordId)) {
@@ -376,15 +374,10 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
   const propertyIds = properties.map((p) => p._id);
   const validPropObjectIds = isAll ? [] : filterValidObjectIds([...propertyIds, ...properties.map((p) => p.id)]);
 
-  const unitQueryFilter = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
   const tenancyQueryFilter = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
-
-  const units = await Unit.find(unitQueryFilter);
-  const unitIds = units.map((u) => u._id);
 
   const tenancies = await Tenancy.find(tenancyQueryFilter)
     .populate('customerId')
-    .populate('unitId')
     .populate('agentId');
 
   // Payments & Expenses
@@ -409,9 +402,8 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
   const netIncome = totalPayments - totalExpenses;
   const totalOutstanding = totalRentDue - totalPayments;
 
-  // Breakdown per property
+  // Breakdown per individual property
   const propertyBreakdown = properties.map((p) => {
-    const pUnits = units.filter((u) => safeIdEquals(u.propertyId, p._id));
     const pTenancies = tenancies.filter((t) => safeIdEquals(t.propertyId, p._id));
     const pPayments = payments.filter((pay) => safeIdEquals(pay.propertyId, p._id));
     const pPropExp = propertyExpenses.filter((e) => safeIdEquals(e.propertyId, p._id));
@@ -420,16 +412,17 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
     const due = pPayments.reduce((sum, pay) => sum + (pay.amount || 0), 0);
     const paid = pPayments.reduce((sum, pay) => sum + (pay.paidAmount || 0), 0);
     const exp = pPropExp.reduce((sum, e) => sum + (e.amount || 0), 0) + pAgentExp.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const isOccupied = p.status === 'Occupied' || pTenancies.length > 0;
 
     return {
       propertyId: p._id,
-      propertyName: p.title || p.name,
-      propertyType: p.type || 'Residential',
-      name: p.title || p.name,
-      address: p.address,
-      totalUnits: pUnits.length,
-      occupiedUnits: pUnits.filter((u) => u.status === 'Occupied').length,
-      availableUnits: pUnits.filter((u) => u.status === 'Available').length,
+      propertyName: p.name || p.propertyName || p.title,
+      propertyType: p.type || 'Shop',
+      name: p.name || p.propertyName || p.title,
+      address: p.address || p.name,
+      totalUnits: 1,
+      occupiedUnits: isOccupied ? 1 : 0,
+      availableUnits: !isOccupied ? 1 : 0,
       activeTenantsCount: pTenancies.length,
       rentDueFormatted: formatReportCurrency(due),
       paymentsFormatted: formatReportCurrency(paid),
@@ -440,6 +433,7 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
       totalExpenses: exp,
       netIncome: paid - exp,
       outstanding: due - paid,
+      status: p.status,
     };
   });
 
@@ -453,76 +447,61 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
   const unitMatrixRows = [];
 
   for (const p of properties) {
-    const pUnits = units.filter((u) => safeIdEquals(u.propertyId, p._id));
-    const unitsToProcess = pUnits.length > 0 ? pUnits : [{ _id: p._id, name: p.title || p.name, price: p.price || 0, isSynthetic: true }];
+    const pTenancy = tenancies.find((t) => safeIdEquals(t.propertyId, p._id));
+    const samplePay = periodPayments.find((pay) => safeIdEquals(pay.propertyId, p._id));
 
-    for (const u of unitsToProcess) {
-      const uTenancy =
-        tenancies.find((t) => safeIdEquals(t.unitId, u._id)) ||
-        tenancies.find((t) => safeIdEquals(t.propertyId, p._id));
-
-      const samplePay = periodPayments.find((pay) => {
-        return u.isSynthetic ? safeIdEquals(pay.propertyId, p._id) : safeIdEquals(pay.unitId, u._id);
-      });
-
-      let rent = Number(uTenancy?.monthlyRent || u.monthlyRent || u.price || p.price || samplePay?.amount) || 0;
-      if (rent === 0 && payments && payments.length > 0) {
-        const propPay = payments.find((pay) => safeIdEquals(pay.propertyId, p._id) && pay.amount > 0);
-        if (propPay) rent = propPay.amount;
-      }
-
-      const rawMFee = Number(uTenancy?.companyMonthlyAmount || u.companyMonthlyAmount) || (rent > 0 ? 50 : 0);
-      const mFee = rent > 0 ? -Math.abs(rawMFee) : 0;
-      const dueDateStr = getOrdinalDay(uTenancy?.paymentDueDay || 1);
-      const netRentReceivable = rent + mFee;
-
-      const fullAddress = `${p.address || p.title || p.name}${u.name && !u.isSynthetic ? ', ' + u.name : ''}`;
-
-      const collections = trackingMonths.map((mInfo) => {
-        const mPay = periodPayments.find((pay) => {
-          const matchUnit = u.isSynthetic
-            ? safeIdEquals(pay.propertyId, p._id)
-            : safeIdEquals(pay.unitId, u._id);
-          return matchUnit && isPaymentInMonth(pay, mInfo);
-        });
-
-        if (mPay && (mPay.paidAmount > 0 || mPay.status === 'Paid' || mPay.amount > 0)) {
-          const paidD = mPay.paidDate || mPay.dueDate;
-          const dateFmt = typeof paidD === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(paidD)
-            ? paidD
-            : formatUKDate(paidD);
-
-          const paidAmt = mPay.paidAmount > 0 ? mPay.paidAmount : (mPay.amount || netRentReceivable);
-          return {
-            monthLabel: mInfo.label,
-            date: dateFmt,
-            amount: paidAmt,
-            status: paidAmt >= (mPay.amount || rent) ? 'Paid' : 'Partial',
-          };
-        } else {
-          return {
-            monthLabel: mInfo.label,
-            date: '',
-            amount: 0,
-            status: 'Unpaid',
-          };
-        }
-      });
-
-      unitMatrixRows.push({
-        no: rowCounter++,
-        propertyId: p._id,
-        unitId: u._id,
-        propertyName: p.title || p.name,
-        unitName: u.isSynthetic ? '' : u.name,
-        propertyAddress: fullAddress,
-        rent,
-        mFee,
-        dueDate: dueDateStr,
-        netRentReceivable,
-        collections,
-      });
+    let rent = Number(pTenancy?.monthlyRent || p.monthlyRent || p.price || samplePay?.amount) || 0;
+    if (rent === 0 && payments && payments.length > 0) {
+      const propPay = payments.find((pay) => safeIdEquals(pay.propertyId, p._id) && pay.amount > 0);
+      if (propPay) rent = propPay.amount;
     }
+
+    const rawMFee = Number(pTenancy?.companyMonthlyAmount) || (rent > 0 ? 50 : 0);
+    const mFee = rent > 0 ? -Math.abs(rawMFee) : 0;
+    const dueDateStr = getOrdinalDay(pTenancy?.paymentDueDay || 1);
+    const netRentReceivable = rent + mFee;
+
+    const fullAddress = p.address ? `${p.name}, ${p.address}` : p.name;
+
+    const collections = trackingMonths.map((mInfo) => {
+      const mPay = periodPayments.find((pay) => safeIdEquals(pay.propertyId, p._id) && isPaymentInMonth(pay, mInfo));
+
+      if (mPay && (mPay.paidAmount > 0 || mPay.status === 'Paid' || mPay.amount > 0)) {
+        const paidD = mPay.paidDate || mPay.dueDate;
+        const dateFmt = typeof paidD === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(paidD)
+          ? paidD
+          : formatUKDate(paidD);
+
+        const paidAmt = mPay.paidAmount > 0 ? mPay.paidAmount : (mPay.amount || netRentReceivable);
+        return {
+          monthLabel: mInfo.label,
+          date: dateFmt,
+          amount: paidAmt,
+          status: paidAmt >= (mPay.amount || rent) ? 'Paid' : 'Partial',
+        };
+      } else {
+        return {
+          monthLabel: mInfo.label,
+          date: '',
+          amount: 0,
+          status: 'Unpaid',
+        };
+      }
+    });
+
+    unitMatrixRows.push({
+      no: rowCounter++,
+      propertyId: p._id,
+      unitId: p._id,
+      propertyName: p.name || p.propertyName || p.title,
+      unitName: p.name || p.propertyName || '',
+      propertyAddress: fullAddress,
+      rent,
+      mFee,
+      dueDate: dueDateStr,
+      netRentReceivable,
+      collections,
+    });
   }
 
   return {
@@ -542,9 +521,9 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
     },
     summary: {
       totalProperties: properties.length,
-      totalUnits: units.length,
-      occupiedUnits: units.filter((u) => u.status === 'Occupied').length,
-      availableUnits: units.filter((u) => u.status === 'Available').length,
+      totalUnits: properties.length,
+      occupiedUnits: properties.filter((p) => p.status === 'Occupied').length,
+      availableUnits: properties.filter((p) => p.status === 'Available').length,
       activeTenantsCount: tenancies.length,
       totalRentDue,
       totalRentDueFormatted: formatReportCurrency(totalRentDue),
@@ -599,14 +578,12 @@ async function generateAgentReportData(agentId, fromDate, toDate) {
 
   const settlements = await AgentPayment.find(settlementsQuery)
     .populate('propertyId')
-    .populate('unitId')
     .populate('tenantId')
     .sort({ billingYear: -1, billingMonth: -1 });
 
   const assignedTenancyQuery = isAll ? { status: 'Active' } : { agentId: agent._id, status: 'Active' };
   const assignedTenancies = await Tenancy.find(assignedTenancyQuery)
     .populate('propertyId')
-    .populate('unitId')
     .populate('customerId');
 
   const expectedAmount = settlements.reduce((sum, s) => sum + (s.expectedAmount || 0), 0);
@@ -629,6 +606,7 @@ async function generateAgentReportData(agentId, fromDate, toDate) {
       profileImage: agent.profileImage || '',
     },
     summary: {
+      assignedPropertiesCount: assignedTenancies.length,
       assignedUnitsCount: assignedTenancies.length,
       expectedAmount,
       expectedAmountFormatted: formatReportCurrency(expectedAmount),
@@ -646,7 +624,7 @@ async function generateAgentReportData(agentId, fromDate, toDate) {
       monthYear: `${s.billingMonth}/${s.billingYear}`,
       dueDate: s.dueDate,
       property: s.propertyId?.title || s.propertyId?.name || 'N/A',
-      unit: s.unitId?.name || 'N/A',
+      unit: s.propertyId?.name || 'N/A',
       tenant: s.tenantId?.fullName || s.tenantId?.name || 'N/A',
       expectedAmount: s.expectedAmount,
       expenseAmount: s.expenseAmount,
@@ -667,18 +645,13 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
   let properties = [];
 
   if (isAll) {
-    properties = await Property.find().populate('landlordId');
-    if (properties.length === 0) {
-      property = { _id: 'all_props', name: 'All Properties Portfolio', title: 'All Properties Portfolio', landlordName: 'Portfolio Manager' };
-      properties = [property];
-    } else {
-      property = {
-        _id: 'all_props',
-        name: 'All Properties Portfolio',
-        title: 'All Properties Portfolio',
-        landlordName: properties[0]?.landlordId?.fullName || properties[0]?.landlordId?.name || 'Portfolio Manager',
-      };
-    }
+    properties = await Property.find({ isArchived: { $ne: true } }).populate('landlordId');
+    property = {
+      _id: 'all_props',
+      name: 'All Properties Portfolio',
+      title: 'All Properties Portfolio',
+      landlordName: properties[0]?.landlordId?.fullName || 'Portfolio Manager',
+    };
   } else {
     property = await findEntitySafely(Property, propertyId);
     if (!property) {
@@ -688,55 +661,30 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
         title: typeof propertyId === 'string' ? propertyId : 'Selected Property',
         landlordName: 'Property Manager',
       };
+    } else if (property.landlordId && mongoose.Types.ObjectId.isValid(property.landlordId)) {
+      const l = await Landlord.findById(property.landlordId);
+      property.landlordName = l?.fullName || 'Landlord';
+      property.landlordLogo = l?.logo?.url || '';
     }
     properties = [property];
   }
 
-  const allPossiblePropIds = [
-    property?._id,
-    property?._id?.toString(),
-    property?.id,
-    property?.name,
-    property?.title,
-    property?.propertyName,
-    propertyId,
-  ].filter(Boolean);
+  const propIds = properties.map((p) => p._id).filter(Boolean);
 
-  const isPropMatch = (pRef) => {
-    if (isAll) return true;
-    if (!pRef) return false;
-    const strRef = (pRef._id || pRef.id || pRef?.name || pRef?.title || pRef).toString().trim().toLowerCase();
-    return allPossiblePropIds.some((idVal) => {
-      if (!idVal) return false;
-      const strVal = idVal.toString().trim().toLowerCase();
-      return strRef === strVal;
-    });
-  };
-
-  const allUnits = await Unit.find({ isArchived: { $ne: true } });
-  const units = isAll ? allUnits : allUnits.filter((u) => isPropMatch(u.propertyId) || isPropMatch(u.property));
-
-  const allTenancies = await Tenancy.find()
-    .populate('customerId')
-    .populate('unitId')
-    .populate('agentId');
-  const tenancies = isAll ? allTenancies : allTenancies.filter((t) => isPropMatch(t.propertyId) || isPropMatch(t.property));
-
-  let pQuery = {};
-  let eQuery = {};
+  let pQuery = { propertyId: { $in: propIds } };
+  let eQuery = { propertyId: { $in: propIds } };
   if (fromDate && toDate) {
     pQuery.dueDate = { $gte: fromDate, $lte: toDate };
     eQuery.date = { $gte: fromDate, $lte: toDate };
   }
 
-  const allPayments = await Payment.find(pQuery);
-  const payments = isAll ? allPayments : allPayments.filter((p) => isPropMatch(p.propertyId) || isPropMatch(p.property));
+  const payments = await Payment.find(pQuery).populate('customerId').sort({ dueDate: -1 });
+  const propertyExpenses = await Expense.find(eQuery);
+  const agentExpenses = await AgentExpense.find({ ...eQuery, status: 'Approved' });
 
-  const allPropertyExpenses = await Expense.find(eQuery);
-  const propertyExpenses = isAll ? allPropertyExpenses : allPropertyExpenses.filter((e) => isPropMatch(e.propertyId) || isPropMatch(e.property));
-
-  const allAgentExpenses = await AgentExpense.find({ ...eQuery, status: 'Approved' });
-  const agentExpenses = isAll ? allAgentExpenses : allAgentExpenses.filter((e) => isPropMatch(e.propertyId) || isPropMatch(e.property));
+  const tenancies = await Tenancy.find({ propertyId: { $in: propIds } })
+    .populate('customerId')
+    .populate('agentId');
 
   const totalRent = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const totalPaid = payments.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
@@ -744,46 +692,27 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
     propertyExpenses.reduce((sum, e) => sum + (e.amount || 0), 0) +
     agentExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
-  // 3-Month Collection Tracker Matrix for Rent Income Report
+  // 3-Month Collection Tracker Matrix
   const trackingMonths = getRecent3Months(toDate);
   const periodPayments = payments;
 
   let rowCounter = 1;
   const unitMatrixRows = [];
-  const unitsToProcess = units.length > 0 ? units : properties.map(p => ({ _id: p._id, name: p.title || p.name, price: p.price || 0, isSynthetic: true }));
 
-  for (const u of unitsToProcess) {
-    const uTenancy =
-      tenancies.find((t) => safeIdEquals(t.unitId, u._id)) ||
-      tenancies.find((t) => isPropMatch(t.propertyId));
+  for (const p of properties) {
+    const pTenancy = tenancies.find((t) => safeIdEquals(t.propertyId, p._id));
+    const samplePay = periodPayments.find((pay) => safeIdEquals(pay.propertyId, p._id));
 
-    const samplePay = periodPayments.find((pay) => {
-      return u.isSynthetic
-        ? isPropMatch(pay.propertyId)
-        : safeIdEquals(pay.unitId, u._id);
-    });
-
-    let rent = Number(uTenancy?.monthlyRent || u.monthlyRent || u.price || property.price || samplePay?.amount) || 0;
-    if (rent === 0 && payments && payments.length > 0) {
-      const propPay = payments.find((pay) => pay.amount > 0);
-      if (propPay) rent = propPay.amount;
-    }
-
-    const rawMFee = Number(uTenancy?.companyMonthlyAmount || u.companyMonthlyAmount) || (rent > 0 ? 50 : 0);
+    let rent = Number(pTenancy?.monthlyRent || p.monthlyRent || p.price || samplePay?.amount) || 0;
+    const rawMFee = Number(pTenancy?.companyMonthlyAmount) || (rent > 0 ? 50 : 0);
     const mFee = rent > 0 ? -Math.abs(rawMFee) : 0;
-    const dueDateStr = getOrdinalDay(uTenancy?.paymentDueDay || 1);
+    const dueDateStr = getOrdinalDay(pTenancy?.paymentDueDay || 1);
     const netRentReceivable = rent + mFee;
 
-    const fullAddress = `${property.address || property.title || property.name}${u.name && !u.isSynthetic ? ', ' + u.name : ''}`;
+    const fullAddress = p.address ? `${p.name}, ${p.address}` : (p.name || 'Property');
 
     const collections = trackingMonths.map((mInfo) => {
-      const mPay = periodPayments.find((pay) => {
-        const matchUnit = u.isSynthetic
-          ? isPropMatch(pay.propertyId)
-          : safeIdEquals(pay.unitId, u._id);
-
-        return matchUnit && isPaymentInMonth(pay, mInfo);
-      });
+      const mPay = periodPayments.find((pay) => safeIdEquals(pay.propertyId, p._id) && isPaymentInMonth(pay, mInfo));
 
       if (mPay && (mPay.paidAmount > 0 || mPay.status === 'Paid' || mPay.amount > 0)) {
         const paidD = mPay.paidDate || mPay.dueDate;
@@ -810,10 +739,10 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
 
     unitMatrixRows.push({
       no: rowCounter++,
-      propertyId: property._id,
-      unitId: u._id,
-      propertyName: property.title || property.name,
-      unitName: u.isSynthetic ? '' : u.name,
+      propertyId: p._id,
+      unitId: p._id,
+      propertyName: p.name || p.propertyName || p.title,
+      unitName: p.name || p.propertyName || '',
       propertyAddress: fullAddress,
       rent,
       mFee,
@@ -823,6 +752,25 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
     });
   }
 
+  const individualBreakdown = properties.map((p) => {
+    const activeTenancy = tenancies.find(
+      (t) => safeIdEquals(t.propertyId, p._id) && t.status === 'Active'
+    );
+    const isOccupied = p.status === 'Occupied' || Boolean(activeTenancy);
+    return {
+      unitId: p._id,
+      propertyId: p._id,
+      name: p.name || p.propertyName,
+      propertyName: p.name || p.propertyName,
+      type: p.type || 'Shop',
+      status: p.isArchived ? 'Archived' : (isOccupied ? 'Occupied' : p.status),
+      tenantName: activeTenancy?.customerId?.fullName || activeTenancy?.customerId?.name || p.customerName || 'Vacant',
+      agentName: activeTenancy?.agentId?.fullName || activeTenancy?.agentId?.name || 'Direct / None',
+      monthlyRent: activeTenancy?.monthlyRent || p.monthlyRent || p.price || 0,
+      companyMonthlyAmount: activeTenancy?.companyMonthlyAmount || 0,
+    };
+  });
+
   return {
     reportType: 'Property Report',
     reportDate: new Date().toISOString().split('T')[0],
@@ -830,16 +778,17 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
     toDate: toDate || '',
     property: {
       id: property._id,
-      name: property.title || property.name,
-      address: property.address,
-      type: property.type,
+      name: property.name || property.propertyName || property.title,
+      address: property.address || '',
+      type: property.type || 'Shop',
       landlordName: property.landlordName || property.landlordId?.fullName || 'Portfolio Manager',
-      landlordLogo: property.landlordId?.logo?.url || '',
+      landlordLogo: property.landlordLogo || property.landlordId?.logo?.url || '',
     },
     summary: {
-      totalUnits: units.length,
-      occupiedUnits: units.filter((u) => u.status === 'Occupied').length,
-      availableUnits: units.filter((u) => u.status === 'Available').length,
+      totalProperties: properties.length,
+      totalUnits: properties.length,
+      occupiedUnits: properties.filter((p) => p.status === 'Occupied').length,
+      availableUnits: properties.filter((p) => p.status === 'Available').length,
       totalRent,
       totalRentFormatted: formatReportCurrency(totalRent),
       totalPaid,
@@ -851,136 +800,19 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
       outstanding: totalRent - totalPaid,
       outstandingFormatted: formatReportCurrency(totalRent - totalPaid),
     },
-    unitsBreakdown: units.map((u) => {
-      const activeTenancy = tenancies.find(
-        (t) => t.unitId?._id?.toString() === u._id?.toString() && t.status === 'Active'
-      );
-      return {
-        unitId: u._id,
-        name: u.name,
-        type: u.type,
-        status: u.status,
-        tenantName: activeTenancy?.customerId?.fullName || activeTenancy?.customerId?.name || 'N/A',
-        agentName: activeTenancy?.agentId?.fullName || 'Direct / None',
-        monthlyRent: activeTenancy?.monthlyRent || u.price || 0,
-        companyMonthlyAmount: activeTenancy?.companyMonthlyAmount || 0,
-      };
-    }),
-    units: units.map((u) => {
-      const activeTenancy = tenancies.find(
-        (t) => t.unitId?._id?.toString() === u._id?.toString() && t.status === 'Active'
-      );
-      return {
-        unitId: u._id,
-        name: u.name,
-        type: u.type,
-        status: u.status,
-        tenantName: activeTenancy?.customerId?.fullName || activeTenancy?.customerId?.name || 'N/A',
-        agentName: activeTenancy?.agentId?.fullName || 'Direct / None',
-        monthlyRent: activeTenancy?.monthlyRent || u.price || 0,
-        companyMonthlyAmount: activeTenancy?.companyMonthlyAmount || 0,
-      };
-    }),
+    unitsBreakdown: individualBreakdown,
+    units: individualBreakdown,
+    propertiesBreakdown: individualBreakdown,
     unitMatrixRows,
     trackingMonths: trackingMonths.map((m) => m.label),
   };
 }
 
 /**
- * 5. UNIT REPORT DATA GENERATOR
+ * 5. UNIT REPORT DATA GENERATOR (Converted to Property Report)
  */
-async function generateUnitReportData(unitId, fromDate, toDate) {
-  const isAll = !unitId || unitId === 'All' || unitId === 'all';
-  let unit = await findEntitySafely(Unit, unitId);
-
-  if (!unit) {
-    unit = {
-      _id: isAll ? 'all_units' : unitId,
-      name: isAll ? 'All Units Portfolio' : (typeof unitId === 'string' ? unitId : 'Unit'),
-      type: 'Multi-Unit',
-      status: 'Active',
-      floor: '-',
-      size: '-',
-      price: 0,
-    };
-  }
-
-  const property = unit.propertyId
-    ? (typeof unit.propertyId === 'object'
-        ? unit.propertyId
-        : (mongoose.Types.ObjectId.isValid(unit.propertyId)
-            ? await Property.findById(unit.propertyId).populate('landlordId')
-            : await findEntitySafely(Property, unit.propertyId)))
-    : null;
-
-  const allPossibleUnitIds = [
-    unit?._id,
-    unit?._id?.toString(),
-    unit?.id,
-    unit?.name,
-    unitId,
-  ].filter(Boolean);
-
-  const isUnitMatch = (uRef) => {
-    if (isAll) return true;
-    if (!uRef) return false;
-    const strRef = (uRef._id || uRef.id || uRef?.name || uRef).toString().trim().toLowerCase();
-    return allPossibleUnitIds.some((idVal) => {
-      if (!idVal) return false;
-      const strVal = idVal.toString().trim().toLowerCase();
-      return strRef === strVal;
-    });
-  };
-
-  const allTenancies = await Tenancy.find()
-    .populate('customerId')
-    .populate('agentId');
-  const tenancy = isAll
-    ? allTenancies.find((t) => t.status === 'Active') || null
-    : allTenancies.find((t) => isUnitMatch(t.unitId) || isUnitMatch(t.unit));
-
-  let pQuery = {};
-  if (fromDate && toDate) pQuery.dueDate = { $gte: fromDate, $lte: toDate };
-  const allPayments = await Payment.find(pQuery).sort({ dueDate: -1 });
-  const payments = isAll
-    ? allPayments
-    : allPayments.filter((p) => isUnitMatch(p.unitId) || isUnitMatch(p.unit));
-
-  const totalRent = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  const totalPaid = payments.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
-
-  return {
-    reportType: 'Unit Report',
-    reportDate: new Date().toISOString().split('T')[0],
-    unit: {
-      id: unit._id,
-      name: unit.name,
-      type: unit.type,
-      status: unit.status,
-      floor: unit.floor,
-      size: unit.size,
-      price: unit.price,
-    },
-    property: {
-      name: property?.title || property?.name || 'N/A',
-      address: property?.address || '',
-      landlordName: property?.landlordId?.fullName || property?.landlordId?.name || 'N/A',
-    },
-    tenant: tenancy?.customerId
-      ? {
-          name: tenancy.customerId.fullName || tenancy.customerId.name,
-          phone: tenancy.customerId.phone,
-          email: tenancy.customerId.email,
-        }
-      : null,
-    agent: tenancy?.agentId ? { name: tenancy.agentId.fullName || tenancy.agentId.name, phone: tenancy.agentId.phone } : null,
-    summary: {
-      totalRent,
-      totalPaid,
-      outstanding: totalRent - totalPaid,
-    },
-    payments,
-  };
+async function generateUnitReportData(propertyOrUnitId, fromDate, toDate) {
+  return generatePropertyReportData(propertyOrUnitId, fromDate, toDate);
 }
 
 /**
@@ -1009,7 +841,6 @@ async function generatePaymentReportData(filters = {}) {
   const payments = await Payment.find(query)
     .populate('customerId')
     .populate('propertyId')
-    .populate('unitId')
     .sort({ dueDate: -1 });
 
   const totalExpected = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
@@ -1029,8 +860,8 @@ async function generatePaymentReportData(filters = {}) {
       dueDate: p.dueDate,
       paidDate: p.paidDate || '',
       tenantName: p.customerId?.fullName || p.customerId?.name || 'N/A',
-      propertyName: p.propertyId?.title || p.propertyId?.name || 'N/A',
-      unitName: p.unitId?.name || 'N/A',
+      propertyName: p.propertyId?.name || p.propertyId?.propertyName || p.propertyId?.title || 'N/A',
+      unitName: p.propertyId?.name || p.propertyId?.propertyName || 'N/A',
       amount: p.amount,
       paidAmount: p.paidAmount,
       remainingAmount: p.remainingAmount,

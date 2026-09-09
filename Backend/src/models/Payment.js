@@ -12,11 +12,6 @@ const paymentSchema = new mongoose.Schema(
       ref: 'Property',
       required: [true, 'Property reference is required'],
     },
-    unitId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Unit',
-      required: [true, 'Unit reference is required'],
-    },
     tenancyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Tenancy',
@@ -81,7 +76,6 @@ const paymentSchema = new mongoose.Schema(
 
 paymentSchema.index({ customerId: 1 });
 paymentSchema.index({ propertyId: 1 });
-paymentSchema.index({ unitId: 1 });
 paymentSchema.index({ tenancyId: 1 });
 paymentSchema.index({ status: 1 });
 paymentSchema.index({ dueDate: 1 });

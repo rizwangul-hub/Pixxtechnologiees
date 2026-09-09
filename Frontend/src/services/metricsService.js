@@ -31,20 +31,21 @@ export function getTotalPropertiesCount() {
   return getSavedProperties().length;
 }
 
+// In the new model, each property IS an individual rentable unit
 export function getTotalUnitsCount() {
-  return getSavedUnits().length;
+  return getSavedProperties().length;
 }
 
 export function getOccupiedUnitsCount() {
-  return getSavedUnits().filter((u) => u.status === 'Occupied').length;
+  return getSavedProperties().filter((p) => p.status === 'Occupied').length;
 }
 
 export function getAvailableUnitsCount() {
-  return getSavedUnits().filter((u) => u.status === 'Available').length;
+  return getSavedProperties().filter((p) => p.status === 'Available').length;
 }
 
 export function getReservedUnitsCount() {
-  return getSavedUnits().filter((u) => u.status === 'Reserved').length;
+  return getSavedProperties().filter((p) => p.status === 'Reserved').length;
 }
 
 export function getTotalCustomersCount() {
@@ -54,7 +55,7 @@ export function getTotalCustomersCount() {
 // --- FINANCIAL COMPUTATIONS ---
 
 export function getFinancialOverview() {
-  const units = getSavedUnits();
+  const properties = getSavedProperties();
   const schedules = getSavedPaymentSchedules();
   const payments = getSavedRecordedPayments();
 
@@ -62,10 +63,10 @@ export function getFinancialOverview() {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
 
-  // Monthly expected rent from units with monthly_rent price type
-  const monthlyExpectedRent = units
-    .filter((u) => u.priceType === 'monthly_rent' || !u.priceType)
-    .reduce((sum, u) => sum + (Number(u.price) || 0), 0);
+  // Monthly expected rent from properties with monthly_rent price type
+  const monthlyExpectedRent = properties
+    .filter((p) => p.priceType === 'monthly_rent' || !p.priceType)
+    .reduce((sum, p) => sum + (Number(p.monthlyRent) || Number(p.price) || 0), 0);
 
   // Payments received in the current calendar month
   const paymentsReceivedThisMonth = payments

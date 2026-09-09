@@ -4,7 +4,6 @@ const rentPaymentSchema = new mongoose.Schema(
   {
     customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
     propertyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Property', required: true },
-    unitId: { type: mongoose.Schema.Types.ObjectId, ref: 'Unit', required: true },
     tenancyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenancy', required: true },
     amount: { type: Number, required: true, min: 0 },
     paidAmount: { type: Number, default: 0, min: 0 },

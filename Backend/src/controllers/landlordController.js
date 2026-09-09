@@ -1,12 +1,8 @@
 const mongoose = require('mongoose');
 const Landlord = require('../models/Landlord');
 const Property = require('../models/Property');
-const Unit = require('../models/Unit');
 const { deleteFromCloudinary } = require('../services/cloudinaryService');
 
-// @desc    Get all landlords with search, filter, pagination, and propertiesCount
-// @route   GET /api/landlords
-// @access  Private
 // @desc    Get all landlords with search, filter, pagination, and propertiesCount
 // @route   GET /api/landlords
 // @access  Private
@@ -46,14 +42,23 @@ const getLandlords = async (req, res) => {
       .skip(skip)
       .limit(limitNum);
 
-    // Compute propertiesCount for each landlord efficiently
+    // Compute individual properties metrics for each landlord
     const landlords = await Promise.all(
       rawLandlords.map(async (l) => {
         const lObj = l.toObject();
-        const propertiesCount = await Property.countDocuments({ landlordId: l._id, isArchived: { $ne: true } });
+        const activeProps = await Property.find({ landlordId: l._id, isArchived: { $ne: true } });
+        const totalProperties = activeProps.length;
+        const occupiedProperties = activeProps.filter(p => p.status === 'Occupied').length;
+        const availableProperties = activeProps.filter(p => p.status === 'Available').length;
+        const totalRent = activeProps.reduce((sum, p) => sum + (Number(p.monthlyRent || p.price) || 0), 0);
+
         return {
           ...lObj,
-          propertiesCount,
+          propertiesCount: totalProperties,
+          totalProperties,
+          occupiedProperties,
+          availableProperties,
+          totalRent,
         };
       })
     );
@@ -288,7 +293,7 @@ const restoreLandlord = async (req, res) => {
   }
 };
 
-// @desc    Get properties owned by a specific landlord with unit counts
+// @desc    Get properties owned by a specific landlord
 // @route   GET /api/landlords/:landlordId/properties
 // @access  Private
 const getLandlordProperties = async (req, res) => {
@@ -306,30 +311,18 @@ const getLandlordProperties = async (req, res) => {
 
     const properties = await Property.find({ landlordId }).sort({ createdAt: -1 });
 
-    const propertySummaries = await Promise.all(
-      properties.map(async (prop) => {
-        const propIdList = [prop._id, prop._id?.toString(), prop.id].filter(Boolean);
-        const propUnits = await Unit.find({
-          propertyId: { $in: propIdList },
-          isArchived: { $ne: true },
-        });
-
-        const totalUnits = propUnits.length > 0 ? propUnits.length : (prop.totalUnits || 0);
-        const occupiedUnits = propUnits.filter((u) => u.status === 'Occupied' || u.customerId || u.customerName).length;
-        const availableUnits = propUnits.filter((u) => u.status === 'Available').length || Math.max(0, totalUnits - occupiedUnits);
-        const reservedUnits = propUnits.filter((u) => u.status === 'Reserved').length;
-        const maintenanceUnits = propUnits.filter((u) => u.status === 'Maintenance').length;
-
-        return {
-          ...prop.toObject(),
-          totalUnits,
-          occupiedUnits,
-          availableUnits,
-          reservedUnits,
-          maintenanceUnits,
-        };
-      })
-    );
+    const propertySummaries = properties.map((prop) => {
+      const pObj = prop.toObject ? prop.toObject() : prop;
+      const isOccupied = pObj.status === 'Occupied' || Boolean(pObj.customerName);
+      return {
+        ...pObj,
+        totalUnits: 1,
+        occupiedUnits: isOccupied ? 1 : 0,
+        availableUnits: pObj.status === 'Available' ? 1 : 0,
+        reservedUnits: pObj.status === 'Reserved' ? 1 : 0,
+        maintenanceUnits: pObj.status === 'Maintenance' ? 1 : 0,
+      };
+    });
 
     res.status(200).json({
       success: true,

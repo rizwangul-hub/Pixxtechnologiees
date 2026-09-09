@@ -119,7 +119,6 @@ const generateMonthlyAgentSettlements = async () => {
               agentId: tenancy.agentId,
               tenancyId: tenancy._id,
               propertyId: tenancy.propertyId,
-              unitId: tenancy.unitId,
               tenantId: tenancy.customerId,
               billingMonth: month,
               billingYear: year,

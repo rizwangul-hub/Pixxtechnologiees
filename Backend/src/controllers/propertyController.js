@@ -1,17 +1,29 @@
+const mongoose = require('mongoose');
 const Property = require('../models/Property');
-const Unit = require('../models/Unit');
 const Landlord = require('../models/Landlord');
+const Tenancy = require('../models/Tenancy');
 const { deleteFromCloudinary } = require('../services/cloudinaryService');
 
 // @desc    Get all properties with search, filter, and pagination
 // @route   GET /api/properties
 // @access  Private
-// @desc    Get all properties with search, filter, and pagination
-// @route   GET /api/properties
-// @access  Private
 const getProperties = async (req, res) => {
   try {
-    const { name, search, type, status, landlordId, archived, includeArchived, page = 1, limit = 100 } = req.query;
+    const {
+      name,
+      search,
+      type,
+      propertyType,
+      status,
+      landlordId,
+      city,
+      county,
+      postcode,
+      archived,
+      includeArchived,
+      page = 1,
+      limit = 100,
+    } = req.query;
 
     const filter = {};
 
@@ -26,9 +38,19 @@ const getProperties = async (req, res) => {
 
     const searchTerm = name || search;
     if (searchTerm) {
-      filter.name = { $regex: searchTerm, $options: 'i' };
+      filter.$or = [
+        { name: { $regex: searchTerm, $options: 'i' } },
+        { address: { $regex: searchTerm, $options: 'i' } },
+        { city: { $regex: searchTerm, $options: 'i' } },
+        { postcode: { $regex: searchTerm, $options: 'i' } },
+      ];
     }
-    if (type) filter.type = type;
+    const selectedType = type || propertyType;
+    if (selectedType && selectedType !== 'All') filter.type = selectedType;
+    if (city) filter.city = { $regex: city, $options: 'i' };
+    if (county) filter.county = { $regex: county, $options: 'i' };
+    if (postcode) filter.postcode = { $regex: postcode, $options: 'i' };
+
     if (landlordId && landlordId !== 'All' && landlordId !== 'all' && mongoose.Types.ObjectId.isValid(landlordId)) {
       filter.landlordId = landlordId;
     }
@@ -44,11 +66,42 @@ const getProperties = async (req, res) => {
       .skip(skip)
       .limit(limitNum);
 
+    // Enrich each property with active tenancy & tenant & agent info
+    const enrichedProperties = await Promise.all(
+      properties.map(async (prop) => {
+        const pObj = prop.toObject ? prop.toObject() : prop;
+        const activeTenancy = await Tenancy.findOne({
+          propertyId: prop._id,
+          status: 'Active',
+          isArchived: { $ne: true },
+        })
+          .populate('customerId', 'fullName email phone')
+          .populate('agentId', 'name agencyName email phone');
+
+        const tenant = activeTenancy?.customerId || null;
+        const agent = activeTenancy?.agentId || null;
+        const isOccupied = Boolean(activeTenancy || pObj.customerName);
+
+        return {
+          ...pObj,
+          activeTenancy: activeTenancy || null,
+          tenant: tenant || null,
+          tenantName: tenant ? tenant.fullName : pObj.customerName || null,
+          agent: agent || null,
+          agentName: agent ? (agent.name || agent.agencyName) : null,
+          status: pObj.isArchived ? 'Archived' : (isOccupied ? 'Occupied' : pObj.status),
+          totalUnits: 1,
+          occupiedUnits: isOccupied ? 1 : 0,
+          availableUnits: !isOccupied && !pObj.isArchived ? 1 : 0,
+        };
+      })
+    );
+
     res.status(200).json({
       success: true,
       message: 'Properties retrieved successfully',
-      count: properties.length,
-      data: properties,
+      count: enrichedProperties.length,
+      data: enrichedProperties,
       pagination: {
         total,
         page: pageNum,
@@ -65,7 +118,7 @@ const getProperties = async (req, res) => {
   }
 };
 
-// @desc    Create a new property
+// @desc    Create a new individual property
 // @route   POST /api/properties
 // @access  Private
 const createProperty = async (req, res) => {
@@ -88,20 +141,36 @@ const createProperty = async (req, res) => {
       });
     }
 
-    const propertyData = {
-      ...req.body,
-      name: req.body.name || req.body.propertyName,
-      landlordId,
-      managerId: req.manager ? req.manager._id : null,
-    };
-
-    if (!propertyData.name) {
+    const name = (req.body.name || req.body.propertyName || '').trim();
+    if (!name) {
       return res.status(400).json({
         success: false,
         message: 'Property name is required',
         errors: ['name field is missing'],
       });
     }
+
+    const price = Number(req.body.price ?? req.body.monthlyRent ?? 0);
+    const monthlyRent = Number(req.body.monthlyRent ?? req.body.price ?? price);
+
+    const propertyData = {
+      ...req.body,
+      name,
+      type: req.body.type || req.body.propertyType || 'Shop',
+      price,
+      monthlyRent,
+      landlordId,
+      address: req.body.address || '',
+      city: req.body.city || 'London',
+      area: req.body.area || '',
+      county: req.body.county || '',
+      postcode: req.body.postcode || '',
+      floor: req.body.floor || 'Ground',
+      size: req.body.size || '',
+      sizeUnit: req.body.sizeUnit || 'sq ft',
+      status: req.body.status || 'Available',
+      managerId: req.manager ? req.manager._id : null,
+    };
 
     let property = await Property.create(propertyData);
     property = await Property.findById(property._id).populate('landlordId', 'fullName email phone address country region logo');
@@ -138,7 +207,25 @@ const getPropertyById = async (req, res) => {
     if (!property) {
       return res.status(404).json({ success: false, message: 'Property not found' });
     }
-    res.status(200).json({ success: true, data: property });
+
+    const activeTenancy = await Tenancy.findOne({
+      propertyId: property._id,
+      status: 'Active',
+      isArchived: { $ne: true },
+    })
+      .populate('customerId', 'fullName email phone')
+      .populate('agentId', 'name agencyName email phone');
+
+    const pObj = property.toObject ? property.toObject() : property;
+    res.status(200).json({
+      success: true,
+      data: {
+        ...pObj,
+        activeTenancy: activeTenancy || null,
+        tenant: activeTenancy?.customerId || null,
+        agent: activeTenancy?.agentId || null,
+      },
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -156,7 +243,15 @@ const updateProperty = async (req, res) => {
       }
     }
 
-    const property = await Property.findByIdAndUpdate(req.params.id, req.body, {
+    const updateData = { ...req.body };
+    if (req.body.propertyName && !req.body.name) {
+      updateData.name = req.body.propertyName;
+    }
+    if (req.body.propertyType && !req.body.type) {
+      updateData.type = req.body.propertyType;
+    }
+
+    const property = await Property.findByIdAndUpdate(req.params.id, updateData, {
       new: true,
       runValidators: true,
     }).populate('landlordId', 'fullName email phone address country region logo');
@@ -170,7 +265,7 @@ const updateProperty = async (req, res) => {
   }
 };
 
-// @desc    Archive / Soft Delete property & associated units
+// @desc    Archive / Soft Delete property
 // @route   DELETE /api/properties/:id or PUT /api/properties/:id/archive
 // @access  Private
 const archiveProperty = async (req, res) => {
@@ -189,26 +284,17 @@ const archiveProperty = async (req, res) => {
     property.archiveReason = archiveReason;
     await property.save();
 
-    await Unit.updateMany(
-      { propertyId: property._id },
-      {
-        $set: {
-          isArchived: true,
-          status: 'Archived',
-          archivedAt: new Date(),
-          archivedBy: req.user?._id || null,
-          archiveReason,
-        },
-      }
-    );
-
-    res.status(200).json({ success: true, message: 'Property and associated units archived successfully.', data: property });
+    res.status(200).json({
+      success: true,
+      message: 'Property archived successfully.',
+      data: property,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Restore archived property & associated units
+// @desc    Restore archived property
 // @route   PUT /api/properties/:id/restore
 // @access  Private
 const restoreProperty = async (req, res) => {
@@ -218,51 +304,43 @@ const restoreProperty = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Property not found' });
     }
 
+    const activeTenancy = await Tenancy.findOne({
+      propertyId: property._id,
+      status: 'Active',
+      isArchived: { $ne: true },
+    });
+
     property.isArchived = false;
-    property.status = 'Active';
+    property.status = activeTenancy ? 'Occupied' : 'Available';
     property.archivedAt = null;
     property.archivedBy = null;
     property.archiveReason = '';
     await property.save();
 
-    await Unit.updateMany(
-      { propertyId: property._id },
-      {
-        $set: {
-          isArchived: false,
-          status: 'Available',
-          archivedAt: null,
-          archivedBy: null,
-          archiveReason: '',
-        },
-      }
-    );
-
-    res.status(200).json({ success: true, message: 'Property and associated units restored successfully.', data: property });
+    res.status(200).json({
+      success: true,
+      message: 'Property restored successfully.',
+      data: property,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get units belonging to a specific property
+// @desc    Get backward compatibility units (returns the property itself in an array)
 // @route   GET /api/properties/:id/units or GET /api/properties/:propertyId/units
 // @access  Private
 const getPropertyUnits = async (req, res) => {
   try {
     const propertyId = req.params.id || req.params.propertyId;
-    const filter = {};
-    if (propertyId && propertyId !== 'All' && propertyId !== 'all' && mongoose.Types.ObjectId.isValid(propertyId)) {
-      filter.propertyId = propertyId;
+    if (!propertyId || !mongoose.Types.ObjectId.isValid(propertyId)) {
+      return res.status(200).json({ success: true, count: 0, data: [] });
     }
-    if (req.query.archived === 'true' || req.query.status === 'Archived') {
-      filter.isArchived = true;
-    } else if (req.query.includeArchived === 'true') {
-      // no filter
-    } else {
-      filter.isArchived = { $ne: true };
+    const prop = await Property.findById(propertyId);
+    if (!prop) {
+      return res.status(200).json({ success: true, count: 0, data: [] });
     }
-    const units = await Unit.find(filter).sort({ createdAt: -1 });
-    res.status(200).json({ success: true, count: units.length, data: units });
+    res.status(200).json({ success: true, count: 1, data: [prop] });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

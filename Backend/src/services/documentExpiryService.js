@@ -2,7 +2,6 @@ const TenantDocument = require('../models/TenantDocument');
 const Customer = require('../models/Customer');
 const Tenancy = require('../models/Tenancy');
 const Property = require('../models/Property');
-const Unit = require('../models/Unit');
 const Agent = require('../models/Agent');
 const Notification = require('../models/Notification');
 const { sendDocumentExpiryEmail, FALLBACK_EMAIL } = require('./emailService');
@@ -41,20 +40,20 @@ async function checkAndProcessDocumentExpiries() {
         const tenant = await Customer.findById(doc.tenantId);
         const tenantName = tenant?.fullName || tenant?.name || 'Unknown Tenant';
 
-        // Find active tenancy to identify assigned Agent, Unit & Property
+        // Find active tenancy to identify assigned Agent & Property
         const activeTenancy = await Tenancy.findOne({
           customerId: doc.tenantId,
           status: 'Active',
         })
           .populate('propertyId')
-          .populate('unitId')
           .populate('agentId');
 
         const propertyName =
-          activeTenancy?.propertyId?.title ||
           activeTenancy?.propertyId?.name ||
+          activeTenancy?.propertyId?.propertyName ||
+          activeTenancy?.propertyId?.title ||
           'Unassigned Property';
-        const unitName = activeTenancy?.unitId?.name || 'Unassigned Unit';
+        const unitName = propertyName;
 
         const agent = activeTenancy?.agentId || null;
         const agentName = agent?.fullName || 'No Agent';
@@ -104,7 +103,6 @@ async function checkAndProcessDocumentExpiries() {
             documentId: doc._id,
             tenantId: doc.tenantId,
             propertyId: activeTenancy?.propertyId?._id || null,
-            unitId: activeTenancy?.unitId?._id || null,
             agentId: agent?._id || null,
             recipientEmail: recipientEmail,
             isRead: false,
@@ -135,8 +133,8 @@ async function sendTestDocumentExpiryEmail(options = {}) {
   let sampleDoc = await TenantDocument.findOne({ expiryDate: { $ne: null } }).populate('tenantId');
   let tenantName = sampleDoc?.tenantId?.fullName || sampleDoc?.tenantId?.name || 'Ahmed Khan';
   let documentName = sampleDoc?.documentName || 'Passport & Right to Rent Check';
-  let propertyName = 'ABC Plaza';
-  let unitName = 'Flat 101';
+  let propertyName = 'Shop 1';
+  let unitName = 'Shop 1';
   let expiryDateStr = sampleDoc?.expiryDate
     ? new Date(sampleDoc.expiryDate).toISOString().split('T')[0]
     : '2026-10-08';
@@ -144,11 +142,10 @@ async function sendTestDocumentExpiryEmail(options = {}) {
 
   if (sampleDoc) {
     const activeTenancy = await Tenancy.findOne({ customerId: sampleDoc.tenantId, status: 'Active' })
-      .populate('propertyId')
-      .populate('unitId');
+      .populate('propertyId');
     if (activeTenancy) {
-      propertyName = activeTenancy.propertyId?.title || activeTenancy.propertyId?.name || propertyName;
-      unitName = activeTenancy.unitId?.name || unitName;
+      propertyName = activeTenancy.propertyId?.name || activeTenancy.propertyId?.propertyName || propertyName;
+      unitName = propertyName;
     }
   }
 

@@ -5,10 +5,9 @@ import { Plus, Download, Search, Eye, Edit, Trash2, Building2, MapPin, UserCheck
 import {
   getSavedProperties,
   deleteProperty,
-  getPropertyMetrics,
   exportPropertiesToFile,
 } from '../data/propertiesData';
-import { fetchPropertiesFromAPI } from '../services/apiData';
+import { archivePropertyAPI, fetchPropertiesFromAPI } from '../services/apiData';
 import { downloadFileAPI } from '../services/api';
 
 export function PropertiesPage() {
@@ -79,10 +78,15 @@ export function PropertiesPage() {
     return Object.values(groupsMap);
   }, [filteredProperties]);
 
-  const handleDelete = (id, name) => {
+  const handleDelete = async (id, name) => {
     if (window.confirm(`Are you sure you want to delete "${name}"? All associated units will also be deleted.`)) {
-      const updated = deleteProperty(id);
-      setProperties(updated);
+      try {
+        await archivePropertyAPI(id);
+        setProperties((current) => current.filter((property) => property.id !== id && property._id !== id));
+        deleteProperty(id);
+      } catch (error) {
+        window.alert(`Unable to delete property: ${error.message}`);
+      }
     }
   };
 
@@ -239,9 +243,8 @@ export function PropertiesPage() {
                           <th className="py-3 px-4">Property Name</th>
                           <th className="py-3 px-4">Type</th>
                           <th className="py-3 px-4">Address</th>
-                          <th className="py-3 px-4 text-center">Total Units</th>
-                          <th className="py-3 px-4 text-center">Occupied</th>
-                          <th className="py-3 px-4 text-center">Available</th>
+                          <th className="py-3 px-4">Monthly Rent</th>
+                          <th className="py-3 px-4">Tenant</th>
                           <th className="py-3 px-4">Status</th>
                           <th className="py-3 px-4 text-right">Actions</th>
                         </tr>
@@ -250,7 +253,18 @@ export function PropertiesPage() {
                         {group.properties.map((p) => {
                           const pid = p._id || p.id;
                           const propName = p.name || p.propertyName;
-                          const metrics = getPropertyMetrics(pid);
+                          const monthlyRent = p.monthlyRent || p.price || 0;
+                          const tenantName = p.activeTenancy?.customerId?.fullName
+                            || p.activeTenancy?.tenantName
+                            || p.customerName
+                            || (p.status === 'Occupied' ? 'Occupied' : '—');
+                          const statusColor = p.status === 'Occupied'
+                            ? 'bg-blue-50 text-blue-800 border-blue-200'
+                            : p.status === 'Available'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : p.status === 'Maintenance'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : 'bg-slate-50 text-slate-800 border-slate-200';
 
                           return (
                             <tr key={pid} className="hover:bg-slate-50/80 transition-colors">
@@ -270,17 +284,14 @@ export function PropertiesPage() {
                                   <span>{[p.address, p.city].filter(Boolean).join(', ') || '-'}</span>
                                 </div>
                               </td>
-                              <td className="py-3.5 px-4 text-center font-extrabold text-slate-900">
-                                {metrics.totalUnits}
+                              <td className="py-3.5 px-4 font-bold text-slate-900">
+                                £{monthlyRent.toLocaleString()}/mo
                               </td>
-                              <td className="py-3.5 px-4 text-center font-bold text-blue-700">
-                                {metrics.occupiedUnits}
-                              </td>
-                              <td className="py-3.5 px-4 text-center font-bold text-emerald-700">
-                                {metrics.availableUnits}
+                              <td className="py-3.5 px-4 font-medium text-slate-600 text-xs">
+                                {tenantName}
                               </td>
                               <td className="py-3.5 px-4">
-                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${statusColor}`}>
                                   {p.status || 'Active'}
                                 </span>
                               </td>
@@ -333,9 +344,8 @@ export function PropertiesPage() {
                     <th className="py-3 px-4">Landlord</th>
                     <th className="py-3 px-4">Type</th>
                     <th className="py-3 px-4">Address</th>
-                    <th className="py-3 px-4 text-center">Total Units</th>
-                    <th className="py-3 px-4 text-center">Occupied</th>
-                    <th className="py-3 px-4 text-center">Available</th>
+                    <th className="py-3 px-4">Monthly Rent</th>
+                    <th className="py-3 px-4">Tenant</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
@@ -343,7 +353,7 @@ export function PropertiesPage() {
                 <tbody className="divide-y divide-slate-100">
                   {filteredProperties.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-slate-400 font-medium">
+                      <td colSpan={8} className="py-8 text-center text-slate-400 font-medium">
                         No properties found matching your search.
                       </td>
                     </tr>
@@ -353,7 +363,18 @@ export function PropertiesPage() {
                       const propName = p.name || p.propertyName;
                       const landlordObj = p.landlordId || {};
                       const landlordName = landlordObj.fullName || p.landlordName || '—';
-                      const metrics = getPropertyMetrics(pid);
+                      const monthlyRent = p.monthlyRent || p.price || 0;
+                      const tenantName = p.activeTenancy?.customerId?.fullName
+                        || p.activeTenancy?.tenantName
+                        || p.customerName
+                        || (p.status === 'Occupied' ? 'Occupied' : '—');
+                      const statusColor = p.status === 'Occupied'
+                        ? 'bg-blue-50 text-blue-800 border-blue-200'
+                        : p.status === 'Available'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : p.status === 'Maintenance'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                        : 'bg-slate-50 text-slate-800 border-slate-200';
 
                       return (
                         <tr key={pid} className="hover:bg-slate-50/80 transition-colors">
@@ -383,18 +404,15 @@ export function PropertiesPage() {
                               <span>{[p.address, p.city].filter(Boolean).join(', ') || '-'}</span>
                             </div>
                           </td>
-                          <td className="py-3.5 px-4 text-center font-extrabold text-slate-900">
-                            {metrics.totalUnits}
+                          <td className="py-3.5 px-4 font-bold text-slate-900">
+                            £{monthlyRent.toLocaleString()}/mo
                           </td>
-                          <td className="py-3.5 px-4 text-center font-bold text-blue-700">
-                            {metrics.occupiedUnits}
-                          </td>
-                          <td className="py-3.5 px-4 text-center font-bold text-emerald-700">
-                            {metrics.availableUnits}
+                          <td className="py-3.5 px-4 font-medium text-slate-600 text-xs">
+                            {tenantName}
                           </td>
                           <td className="py-3.5 px-4">
-                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                              {p.status || 'Active'}
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${statusColor}`}>
+                              {p.status || 'Available'}
                             </span>
                           </td>
                           <td className="py-3.5 px-4 text-right">
