@@ -20,13 +20,17 @@ const loginManager = async (req, res) => {
     const cleanEmail = email.toLowerCase().trim();
 
     // Auto-seed initial admin manager if database has 0 managers
-    const managerCount = await Manager.countDocuments();
-    if (managerCount === 0) {
-      await Manager.create({
-        name: 'System Admin',
-        email: cleanEmail,
-        password: password,
-      });
+    try {
+      const managerCount = await Manager.countDocuments();
+      if (managerCount === 0) {
+        await Manager.create({
+          name: 'System Admin',
+          email: cleanEmail,
+          password: password,
+        });
+      }
+    } catch (seedErr) {
+      console.warn('[Auto-seed Warning]', seedErr.message);
     }
 
     let manager = await Manager.findOne({ email: cleanEmail });
