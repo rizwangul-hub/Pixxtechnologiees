@@ -384,16 +384,6 @@ export function PropertyDetailPage() {
                 <Plus className="w-4 h-4 stroke-[3]" />
                 <span>Add Unit</span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => handleExportUnits('xlsx')}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-extrabold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
-                title="Export Units to Excel"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export</span>
-              </button>
             </div>
           </div>
 

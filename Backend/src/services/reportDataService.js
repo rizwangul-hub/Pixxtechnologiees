@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Customer = require('../models/Customer');
 const Property = require('../models/Property');
 const Unit = require('../models/Unit');
@@ -248,24 +249,32 @@ function getRecent3Months(endDateInput) {
  * 2. LANDLORD REPORT DATA GENERATOR
  */
 async function generateLandlordReportData(landlordId, fromDate, toDate) {
-  const landlord = await Landlord.findById(landlordId);
+  let landlord;
+  if (mongoose.Types.ObjectId.isValid(landlordId)) {
+    landlord = await Landlord.findById(landlordId);
+  }
+  if (!landlord) {
+    landlord = await Landlord.findOne({ $or: [{ _id: landlordId }, { id: landlordId }] });
+  }
   if (!landlord) {
     throw new Error('Landlord not found');
   }
 
-  const properties = await Property.find({ landlordId });
+  const landlordIdList = [landlord._id, landlord._id?.toString(), landlord.id, landlordId].filter(Boolean);
+  const properties = await Property.find({ landlordId: { $in: landlordIdList } });
   const propertyIds = properties.map((p) => p._id);
+  const allPropIdList = [...propertyIds, ...properties.map((p) => p.id), ...properties.map((p) => p._id?.toString())].filter(Boolean);
 
-  const units = await Unit.find({ propertyId: { $in: propertyIds } });
+  const units = await Unit.find({ propertyId: { $in: allPropIdList } });
   const unitIds = units.map((u) => u._id);
 
-  const tenancies = await Tenancy.find({ propertyId: { $in: propertyIds } })
+  const tenancies = await Tenancy.find({ propertyId: { $in: allPropIdList } })
     .populate('customerId')
     .populate('unitId')
     .populate('agentId');
 
   // Payments & Expenses
-  const pQuery = { propertyId: { $in: propertyIds } };
+  const pQuery = { propertyId: { $in: allPropIdList } };
   if (fromDate && toDate) {
     pQuery.dueDate = { $gte: fromDate, $lte: toDate };
   }
@@ -520,22 +529,30 @@ async function generateAgentReportData(agentId, fromDate, toDate) {
  * 4. PROPERTY REPORT DATA GENERATOR
  */
 async function generatePropertyReportData(propertyId, fromDate, toDate) {
-  const property = await Property.findById(propertyId).populate('landlordId');
+  let property;
+  if (mongoose.Types.ObjectId.isValid(propertyId)) {
+    property = await Property.findById(propertyId).populate('landlordId');
+  }
+  if (!property) {
+    property = await Property.findOne({ $or: [{ _id: propertyId }, { id: propertyId }] }).populate('landlordId');
+  }
   if (!property) {
     throw new Error('Property not found');
   }
 
-  const units = await Unit.find({ propertyId });
-  const tenancies = await Tenancy.find({ propertyId })
+  const propIdList = [property._id, property._id?.toString(), property.id, propertyId].filter(Boolean);
+
+  const units = await Unit.find({ propertyId: { $in: propIdList } });
+  const tenancies = await Tenancy.find({ propertyId: { $in: propIdList } })
     .populate('customerId')
     .populate('unitId')
     .populate('agentId');
 
-  const pQuery = { propertyId };
+  const pQuery = { propertyId: { $in: propIdList } };
   if (fromDate && toDate) pQuery.dueDate = { $gte: fromDate, $lte: toDate };
   const payments = await Payment.find(pQuery);
 
-  const eQuery = { propertyId };
+  const eQuery = { propertyId: { $in: propIdList } };
   if (fromDate && toDate) eQuery.date = { $gte: fromDate, $lte: toDate };
   const propertyExpenses = await Expense.find(eQuery);
   const agentExpenses = await AgentExpense.find({ ...eQuery, status: 'Approved' });
@@ -549,7 +566,7 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
   // 3-Month Collection Tracker Matrix for Rent Income Report
   const trackingMonths = getRecent3Months(toDate);
   const periodPayments = await Payment.find({
-    propertyId,
+    propertyId: { $in: propIdList },
     dueDate: { $gte: trackingMonths[0].startStr, $lte: trackingMonths[2].endStr },
   });
 
@@ -559,8 +576,8 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
 
   for (const u of unitsToProcess) {
     const uTenancy =
-      tenancies.find((t) => t.unitId && (t.unitId._id?.toString() === u._id.toString() || t.unitId?.toString() === u._id.toString())) ||
-      tenancies.find((t) => t.propertyId && (t.propertyId._id?.toString() === property._id.toString() || t.propertyId?.toString() === property._id.toString()));
+      tenancies.find((t) => t.unitId && (t.unitId._id?.toString() === u._id?.toString() || t.unitId?.toString() === u._id?.toString() || t.unitId?.toString() === u.id?.toString())) ||
+      tenancies.find((t) => t.propertyId && propIdList.some((idVal) => idVal?.toString() === t.propertyId._id?.toString() || idVal?.toString() === t.propertyId?.toString()));
 
     const rent = uTenancy?.monthlyRent || u.monthlyRent || u.price || property.price || 0;
     const rawMFee = uTenancy?.companyMonthlyAmount || 50;
@@ -572,9 +589,13 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
 
     const collections = trackingMonths.map((mInfo) => {
       const mPay = periodPayments.find((pay) => {
+        const payPropStr = pay.propertyId ? pay.propertyId.toString() : '';
+        const payUnitStr = pay.unitId ? pay.unitId.toString() : '';
+        const targetUnitStr = u._id ? u._id.toString() : u.id ? u.id.toString() : '';
+
         const matchUnit = u.isSynthetic
-          ? pay.propertyId.toString() === property._id.toString()
-          : pay.unitId?.toString() === u._id.toString();
+          ? propIdList.some((idVal) => idVal?.toString() === payPropStr)
+          : (payUnitStr === targetUnitStr);
         const pDate = pay.dueDate || pay.paidDate;
         return matchUnit && pDate >= mInfo.startStr && pDate <= mInfo.endStr;
       });
