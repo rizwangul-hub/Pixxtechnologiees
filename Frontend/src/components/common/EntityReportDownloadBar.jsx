@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, Download, FileText, Loader2, Sparkles } from 'lucide-react';
 import { downloadFileAPI } from '../../services/api';
+import { exportPropertyReport, exportCustomerReport } from '../../services/reportExportService';
 
 /**
  * Reusable Date-Range Excel & PDF Statement/Report Download Control
@@ -40,7 +41,20 @@ export function EntityReportDownloadBar({ entityType, entityId, entityName = 'Re
       const filename = `${entityType.toUpperCase()}_Statement_${cleanName}_${fromDate}_to_${toDate}.xlsx`;
       await downloadFileAPI(endpoint, filename);
     } catch (err) {
-      alert(err.message || 'Failed to generate Excel report');
+      console.warn('[Excel Download API Fallback]', err.message);
+      try {
+        if (entityType === 'property') {
+          exportPropertyReport({ propertyId: entityId, dateFrom: fromDate, dateTo: toDate });
+        } else if (entityType === 'landlord') {
+          exportPropertyReport({ landlordId: entityId, dateFrom: fromDate, dateTo: toDate });
+        } else if (entityType === 'tenant' || entityType === 'customer') {
+          exportCustomerReport({ tenantId: entityId, dateFrom: fromDate, dateTo: toDate });
+        } else {
+          exportPropertyReport({ dateFrom: fromDate, dateTo: toDate });
+        }
+      } catch (localErr) {
+        alert(err.message || 'Failed to generate Excel report');
+      }
     } finally {
       setLoadingExcel(false);
     }
@@ -55,7 +69,7 @@ export function EntityReportDownloadBar({ entityType, entityId, entityName = 'Re
       const filename = `${entityType.toUpperCase()}_Statement_${cleanName}_${fromDate}_to_${toDate}.pdf`;
       await downloadFileAPI(endpoint, filename);
     } catch (err) {
-      alert(err.message || 'Failed to generate PDF report');
+      alert(err.message || 'Failed to generate PDF report from server.');
     } finally {
       setLoadingPdf(false);
     }

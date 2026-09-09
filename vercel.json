@@ -2,6 +2,11 @@
   "version": 2,
   "buildCommand": "cd Frontend && npm install && npm run build",
   "outputDirectory": "Frontend/dist",
+  "functions": {
+    "api/**/*.js": {
+      "includeFiles": "Backend/node_modules/pdfkit/**,node_modules/pdfkit/**,Backend/src/assets/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/:path*",
