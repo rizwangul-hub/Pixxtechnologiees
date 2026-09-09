@@ -7,7 +7,7 @@ export function AuthLayout({ children }) {
       <div className="w-full max-w-md mx-auto bg-white rounded-2xl shadow-xl border border-slate-200/80 p-6 sm:p-8 space-y-6 text-left">
         {/* LOGO HEADER */}
         <div className="flex flex-col items-center justify-center space-y-2 text-center pb-2 border-b border-slate-100">
-          <PixxLogo variant="light" className="scale-110" />
+          <PixxLogo variant="login" className="scale-110" />
           <p className="text-xs font-semibold text-slate-500 pt-1">
             Internal Property & Payment Tracking Portal
           </p>

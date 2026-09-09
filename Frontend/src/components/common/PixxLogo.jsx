@@ -1,7 +1,12 @@
 import React from 'react';
 import logoImg from '../../assets/image/logo.png';
+import logo2Img from '../../assets/image/logo2.png';
 
-export function PixxLogo({ variant = 'dark', className = '' }) {
+export function PixxLogo({ variant = 'dark', useDashboardLogo = false, className = '' }) {
+  // Use logo.png for login page, logo2.png for dashboard page
+  const isDashboard = useDashboardLogo || variant === 'dashboard' || variant === 'dark';
+  const currentLogo = isDashboard ? logo2Img : logoImg;
+
   return (
     <div className={`flex items-center select-none ${className}`} style={{ perspective: '1000px' }}>
       <style>{`
@@ -21,7 +26,7 @@ export function PixxLogo({ variant = 'dark', className = '' }) {
       `}</style>
       {/* BRAND LOGO IMAGE */}
       <img
-        src={logoImg}
+        src={currentLogo}
         alt="PixxTechnologies Logo"
         className="h-11 md:h-13 w-auto object-contain shrink-0 drop-shadow-sm animate-rotate-y"
       />

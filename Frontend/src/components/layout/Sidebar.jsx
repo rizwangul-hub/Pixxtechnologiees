@@ -70,7 +70,7 @@ export function Sidebar({ isMobileMenuOpen, setIsMobileMenuOpen }) {
             <div className="space-y-6 text-left">
               {/* Header inside Mobile Drawer */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <PixxLogo variant="light" />
+                <PixxLogo variant="dashboard" />
                 <button
                   type="button"
                   onClick={() => setIsMobileMenuOpen(false)}
