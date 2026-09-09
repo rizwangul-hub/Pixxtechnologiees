@@ -11,6 +11,8 @@ const Mortgage = require('../models/Mortgage');
 const { convertToCSV, convertToExcelBuffer } = require('../utils/exportHelper');
 const { getMonthName } = require('../services/paymentGeneratorService');
 
+const mongoose = require('mongoose');
+
 /**
  * EXPORT PAYMENTS (CSV & Excel)
  */
@@ -19,8 +21,8 @@ exports.exportPayments = async (req, res) => {
     const { fromDate, toDate, property, customer, status, format } = req.query;
 
     const filter = {};
-    if (property) filter.propertyId = property;
-    if (customer) filter.customerId = customer;
+    if (property && property !== 'All' && property !== 'all' && mongoose.Types.ObjectId.isValid(property)) filter.propertyId = property;
+    if (customer && customer !== 'All' && customer !== 'all' && mongoose.Types.ObjectId.isValid(customer)) filter.customerId = customer;
     if (status) filter.status = status;
 
     if (fromDate || toDate) {
@@ -174,8 +176,8 @@ exports.exportTenancies = async (req, res) => {
     const { status, property, customer, format } = req.query;
     const filter = {};
     if (status) filter.status = status;
-    if (property) filter.propertyId = property;
-    if (customer) filter.customerId = customer;
+    if (property && property !== 'All' && property !== 'all' && mongoose.Types.ObjectId.isValid(property)) filter.propertyId = property;
+    if (customer && customer !== 'All' && customer !== 'all' && mongoose.Types.ObjectId.isValid(customer)) filter.customerId = customer;
 
     const tenancies = await Tenancy.find(filter)
       .populate('customerId', 'name fullName')
@@ -220,7 +222,7 @@ exports.exportExpenses = async (req, res) => {
   try {
     const { fromDate, toDate, property, category, status, format } = req.query;
     const filter = {};
-    if (property) filter.propertyId = property;
+    if (property && property !== 'All' && property !== 'all' && mongoose.Types.ObjectId.isValid(property)) filter.propertyId = property;
     if (category) filter.category = category;
     if (status) filter.status = status;
 

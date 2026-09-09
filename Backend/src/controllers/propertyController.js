@@ -29,7 +29,9 @@ const getProperties = async (req, res) => {
       filter.name = { $regex: searchTerm, $options: 'i' };
     }
     if (type) filter.type = type;
-    if (landlordId) filter.landlordId = landlordId;
+    if (landlordId && landlordId !== 'All' && landlordId !== 'all' && mongoose.Types.ObjectId.isValid(landlordId)) {
+      filter.landlordId = landlordId;
+    }
 
     const pageNum = Math.max(1, parseInt(page, 10));
     const limitNum = Math.max(1, parseInt(limit, 10));
@@ -123,7 +125,16 @@ const createProperty = async (req, res) => {
 // @access  Private
 const getPropertyById = async (req, res) => {
   try {
-    const property = await Property.findById(req.params.id).populate('landlordId', 'fullName email phone address country region logo');
+    const { id } = req.params;
+    if (!id || id === 'All' || id === 'all' || !mongoose.Types.ObjectId.isValid(id)) {
+      const properties = await Property.find().populate('landlordId', 'fullName email phone address country region logo');
+      if (properties.length > 0) {
+        return res.status(200).json({ success: true, data: properties[0] });
+      }
+      return res.status(404).json({ success: false, message: 'Property not found' });
+    }
+
+    const property = await Property.findById(id).populate('landlordId', 'fullName email phone address country region logo');
     if (!property) {
       return res.status(404).json({ success: false, message: 'Property not found' });
     }
@@ -239,7 +250,10 @@ const restoreProperty = async (req, res) => {
 const getPropertyUnits = async (req, res) => {
   try {
     const propertyId = req.params.id || req.params.propertyId;
-    const filter = { propertyId };
+    const filter = {};
+    if (propertyId && propertyId !== 'All' && propertyId !== 'all' && mongoose.Types.ObjectId.isValid(propertyId)) {
+      filter.propertyId = propertyId;
+    }
     if (req.query.archived === 'true' || req.query.status === 'Archived') {
       filter.isArchived = true;
     } else if (req.query.includeArchived === 'true') {

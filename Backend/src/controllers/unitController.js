@@ -1,8 +1,6 @@
+const mongoose = require('mongoose');
 const Unit = require('../models/Unit');
 
-// @desc    Get all units (optionally filtered by propertyId)
-// @route   GET /api/units
-// @access  Private
 // @desc    Get all units (optionally filtered by propertyId)
 // @route   GET /api/units
 // @access  Private
@@ -10,7 +8,9 @@ const getUnits = async (req, res) => {
   try {
     const { propertyId, status, archived, includeArchived } = req.query;
     const filter = {};
-    if (propertyId) filter.propertyId = propertyId;
+    if (propertyId && propertyId !== 'All' && propertyId !== 'all' && mongoose.Types.ObjectId.isValid(propertyId)) {
+      filter.propertyId = propertyId;
+    }
 
     if (archived === 'true' || status === 'Archived') {
       filter.isArchived = true;

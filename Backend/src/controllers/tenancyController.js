@@ -135,6 +135,8 @@ const assignTenancy = async (req, res) => {
   }
 };
 
+const mongoose = require('mongoose');
+
 // @desc    Get all tenancies
 // @route   GET /api/tenancies
 // @access  Private
@@ -142,10 +144,10 @@ const getTenancies = async (req, res) => {
   try {
     const { customerId, propertyId, unitId, agentId, status, archived, includeArchived } = req.query;
     const filter = {};
-    if (customerId) filter.customerId = customerId;
-    if (propertyId) filter.propertyId = propertyId;
-    if (unitId) filter.unitId = unitId;
-    if (agentId) filter.agentId = agentId;
+    if (customerId && customerId !== 'All' && customerId !== 'all' && mongoose.Types.ObjectId.isValid(customerId)) filter.customerId = customerId;
+    if (propertyId && propertyId !== 'All' && propertyId !== 'all' && mongoose.Types.ObjectId.isValid(propertyId)) filter.propertyId = propertyId;
+    if (unitId && unitId !== 'All' && unitId !== 'all' && mongoose.Types.ObjectId.isValid(unitId)) filter.unitId = unitId;
+    if (agentId && agentId !== 'All' && agentId !== 'all' && mongoose.Types.ObjectId.isValid(agentId)) filter.agentId = agentId;
 
     if (archived === 'true' || status === 'Archived') {
       filter.isArchived = true;

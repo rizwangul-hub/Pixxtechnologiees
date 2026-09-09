@@ -52,7 +52,7 @@ function safeIdEquals(a, b) {
  * Prevents Cast to ObjectId failed errors when idVal is "All", "all", or custom string IDs
  */
 async function findEntitySafely(Model, idVal) {
-  if (!idVal || idVal === 'All' || idVal === 'all') return null;
+  if (!idVal || String(idVal).trim().toLowerCase() === 'all') return null;
 
   if (mongoose.Types.ObjectId.isValid(idVal)) {
     try {
@@ -82,7 +82,7 @@ async function findEntitySafely(Model, idVal) {
  * 1. TENANT STATEMENT DATA GENERATOR
  */
 async function generateTenantStatementData(tenantId, fromDate, toDate, propertyId) {
-  const isAll = !tenantId || tenantId === 'All' || tenantId === 'all';
+  const isAll = !tenantId || String(tenantId).trim().toLowerCase() === 'all';
   let tenant = await findEntitySafely(Customer, tenantId);
 
   if (!tenant) {

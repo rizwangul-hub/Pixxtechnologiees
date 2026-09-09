@@ -16,6 +16,8 @@ function calculateExpenseStatus(amount, paidAmount, dueDate) {
   }
 }
 
+const mongoose = require('mongoose');
+
 /**
  * GET /api/expenses
  */
@@ -23,7 +25,9 @@ exports.getExpenses = async (req, res) => {
   try {
     const { property, category, status, date } = req.query;
     const filter = {};
-    if (property) filter.propertyId = property;
+    if (property && property !== 'All' && property !== 'all' && mongoose.Types.ObjectId.isValid(property)) {
+      filter.propertyId = property;
+    }
     if (category) filter.category = category;
     if (status) filter.status = status;
     if (date) filter.date = date;
