@@ -1,12 +1,14 @@
 import React from 'react';
 import { Building } from 'lucide-react';
-import { demoPropertiesList } from '../../data/propertiesData';
+import { demoPropertiesList, getSavedProperties } from '../../data/propertiesData';
 
 /**
  * InvoicePropertySelector Component
  * Section 2: Property dropdown selector matching screenshot 3.
  */
 export function InvoicePropertySelector({ formData, setFormData, errors }) {
+  const propertiesList = getSavedProperties() || demoPropertiesList;
+
   const handleChange = (value) => {
     setFormData((prev) => ({ ...prev, property: value }));
   };
@@ -31,8 +33,8 @@ export function InvoicePropertySelector({ formData, setFormData, errors }) {
           }`}
         >
           <option value="">- Select Property -</option>
-          {demoPropertiesList.map((prop) => (
-            <option key={prop.id} value={prop.name || prop.reference}>
+          {propertiesList.map((prop) => (
+            <option key={prop.id || prop._id} value={prop.name || prop.reference}>
               {prop.name || prop.reference}
             </option>
           ))}

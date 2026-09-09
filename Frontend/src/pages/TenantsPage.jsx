@@ -32,7 +32,7 @@ export function TenantsPage() {
           </div>
           <h3 className="text-lg font-bold text-slate-900">Tenant Management Module</h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            118 active tenants loaded. Full tenant screening, deposit protection records, and AST contract tools will be rendered here.
+            Full tenant screening, deposit protection records, and lease contract tools are managed here.
           </p>
         </div>
       </div>

@@ -31,7 +31,7 @@ export function filterProperties(properties = [], filters = {}) {
 }
 
 export const demoProperties = [];
-
+export const demoPropertiesList = demoProperties;
 export const demoUnits = [];
 
 const PROPERTIES_KEY = 'pixx_properties_list';
