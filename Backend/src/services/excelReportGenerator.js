@@ -645,20 +645,26 @@ async function generatePropertyExcelWorkbook(data) {
   const trackingMonths = data.trackingMonths && data.trackingMonths.length === 3 ? data.trackingMonths : ['Jun-26', 'Jul-26', 'Aug-26'];
 
   let unitRows = data.unitMatrixRows || [];
-  if (unitRows.length === 0 && data.unitsBreakdown) {
-    unitRows = data.unitsBreakdown.map((u, idx) => ({
-      no: idx + 1,
-      propertyAddress: `${propertyName}${u.name ? ', ' + u.name : ''}`,
-      rent: u.monthlyRent || 1500,
-      mFee: -50,
-      dueDate: '1st',
-      netRentReceivable: (u.monthlyRent || 1500) - 50,
-      collections: [
-        { date: '6/3/2026', amount: (u.monthlyRent || 1500) - 50, status: 'Paid' },
-        { date: '7/3/2026', amount: (u.monthlyRent || 1500) - 50, status: 'Paid' },
-        { date: '', amount: 0, status: 'Unpaid' },
-      ],
-    }));
+  if (unitRows.length === 0 && (data.unitsBreakdown || data.units)) {
+    const unitsList = data.unitsBreakdown || data.units || [];
+    unitRows = unitsList.map((u, idx) => {
+      const rent = Number(u.monthlyRent || u.price) || 0;
+      const mFee = rent > 0 ? -50 : 0;
+      const netRentReceivable = rent + mFee;
+      return {
+        no: idx + 1,
+        propertyAddress: `${propertyName}${u.name ? ', ' + u.name : ''}`,
+        rent,
+        mFee,
+        dueDate: '1st',
+        netRentReceivable,
+        collections: [
+          { date: '-', amount: u.status === 'Occupied' ? rent : 0, status: u.status === 'Occupied' ? 'Paid' : 'Unpaid' },
+          { date: '-', amount: u.status === 'Occupied' ? rent : 0, status: u.status === 'Occupied' ? 'Paid' : 'Unpaid' },
+          { date: '-', amount: u.status === 'Occupied' ? rent : 0, status: u.status === 'Occupied' ? 'Paid' : 'Unpaid' },
+        ],
+      };
+    });
   }
 
   // =========================================================================

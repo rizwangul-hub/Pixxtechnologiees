@@ -775,7 +775,7 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
     const collections = trackingMonths.map((mInfo) => {
       const mPay = periodPayments.find((pay) => {
         const matchUnit = u.isSynthetic
-          ? (propIdList.length === 0 || propIdList.some((idVal) => safeIdEquals(idVal, pay.propertyId)))
+          ? isPropMatch(pay.propertyId)
           : safeIdEquals(pay.unitId, u._id);
 
         return matchUnit && isPaymentInMonth(pay, mInfo);
