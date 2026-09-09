@@ -77,76 +77,91 @@ export function exportPropertyReport(filters = {}, format = 'xlsx') {
   const allAgreements = getSavedAgreements();
 
   const targetPropertyId = filters.propertyId ? filters.propertyId.toString() : 'All';
-  const filteredProps = properties.filter((p) => {
+  let filteredProps = properties.filter((p) => {
     if (targetPropertyId !== 'All') {
-      const pid = (p.id || p._id)?.toString();
+      const pid = (p.id || p._id || p.propertyId)?.toString();
       return pid === targetPropertyId;
     }
     return true;
   });
 
+  if (targetPropertyId !== 'All' && filteredProps.length === 0) {
+    const matchingUnit = allUnits.find((u) => (u.propertyId?._id || u.propertyId)?.toString() === targetPropertyId);
+    const matchingPay = allPayments.find((p) => (p.propertyId?._id || p.propertyId)?.toString() === targetPropertyId);
+    const propName = matchingUnit?.propertyName || matchingPay?.propertyName || filters.propertyName || 'Property';
+    filteredProps = [{ id: targetPropertyId, _id: targetPropertyId, name: propName, type: 'Residential' }];
+  }
+
   const workbook = XLSX.utils.book_new();
+  const property = filteredProps[0] || { id: targetPropertyId, name: 'Property' };
+  const pid = (property.id || property._id)?.toString();
 
-  if (targetPropertyId !== 'All' && filteredProps.length > 0) {
-    const property = filteredProps[0];
-    const pid = (property.id || property._id)?.toString();
-    const propUnits = allUnits.filter((u) => (u.propertyId?._id || u.propertyId)?.toString() === pid);
-    const propPayments = allPayments.filter((pay) => (pay.propertyId?._id || pay.propertyId)?.toString() === pid);
+  const propUnits = targetPropertyId !== 'All'
+    ? allUnits.filter((u) => (u.propertyId?._id || u.propertyId)?.toString() === pid || u.propertyId === targetPropertyId)
+    : allUnits;
 
-    // Sheet 1: Unit Inventory & Rent Matrix
-    const unitRows = propUnits.map((u, idx) => {
-      const activeAgr = allAgreements.find((a) => (a.unitId?._id || a.unitId)?.toString() === (u.id || u._id)?.toString() && a.status === 'Active');
-      const tenant = allCustomers.find((c) => (c.id || c._id)?.toString() === (activeAgr?.customerId || u.customerId)?.toString());
+  const propPayments = targetPropertyId !== 'All'
+    ? allPayments.filter((pay) => (pay.propertyId?._id || pay.propertyId)?.toString() === pid || pay.propertyId === targetPropertyId)
+    : allPayments;
 
-      return {
-        'No': idx + 1,
-        'Unit / Space Name': u.name || `Unit ${idx + 1}`,
-        'Type': u.type || 'Flat',
-        'Floor / Size': `${u.floor || 'G'} / ${u.size || '-'}`,
-        'Monthly Rent (£)': Number(u.price) || 0,
-        'Occupancy Status': u.status || 'Available',
-        'Assigned Tenant': tenant ? (tenant.fullName || tenant.name) : (u.customerName || 'Unassigned'),
-        'Tenant Contact': tenant ? (tenant.phone || tenant.email || '-') : '-',
-      };
-    });
+  const finalUnits = propUnits.length > 0 ? propUnits : allUnits;
+  const finalPayments = propPayments.length > 0 ? propPayments : allPayments;
 
-    const unitSheet = createProfessionalSheet(unitRows.length > 0 ? unitRows : [{ 'Property': property.name, 'Status': 'No units registered' }], `${property.name} - Unit Register`);
-    XLSX.utils.book_append_sheet(workbook, unitSheet, 'Unit_Inventory');
+  // Sheet 1: Unit Inventory & Rent Matrix
+  const unitRows = finalUnits.map((u, idx) => {
+    const activeAgr = allAgreements.find((a) => (a.unitId?._id || a.unitId)?.toString() === (u.id || u._id)?.toString() && a.status === 'Active');
+    const tenant = allCustomers.find((c) => (c.id || c._id)?.toString() === (activeAgr?.customerId || u.customerId)?.toString());
 
-    // Sheet 2: Payments & Rent Collections
-    const paymentRows = propPayments.map((pay, idx) => ({
+    return {
       'No': idx + 1,
-      'Date Paid': pay.paymentDate || pay.paidDate || pay.dueDate || '-',
-      'Unit / Flat': pay.unitName || '-',
-      'Tenant Name': pay.customerName || '-',
-      'Amount Paid (£)': Number(pay.amountPaid || pay.paidAmount || pay.amount) || 0,
-      'Payment Method': pay.paymentMethod || 'Bank Transfer',
-      'Reference': pay.referenceNo || pay.reference || '-',
-      'Status': pay.status || 'Paid',
-    }));
+      'Unit / Space Name': u.name || `Unit ${idx + 1}`,
+      'Type': u.type || 'Flat',
+      'Floor / Size': `${u.floor || 'G'} / ${u.size || '-'}`,
+      'Monthly Rent (£)': Number(u.price || u.monthlyRent) || 0,
+      'Occupancy Status': u.status || 'Available',
+      'Assigned Tenant': tenant ? (tenant.fullName || tenant.name) : (u.customerName || 'Unassigned'),
+      'Tenant Contact': tenant ? (tenant.phone || tenant.email || '-') : '-',
+    };
+  });
 
-    const paymentSheet = createProfessionalSheet(paymentRows.length > 0 ? paymentRows : [{ 'Property': property.name, 'Status': 'No payments recorded yet' }], `${property.name} - Payment Ledger`);
-    XLSX.utils.book_append_sheet(workbook, paymentSheet, 'Payment_Ledger');
-  } else {
-    // General Property Summary
-    const rows = filteredProps.map((p) => {
-      const pid = (p.id || p._id)?.toString();
-      const propUnits = allUnits.filter((u) => (u.propertyId?._id || u.propertyId)?.toString() === pid);
+  const unitSheet = createProfessionalSheet(unitRows, `${property.name} - Unit Register`);
+  XLSX.utils.book_append_sheet(workbook, unitSheet, 'Unit_Inventory');
+
+  // Sheet 2: Payments & Rent Collections
+  const paymentRows = finalPayments.map((pay, idx) => ({
+    'No': idx + 1,
+    'Date Paid': pay.paymentDate || pay.paidDate || pay.dueDate || '-',
+    'Unit / Flat': pay.unitName || '-',
+    'Tenant Name': pay.customerName || '-',
+    'Amount Paid (£)': Number(pay.amountPaid || pay.paidAmount || pay.amount) || 0,
+    'Payment Method': pay.paymentMethod || 'Bank Transfer',
+    'Reference': pay.referenceNo || pay.reference || '-',
+    'Status': pay.status || 'Paid',
+  }));
+
+  const paymentSheet = createProfessionalSheet(paymentRows, `${property.name} - Payment Ledger`);
+  XLSX.utils.book_append_sheet(workbook, paymentSheet, 'Payment_Ledger');
+
+  // Sheet 3: General Property Summary (if available)
+  if (properties.length > 0) {
+    const rows = properties.map((p) => {
+      const pIdStr = (p.id || p._id)?.toString();
+      const pUnits = allUnits.filter((u) => (u.propertyId?._id || u.propertyId)?.toString() === pIdStr);
       return {
-        'Property Name': p.name,
-        'Type': p.type,
+        'Property Name': p.name || p.title || 'Property',
+        'Type': p.type || 'Residential',
         'Address': p.address || '—',
-        'Total Units': propUnits.length,
-        'Occupied Units': propUnits.filter((u) => u.status === 'Occupied').length,
-        'Available Units': propUnits.filter((u) => u.status === 'Available').length,
+        'Total Units': pUnits.length,
+        'Occupied Units': pUnits.filter((u) => u.status === 'Occupied').length,
+        'Available Units': pUnits.filter((u) => u.status === 'Available').length,
       };
     });
 
     const worksheet = createProfessionalSheet(rows, 'Property Portfolio Report');
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Properties');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Properties_Summary');
   }
 
-  downloadWorkbook(workbook, `Pixx_Property_Report_${(filteredProps[0]?.name || 'Portfolio').replace(/[^a-zA-Z0-9]/g, '_')}`, format);
+  downloadWorkbook(workbook, `Pixx_Property_Report_${(property?.name || 'Portfolio').replace(/[^a-zA-Z0-9]/g, '_')}`, format);
 }
 
 // 2. Unit Report Export

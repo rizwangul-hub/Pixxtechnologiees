@@ -3,8 +3,23 @@
   "buildCommand": "cd Frontend && npm install && npm run build",
   "outputDirectory": "Frontend/dist",
   "functions": {
+    "api/index.js": {
+      "includeFiles": [
+        "Backend/node_modules/pdfkit/js/standard-fonts/**",
+        "Backend/node_modules/pdfkit/**",
+        "node_modules/pdfkit/js/standard-fonts/**",
+        "node_modules/pdfkit/**",
+        "Backend/src/assets/**"
+      ]
+    },
     "api/**/*.js": {
-      "includeFiles": "Backend/node_modules/pdfkit/**,node_modules/pdfkit/**,Backend/src/assets/**"
+      "includeFiles": [
+        "Backend/node_modules/pdfkit/js/standard-fonts/**",
+        "Backend/node_modules/pdfkit/**",
+        "node_modules/pdfkit/js/standard-fonts/**",
+        "node_modules/pdfkit/**",
+        "Backend/src/assets/**"
+      ]
     }
   },
   "rewrites": [

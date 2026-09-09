@@ -4,6 +4,23 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+// Patch PDFDocument prototype to ensure font loading errors never throw 500 in serverless environments
+if (PDFDocument && PDFDocument.prototype && PDFDocument.prototype.font) {
+  const originalFont = PDFDocument.prototype.font;
+  PDFDocument.prototype.font = function (src, family, size) {
+    try {
+      return originalFont.call(this, src, family, size);
+    } catch (e) {
+      console.warn(`[PDFKit Font Patch] Notice loading font '${src}': ${e.message}. Using default.`);
+      try {
+        return originalFont.call(this, 'Helvetica');
+      } catch (err) {
+        return this;
+      }
+    }
+  };
+}
+
 const systemLogoPath = path.join(__dirname, '../assets/logo.png');
 
 /**
