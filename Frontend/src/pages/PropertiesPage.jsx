@@ -53,6 +53,32 @@ export function PropertiesPage() {
     });
   }, [properties, searchTerm]);
 
+  const [viewMode, setViewMode] = useState('grouped'); // 'grouped' or 'flat'
+
+  const groupedByLandlord = useMemo(() => {
+    const groupsMap = {};
+
+    filteredProperties.forEach((p) => {
+      const landlordObj = p.landlordId || {};
+      const landlordName = landlordObj.fullName || p.landlordName || 'General Portfolio (Unassigned)';
+      const landlordId = landlordObj._id || landlordObj.id || 'unassigned';
+      const landlordLogoUrl = landlordObj.logo?.url || landlordObj.logoUrl || p.landlordLogo || '';
+
+      if (!groupsMap[landlordId]) {
+        groupsMap[landlordId] = {
+          landlordId,
+          landlordName,
+          landlordLogoUrl,
+          landlordObj,
+          properties: [],
+        };
+      }
+      groupsMap[landlordId].properties.push(p);
+    });
+
+    return Object.values(groupsMap);
+  }, [filteredProperties]);
+
   const handleDelete = (id, name) => {
     if (window.confirm(`Are you sure you want to delete "${name}"? All associated units will also be deleted.`)) {
       const updated = deleteProperty(id);
@@ -81,7 +107,7 @@ export function PropertiesPage() {
               <Building2 className="w-6 h-6 text-[#04A26F]" />
             </h1>
             <p className="text-xs sm:text-sm font-medium text-slate-500 mt-1">
-              Manage your commercial, residential, and mixed property assets and units.
+              Manage your commercial, residential, and mixed property assets grouped by Landlord.
             </p>
           </div>
 
@@ -116,130 +142,298 @@ export function PropertiesPage() {
           </div>
         </div>
 
-        {/* SEARCH BAR */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="relative max-w-md">
+        {/* SEARCH & VIEW TOGGLE BAR */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="relative w-full sm:max-w-md">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
-              placeholder="Search by property name or address..."
+              placeholder="Search by property name, landlord, or address..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F]"
             />
           </div>
-        </div>
 
-        {/* PROPERTIES TABLE */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700 border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-extrabold uppercase tracking-wider text-[11px]">
-                  <th className="py-3 px-4">Property Name</th>
-                  <th className="py-3 px-4">Landlord</th>
-                  <th className="py-3 px-4">Type</th>
-                  <th className="py-3 px-4">Address</th>
-                  <th className="py-3 px-4 text-center">Total Units</th>
-                  <th className="py-3 px-4 text-center">Occupied</th>
-                  <th className="py-3 px-4 text-center">Available</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredProperties.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="py-8 text-center text-slate-400 font-medium">
-                      No properties found matching your search.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredProperties.map((p) => {
-                    const pid = p._id || p.id;
-                    const propName = p.name || p.propertyName;
-                    const landlordObj = p.landlordId || {};
-                    const landlordName = landlordObj.fullName || p.landlordName || '—';
-                    const metrics = getPropertyMetrics(pid);
-
-                    return (
-                      <tr key={pid} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3.5 px-4 font-extrabold text-slate-900">
-                          <Link to={`/properties/${pid}`} className="hover:text-[#04A26F] transition-colors">
-                            {propName}
-                          </Link>
-                        </td>
-                        <td className="py-3.5 px-4 font-bold text-[#04A26F]">
-                          {landlordObj._id ? (
-                            <Link to={`/landlords/${landlordObj._id}`} className="hover:underline flex items-center gap-1">
-                              <UserCheck className="w-3.5 h-3.5 text-[#04A26F] shrink-0" />
-                              <span>{landlordName}</span>
-                            </Link>
-                          ) : (
-                            <span>{landlordName}</span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 font-semibold text-slate-600">
-                          <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[11px]">
-                            {p.type}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 font-medium text-slate-600">
-                          <div className="flex items-center gap-1">
-                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span>{[p.address, p.city].filter(Boolean).join(', ') || '-'}</span>
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-4 text-center font-extrabold text-slate-900">
-                          {metrics.totalUnits}
-                        </td>
-                        <td className="py-3.5 px-4 text-center font-bold text-blue-700">
-                          {metrics.occupiedUnits}
-                        </td>
-                        <td className="py-3.5 px-4 text-center font-bold text-emerald-700">
-                          {metrics.availableUnits}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                            {p.status || 'Active'}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/properties/${p.id}`)}
-                              className="px-2.5 py-1 text-xs font-bold text-[#04A26F] bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors cursor-pointer inline-flex items-center gap-1 border border-emerald-200/80"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>View</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/properties/${p.id}/edit`)}
-                              className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
-                              title="Edit Property"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(p.id, p.name)}
-                              className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
-                              title="Delete Property"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold shrink-0 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setViewMode('grouped')}
+              className={`px-3 py-1.5 rounded-md transition-all cursor-pointer ${
+                viewMode === 'grouped'
+                  ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80 font-extrabold'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Grouped by Landlord
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('flat')}
+              className={`px-3 py-1.5 rounded-md transition-all cursor-pointer ${
+                viewMode === 'flat'
+                  ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80 font-extrabold'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              All Properties List
+            </button>
           </div>
         </div>
+
+        {/* PROPERTIES DISPLAY SECTION */}
+        {viewMode === 'grouped' ? (
+          /* GROUPED BY LANDLORD VIEW */
+          <div className="space-y-6">
+            {groupedByLandlord.length === 0 ? (
+              <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 font-medium">
+                No properties found matching your search.
+              </div>
+            ) : (
+              groupedByLandlord.map((group) => (
+                <div key={group.landlordId} className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                  {/* LANDLORD HEADER BANNER */}
+                  <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {group.landlordLogoUrl ? (
+                        <img
+                          src={group.landlordLogoUrl}
+                          alt={group.landlordName}
+                          className="w-8 h-8 rounded-lg object-contain bg-white p-0.5 border border-slate-700 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg bg-[#04A26F] text-white flex items-center justify-center font-bold shrink-0">
+                          <UserCheck className="w-4 h-4" />
+                        </div>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-sm text-white">
+                            {group.landlordName}
+                          </span>
+                          {group.landlordId !== 'unassigned' && (
+                            <Link
+                              to={`/landlords/${group.landlordId}`}
+                              className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 hover:underline"
+                            >
+                              View Landlord Profile &rarr;
+                            </Link>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 font-medium">
+                          Landlord Portfolio
+                        </p>
+                      </div>
+                    </div>
+
+                    <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-slate-800 text-emerald-400 border border-slate-700">
+                      {group.properties.length} {group.properties.length === 1 ? 'Property' : 'Properties'}
+                    </span>
+                  </div>
+
+                  {/* PROPERTIES TABLE FOR THIS LANDLORD */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-700 border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-extrabold uppercase tracking-wider text-[11px]">
+                          <th className="py-3 px-4">Property Name</th>
+                          <th className="py-3 px-4">Type</th>
+                          <th className="py-3 px-4">Address</th>
+                          <th className="py-3 px-4 text-center">Total Units</th>
+                          <th className="py-3 px-4 text-center">Occupied</th>
+                          <th className="py-3 px-4 text-center">Available</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {group.properties.map((p) => {
+                          const pid = p._id || p.id;
+                          const propName = p.name || p.propertyName;
+                          const metrics = getPropertyMetrics(pid);
+
+                          return (
+                            <tr key={pid} className="hover:bg-slate-50/80 transition-colors">
+                              <td className="py-3.5 px-4 font-extrabold text-slate-900">
+                                <Link to={`/properties/${pid}`} className="hover:text-[#04A26F] transition-colors">
+                                  {propName}
+                                </Link>
+                              </td>
+                              <td className="py-3.5 px-4 font-semibold text-slate-600">
+                                <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[11px]">
+                                  {p.type}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 font-medium text-slate-600">
+                                <div className="flex items-center gap-1">
+                                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span>{[p.address, p.city].filter(Boolean).join(', ') || '-'}</span>
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4 text-center font-extrabold text-slate-900">
+                                {metrics.totalUnits}
+                              </td>
+                              <td className="py-3.5 px-4 text-center font-bold text-blue-700">
+                                {metrics.occupiedUnits}
+                              </td>
+                              <td className="py-3.5 px-4 text-center font-bold text-emerald-700">
+                                {metrics.availableUnits}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                  {p.status || 'Active'}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/properties/${pid}`)}
+                                    className="px-2.5 py-1 text-xs font-bold text-[#04A26F] bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors cursor-pointer inline-flex items-center gap-1 border border-emerald-200/80"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>View</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/properties/${pid}/edit`)}
+                                    className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                                    title="Edit Property"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(pid, propName)}
+                                    className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+                                    title="Delete Property"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          /* ALL PROPERTIES FLAT VIEW */
+          <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-700 border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-extrabold uppercase tracking-wider text-[11px]">
+                    <th className="py-3 px-4">Property Name</th>
+                    <th className="py-3 px-4">Landlord</th>
+                    <th className="py-3 px-4">Type</th>
+                    <th className="py-3 px-4">Address</th>
+                    <th className="py-3 px-4 text-center">Total Units</th>
+                    <th className="py-3 px-4 text-center">Occupied</th>
+                    <th className="py-3 px-4 text-center">Available</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredProperties.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-8 text-center text-slate-400 font-medium">
+                        No properties found matching your search.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredProperties.map((p) => {
+                      const pid = p._id || p.id;
+                      const propName = p.name || p.propertyName;
+                      const landlordObj = p.landlordId || {};
+                      const landlordName = landlordObj.fullName || p.landlordName || '—';
+                      const metrics = getPropertyMetrics(pid);
+
+                      return (
+                        <tr key={pid} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3.5 px-4 font-extrabold text-slate-900">
+                            <Link to={`/properties/${pid}`} className="hover:text-[#04A26F] transition-colors">
+                              {propName}
+                            </Link>
+                          </td>
+                          <td className="py-3.5 px-4 font-bold text-[#04A26F]">
+                            {landlordObj._id ? (
+                              <Link to={`/landlords/${landlordObj._id}`} className="hover:underline flex items-center gap-1">
+                                <UserCheck className="w-3.5 h-3.5 text-[#04A26F] shrink-0" />
+                                <span>{landlordName}</span>
+                              </Link>
+                            ) : (
+                              <span>{landlordName}</span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 font-semibold text-slate-600">
+                            <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[11px]">
+                              {p.type}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-medium text-slate-600">
+                            <div className="flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span>{[p.address, p.city].filter(Boolean).join(', ') || '-'}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-extrabold text-slate-900">
+                            {metrics.totalUnits}
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-bold text-blue-700">
+                            {metrics.occupiedUnits}
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-bold text-emerald-700">
+                            {metrics.availableUnits}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              {p.status || 'Active'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/properties/${pid}`)}
+                                className="px-2.5 py-1 text-xs font-bold text-[#04A26F] bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors cursor-pointer inline-flex items-center gap-1 border border-emerald-200/80"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>View</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/properties/${pid}/edit`)}
+                                className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                                title="Edit Property"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(pid, propName)}
+                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+                                title="Delete Property"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </AppLayout>
   );
