@@ -316,34 +316,56 @@ export function ReportsPage() {
     const localCusts = getSavedCustomers();
     const localSchedules = getSavedPaymentSchedules();
 
-    const isAll = !propertyId || propertyId === 'All';
-    const targetPropIdStr = propertyId ? propertyId.toString() : '';
+    const isAll = !propertyId || propertyId === 'All' || propertyId === 'all';
+    const targetPropIdStr = propertyId ? propertyId.toString().trim().toLowerCase() : '';
 
+    const allPropsPool = properties.length > 0 ? properties : localProps;
     let property = isAll
       ? { _id: 'all_props', name: 'All Properties Portfolio', title: 'All Properties Portfolio', landlordName: 'Portfolio Manager' }
-      : (properties.length > 0 ? properties : localProps).find((p) => (p.id || p._id)?.toString() === targetPropIdStr) || {
+      : allPropsPool.find((p) => {
+          const pId = (p.id || p._id)?.toString().trim().toLowerCase();
+          const pName = (p.title || p.name || p.propertyName)?.toString().trim().toLowerCase();
+          return pId === targetPropIdStr || pName === targetPropIdStr;
+        }) || {
           _id: propertyId,
           name: propertyId || 'Selected Property',
           title: propertyId || 'Selected Property',
           landlordName: 'Property Manager',
         };
 
+    const targetPropIds = [
+      property._id,
+      property._id?.toString(),
+      property.id,
+      property.name,
+      property.title,
+      property.propertyName,
+      propertyId,
+    ]
+      .filter(Boolean)
+      .map((v) => v.toString().trim().toLowerCase());
+
+    const isMatchProp = (uProp) => {
+      if (isAll) return true;
+      if (!uProp) return false;
+      const uPropStr = (uProp._id || uProp.id || uProp?.name || uProp?.title || uProp).toString().trim().toLowerCase();
+      return targetPropIds.includes(uPropStr);
+    };
+
+    const allUnitsPool = units.length > 0 ? units : localUnits;
     const propUnits = isAll
-      ? (units.length > 0 ? units : localUnits)
-      : (units.length > 0 ? units : localUnits).filter((u) => {
-          const uPid = u.propertyId?._id ? u.propertyId._id.toString() : u.propertyId ? u.propertyId.toString() : '';
-          return uPid === targetPropIdStr;
-        });
+      ? allUnitsPool
+      : allUnitsPool.filter((u) => isMatchProp(u.propertyId) || isMatchProp(u.property));
 
     const propSchedules = isAll
       ? localSchedules
-      : localSchedules.filter((s) => {
-          const sPid = s.propertyId?._id ? s.propertyId._id.toString() : s.propertyId ? s.propertyId.toString() : '';
-          return sPid === targetPropIdStr;
-        });
+      : localSchedules.filter((s) => isMatchProp(s.propertyId) || isMatchProp(s.property));
 
     const totalRent = propSchedules.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const totalPaid = propSchedules.reduce((sum, p) => sum + (Number(p.paidAmount) || 0), 0);
+
+    const occupiedCount = propUnits.filter((u) => u.status === 'Occupied' || u.customerId || u.customerName).length;
+    const availableCount = Math.max(0, propUnits.length - occupiedCount);
 
     const unitMatrixRows = propUnits.map((u, idx) => {
       const rent = Number(u.price || u.monthlyRent) || 0;
@@ -381,10 +403,13 @@ export function ReportsPage() {
         type: property.type || property.propertyType || 'Residential',
         landlordName: property.landlordName || 'N/A',
         totalUnits: propUnits.length,
-        occupiedUnits: propUnits.filter((u) => u.status === 'Occupied' || u.customerId).length,
-        availableUnits: propUnits.filter((u) => u.status === 'Available').length,
+        occupiedUnits: occupiedCount,
+        availableUnits: availableCount,
       },
       summary: {
+        totalUnits: propUnits.length,
+        occupiedUnits: occupiedCount,
+        availableUnits: availableCount,
         totalRent,
         totalPaid,
         totalExpenses: 0,

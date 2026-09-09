@@ -688,31 +688,51 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
     properties = [property];
   }
 
-  const validPropObjectIds = isAll
-    ? []
-    : filterValidObjectIds([property._id, property.id, propertyId]);
+  const allPossiblePropIds = [
+    property?._id,
+    property?._id?.toString(),
+    property?.id,
+    property?.name,
+    property?.title,
+    property?.propertyName,
+    propertyId,
+  ].filter(Boolean);
 
-  const unitQuery = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
-  const tenancyQuery = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
-  const pQuery = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
-  const eQuery = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
+  const isPropMatch = (pRef) => {
+    if (isAll) return true;
+    if (!pRef) return false;
+    const strRef = (pRef._id || pRef.id || pRef?.name || pRef?.title || pRef).toString().trim().toLowerCase();
+    return allPossiblePropIds.some((idVal) => {
+      if (!idVal) return false;
+      const strVal = idVal.toString().trim().toLowerCase();
+      return strRef === strVal;
+    });
+  };
 
+  const allUnits = await Unit.find({ isArchived: { $ne: true } });
+  const units = isAll ? allUnits : allUnits.filter((u) => isPropMatch(u.propertyId) || isPropMatch(u.property));
+
+  const allTenancies = await Tenancy.find()
+    .populate('customerId')
+    .populate('unitId')
+    .populate('agentId');
+  const tenancies = isAll ? allTenancies : allTenancies.filter((t) => isPropMatch(t.propertyId) || isPropMatch(t.property));
+
+  let pQuery = {};
+  let eQuery = {};
   if (fromDate && toDate) {
     pQuery.dueDate = { $gte: fromDate, $lte: toDate };
     eQuery.date = { $gte: fromDate, $lte: toDate };
   }
 
-  const periodPaymentQuery = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
+  const allPayments = await Payment.find(pQuery);
+  const payments = isAll ? allPayments : allPayments.filter((p) => isPropMatch(p.propertyId) || isPropMatch(p.property));
 
-  const units = await Unit.find(unitQuery);
-  const tenancies = await Tenancy.find(tenancyQuery)
-    .populate('customerId')
-    .populate('unitId')
-    .populate('agentId');
+  const allPropertyExpenses = await Expense.find(eQuery);
+  const propertyExpenses = isAll ? allPropertyExpenses : allPropertyExpenses.filter((e) => isPropMatch(e.propertyId) || isPropMatch(e.property));
 
-  const payments = await Payment.find(pQuery);
-  const propertyExpenses = await Expense.find(eQuery);
-  const agentExpenses = await AgentExpense.find({ ...eQuery, status: 'Approved' });
+  const allAgentExpenses = await AgentExpense.find({ ...eQuery, status: 'Approved' });
+  const agentExpenses = isAll ? allAgentExpenses : allAgentExpenses.filter((e) => isPropMatch(e.propertyId) || isPropMatch(e.property));
 
   const totalRent = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const totalPaid = payments.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
@@ -722,7 +742,7 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
 
   // 3-Month Collection Tracker Matrix for Rent Income Report
   const trackingMonths = getRecent3Months(toDate);
-  const periodPayments = await Payment.find(periodPaymentQuery);
+  const periodPayments = payments;
 
   let rowCounter = 1;
   const unitMatrixRows = [];
@@ -731,11 +751,11 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
   for (const u of unitsToProcess) {
     const uTenancy =
       tenancies.find((t) => safeIdEquals(t.unitId, u._id)) ||
-      tenancies.find((t) => isAll || validPropObjectIds.some((idVal) => safeIdEquals(idVal, t.propertyId)));
+      tenancies.find((t) => isPropMatch(t.propertyId));
 
     const samplePay = periodPayments.find((pay) => {
       return u.isSynthetic
-        ? (isAll || validPropObjectIds.some((idVal) => safeIdEquals(idVal, pay.propertyId)))
+        ? isPropMatch(pay.propertyId)
         : safeIdEquals(pay.unitId, u._id);
     });
 
