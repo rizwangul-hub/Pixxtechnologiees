@@ -20,12 +20,14 @@ import {
 import { AppLayout } from '../components/layout/AppLayout';
 import { EntityReportDownloadBar } from '../components/common/EntityReportDownloadBar';
 import { getSavedLandlords } from '../data/landlordsData';
-import { getSavedProperties, getUnitsByProperty } from '../data/propertiesData';
-import { fetchLandlordByIdAPI, fetchLandlordPropertiesAPI, fetchMortgagesAPI } from '../services/apiData';
+import { getSavedProperties, getSavedUnits } from '../data/propertiesData';
+import { fetchLandlordByIdAPI, fetchLandlordPropertiesAPI, fetchMortgagesAPI, fetchUnitsFromAPI } from '../services/apiData';
 
 export default function LandlordDetailPage() {
   const { landlordId } = useParams();
   const navigate = useNavigate();
+
+  const [units, setUnits] = useState(() => getSavedUnits());
 
   const [landlord, setLandlord] = useState(() => {
     const localLandlords = getSavedLandlords();
@@ -42,11 +44,16 @@ export default function LandlordDetailPage() {
 
   const loadData = async () => {
     try {
-      const [apiLandlord, apiProperties, apiMortgages] = await Promise.all([
+      const [apiLandlord, apiProperties, apiMortgages, apiUnits] = await Promise.all([
         fetchLandlordByIdAPI(landlordId),
         fetchLandlordPropertiesAPI(landlordId),
         fetchMortgagesAPI({ landlordId }),
+        fetchUnitsFromAPI(),
       ]);
+
+      if (Array.isArray(apiUnits) && apiUnits.length > 0) {
+        setUnits(apiUnits);
+      }
 
       if (apiLandlord) {
         setLandlord(apiLandlord);
@@ -226,6 +233,18 @@ export default function LandlordDetailPage() {
                 const pid = prop._id || prop.id;
                 const propName = prop.propertyName || prop.name;
 
+                const propUnits = units.filter((u) => {
+                  const uPid = u.propertyId?._id || u.propertyId?.id || u.propertyId;
+                  return String(uPid) === String(pid);
+                });
+                const totalCount = prop.totalUnits || propUnits.length;
+                const occupiedCount =
+                  prop.occupiedUnits ??
+                  propUnits.filter((u) => u.status === 'Occupied' || u.customerId || u.customerName || u.tenantName).length;
+                const availableCount =
+                  prop.availableUnits ??
+                  Math.max(0, totalCount - occupiedCount);
+
                 return (
                   <div
                     key={pid}
@@ -248,15 +267,15 @@ export default function LandlordDetailPage() {
                     <div className="grid grid-cols-3 gap-2 bg-gray-50 p-2.5 rounded-lg text-center text-xs">
                       <div>
                         <span className="text-[10px] font-bold text-gray-400 uppercase block">Units</span>
-                        <span className="font-extrabold text-gray-900">{prop.totalUnits || 0}</span>
+                        <span className="font-extrabold text-gray-900">{totalCount}</span>
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-blue-500 uppercase block">Occupied</span>
-                        <span className="font-extrabold text-blue-700">{prop.occupiedUnits || 0}</span>
+                        <span className="font-extrabold text-blue-700">{occupiedCount}</span>
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-emerald-500 uppercase block">Available</span>
-                        <span className="font-extrabold text-emerald-700">{prop.availableUnits || 0}</span>
+                        <span className="font-extrabold text-emerald-700">{availableCount}</span>
                       </div>
                     </div>
 

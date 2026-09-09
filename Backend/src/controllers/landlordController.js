@@ -308,11 +308,17 @@ const getLandlordProperties = async (req, res) => {
 
     const propertySummaries = await Promise.all(
       properties.map(async (prop) => {
-        const totalUnits = await Unit.countDocuments({ propertyId: prop._id });
-        const occupiedUnits = await Unit.countDocuments({ propertyId: prop._id, status: 'Occupied' });
-        const availableUnits = await Unit.countDocuments({ propertyId: prop._id, status: 'Available' });
-        const reservedUnits = await Unit.countDocuments({ propertyId: prop._id, status: 'Reserved' });
-        const maintenanceUnits = await Unit.countDocuments({ propertyId: prop._id, status: 'Maintenance' });
+        const propIdList = [prop._id, prop._id?.toString(), prop.id].filter(Boolean);
+        const propUnits = await Unit.find({
+          propertyId: { $in: propIdList },
+          isArchived: { $ne: true },
+        });
+
+        const totalUnits = propUnits.length > 0 ? propUnits.length : (prop.totalUnits || 0);
+        const occupiedUnits = propUnits.filter((u) => u.status === 'Occupied' || u.customerId || u.customerName).length;
+        const availableUnits = propUnits.filter((u) => u.status === 'Available').length || Math.max(0, totalUnits - occupiedUnits);
+        const reservedUnits = propUnits.filter((u) => u.status === 'Reserved').length;
+        const maintenanceUnits = propUnits.filter((u) => u.status === 'Maintenance').length;
 
         return {
           ...prop.toObject(),
