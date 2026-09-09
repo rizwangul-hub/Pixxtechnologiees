@@ -1,6 +1,10 @@
 const PDFDocument = require('pdfkit');
 const https = require('https');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
+const systemLogoPath = path.join(__dirname, '../assets/logo.png');
 
 /**
  * Helper to format UK dates (DD/MM/YYYY)
@@ -58,7 +62,8 @@ async function renderPDFReportDoc(options) {
       doc.on('data', (chunk) => buffers.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-      const logoBuffer = logoUrl ? await fetchImageBuffer(logoUrl) : null;
+      const fetchedBuffer = logoUrl ? await fetchImageBuffer(logoUrl) : null;
+      const logoBuffer = fetchedBuffer || (fs.existsSync(systemLogoPath) ? fs.readFileSync(systemLogoPath) : null);
 
       // 1. BRANDING HEADER BAR
       doc.rect(36, 36, 523, 40).fill('#04A26F');

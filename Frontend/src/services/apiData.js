@@ -1,4 +1,4 @@
-import fetchAPI from './api';
+import fetchAPI, { API_BASE_URL } from './api';
 
 /**
  * Backend Data Persistence & Export Service for PixxTechnologies
@@ -367,7 +367,7 @@ export async function uploadFileToCloudinaryAPI(file, folder = 'pixxtechnologies
   formData.append('file', file);
   formData.append('folder', folder);
 
-  const response = await fetch('http://localhost:5001/api/upload', {
+  const response = await fetch(`${API_BASE_URL}/upload`, {
     method: 'POST',
     headers: {
       ...(token && { Authorization: `Bearer ${token}` }),
@@ -387,7 +387,7 @@ export async function uploadFileToCloudinaryAPI(file, folder = 'pixxtechnologies
 
 export function getExportDownloadURL(resource, format = 'csv', filters = {}) {
   const query = new URLSearchParams({ ...filters, format }).toString();
-  return `http://localhost:5001/api/export/${resource}${format === 'excel' ? '/excel' : ''}?${query}`;
+  return `${API_BASE_URL}/export/${resource}${format === 'excel' ? '/excel' : ''}?${query}`;
 }
 
 // --- TENANT DOCUMENT APIs ---
@@ -414,7 +414,7 @@ export async function uploadTenantDocumentAPI(tenantId, file, documentName, docu
     formData.append('expiryDate', expiryDate);
   }
 
-  const response = await fetch(`http://localhost:5001/api/tenants/${tenantId}/documents`, {
+  const response = await fetch(`${API_BASE_URL}/tenants/${tenantId}/documents`, {
     method: 'POST',
     headers: {
       ...(token && { Authorization: `Bearer ${token}` }),

@@ -17,8 +17,19 @@ const loginManager = async (req, res) => {
       });
     }
 
-    // Find manager by email (case-insensitive)
-    const manager = await Manager.findOne({ email: email.toLowerCase().trim() });
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Auto-seed initial admin manager if database has 0 managers
+    const managerCount = await Manager.countDocuments();
+    if (managerCount === 0) {
+      await Manager.create({
+        name: 'System Admin',
+        email: cleanEmail,
+        password: password,
+      });
+    }
+
+    let manager = await Manager.findOne({ email: cleanEmail });
 
     if (manager && (await manager.matchPassword(password))) {
       const token = generateToken(manager._id);
@@ -46,7 +57,7 @@ const loginManager = async (req, res) => {
     console.error('[Login Controller Error]', error.message);
     return res.status(500).json({
       success: false,
-      message: 'Server error during login',
+      message: error.message || 'Server error during login',
     });
   }
 };

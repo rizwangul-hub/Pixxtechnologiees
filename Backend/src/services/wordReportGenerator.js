@@ -13,6 +13,10 @@ const {
 } = require('docx');
 const https = require('https');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
+const systemLogoPath = path.join(__dirname, '../assets/logo.png');
 
 /**
  * Helper to format UK dates (DD/MM/YYYY)
@@ -64,7 +68,9 @@ async function renderWordReportDoc(options) {
 
   const children = [];
 
-  const logoBuffer = logoUrl ? await fetchImageBuffer(logoUrl) : null;
+  const fetchedBuffer = logoUrl ? await fetchImageBuffer(logoUrl) : null;
+  const logoBuffer = fetchedBuffer || (fs.existsSync(systemLogoPath) ? fs.readFileSync(systemLogoPath) : null);
+
   if (logoBuffer) {
     try {
       children.push(
