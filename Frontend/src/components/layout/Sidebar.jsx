@@ -29,7 +29,7 @@ export function Sidebar({ isMobileMenuOpen, setIsMobileMenuOpen }) {
   return (
     <>
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex flex-col w-60 shrink-0 bg-white border-r border-slate-200/80 min-h-[calc(100vh-4rem)] p-4 justify-between">
+      <aside className="hidden md:flex flex-col w-60 shrink-0 bg-white border-r border-slate-200/80 h-full overflow-y-auto p-4 justify-between">
         <div className="space-y-4 text-left">
           <p className="px-3 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
             Main Management

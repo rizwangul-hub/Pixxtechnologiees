@@ -127,7 +127,7 @@ export function TopHeader({ onToggleMobileMenu }) {
   const pageTitle = getPageTitle(location.pathname);
 
   return (
-    <header className="w-full bg-slate-900 text-white sticky top-0 z-40 border-b border-slate-800 shadow-sm">
+    <header className="w-full h-16 shrink-0 bg-slate-900 text-white z-40 border-b border-slate-800 shadow-sm">
       <div className="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* LEFT: Mobile Menu Button + Brand Logo + Page Title */}
         <div className="flex items-center gap-3 sm:gap-6">
