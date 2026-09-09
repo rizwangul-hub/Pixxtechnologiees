@@ -1,5 +1,5 @@
 export const API_BASE_URL = (
-  import.meta.env.VITE_API_URL || 'https://pixxtechnologiees-m3m1.vercel.app/api'
+  import.meta.env.VITE_API_URL || '/api'
 ).replace(/\/$/, '');
 
 /**
