@@ -37,6 +37,8 @@ const loginManager = async (req, res) => {
 
     if (manager && (await manager.matchPassword(password))) {
       const token = generateToken(manager._id);
+      const managerName = (!manager.name || manager.name === 'Pixx Manager' || manager.name === 'System Admin') ? 'Fahad Rasheed' : manager.name;
+      const managerRole = (!manager.role || manager.role === 'Administrator') ? 'Manager Accounts' : manager.role;
 
       return res.status(200).json({
         success: true,
@@ -44,7 +46,8 @@ const loginManager = async (req, res) => {
         token,
         manager: {
           id: manager._id,
-          name: manager.name,
+          name: managerName,
+          role: managerRole,
           email: manager.email,
           phone: manager.phone || '',
           profileImage: manager.profileImage || '',
@@ -74,11 +77,15 @@ const loginManager = async (req, res) => {
 const getMe = async (req, res) => {
   try {
     const manager = req.manager;
+    const managerName = (!manager.name || manager.name === 'Pixx Manager' || manager.name === 'System Admin') ? 'Fahad Rasheed' : manager.name;
+    const managerRole = (!manager.role || manager.role === 'Administrator') ? 'Manager Accounts' : manager.role;
+
     return res.status(200).json({
       success: true,
       manager: {
         id: manager._id,
-        name: manager.name,
+        name: managerName,
+        role: managerRole,
         email: manager.email,
         phone: manager.phone || '',
         profileImage: manager.profileImage || '',

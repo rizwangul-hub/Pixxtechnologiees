@@ -6,6 +6,8 @@ export function DashboardHeader() {
   const { user, selectedPortfolio } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const displayName = (!user?.name || user?.name === 'Pixx Manager' || user?.name === 'System Admin') ? 'Fahad Rasheed' : user.name;
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     setTimeout(() => {
@@ -18,7 +20,7 @@ export function DashboardHeader() {
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Welcome back, {user?.name || 'Fahad Rasheed'}
+            Welcome back, {displayName}
           </h1>
           <Sparkles className="w-5 h-5 text-amber-500 fill-amber-400" />
         </div>

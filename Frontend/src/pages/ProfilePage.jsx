@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 
 export function ProfilePage() {
   const { user } = useAuth();
+  const displayName = (!user?.name || user?.name === 'Pixx Manager' || user?.name === 'System Admin') ? 'Fahad Rasheed' : user.name;
+  const displayRole = (!user?.role || user?.role === 'Administrator') ? 'Manager Accounts' : user.role;
 
   return (
     <AppLayout>
@@ -22,10 +24,10 @@ export function ProfilePage() {
         <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 space-y-6 max-w-2xl">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-2xl bg-[#00a36f] text-white flex items-center justify-center text-2xl font-extrabold shadow-md">
-              {user?.name?.charAt(0) || 'U'}
+              {displayName.charAt(0)}
             </div>
             <div>
-              <h3 className="text-xl font-extrabold text-slate-900">{user?.name}</h3>
+              <h3 className="text-xl font-extrabold text-slate-900">{displayName}</h3>
               <p className="text-xs text-slate-500 font-medium">{user?.email}</p>
             </div>
           </div>
@@ -46,7 +48,7 @@ export function ProfilePage() {
             <div className="flex items-center gap-3 text-slate-700">
               <Shield className="w-4 h-4 text-[#00a36f]" />
               <span className="font-semibold text-slate-500 w-32">Account Level:</span>
-              <span className="font-bold text-[#00a36f]">Landlord Admin</span>
+              <span className="font-bold text-[#00a36f]">{displayRole}</span>
             </div>
           </div>
         </div>

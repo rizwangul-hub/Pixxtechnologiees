@@ -15,6 +15,10 @@ export function TopHeader({ onToggleMobileMenu }) {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const displayName = (!user?.name || user?.name === 'Pixx Manager' || user?.name === 'System Admin') ? 'Fahad Rasheed' : user.name;
+  const displayRole = (!user?.role || user?.role === 'Administrator') ? 'Manager Accounts' : user.role;
+  const displayInitial = (displayName || 'Fahad Rasheed')[0].toUpperCase();
+
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -255,11 +259,11 @@ export function TopHeader({ onToggleMobileMenu }) {
 
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs text-left">
             <div className="w-7 h-7 rounded-lg bg-[#04A26F] text-white flex items-center justify-center font-black text-xs shrink-0">
-              {(user?.name || 'Fahad Rasheed')[0]}
+              {displayInitial}
             </div>
             <div className="hidden md:flex flex-col leading-tight">
-              <span className="font-bold text-slate-200">{user?.name || 'Fahad Rasheed'}</span>
-              <span className="text-[10px] text-slate-400 font-medium">{user?.role || 'Manager Accounts'}</span>
+              <span className="font-bold text-slate-200">{displayName}</span>
+              <span className="text-[10px] text-slate-400 font-medium">{displayRole}</span>
             </div>
           </div>
 
