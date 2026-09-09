@@ -165,8 +165,8 @@ export function DashboardPage() {
 
       if (summary || paymentSummary) {
         if (summary) {
+          setLandlordsCount(summary.totalLandlords || 0);
           setPropertiesCount(summary.totalProperties || 0);
-          setUnitsCount(summary.totalUnits || 0);
           setOccupiedCount(summary.occupiedUnits || 0);
           setAvailableCount(summary.availableUnits || 0);
           setCustomersCount(summary.totalCustomers || 0);

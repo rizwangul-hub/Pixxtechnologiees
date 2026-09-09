@@ -78,7 +78,6 @@ const expenseSchema = new mongoose.Schema(
 );
 
 expenseSchema.index({ propertyId: 1 });
-expenseSchema.index({ landlordId: 1 });
 expenseSchema.index({ category: 1 });
 expenseSchema.index({ status: 1 });
 expenseSchema.index({ date: 1 });
