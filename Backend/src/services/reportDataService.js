@@ -54,26 +54,30 @@ function safeIdEquals(a, b) {
 async function findEntitySafely(Model, idVal) {
   if (!idVal || String(idVal).trim().toLowerCase() === 'all') return null;
 
-  if (mongoose.Types.ObjectId.isValid(idVal)) {
+  const strId = String(idVal).trim();
+
+  if (mongoose.Types.ObjectId.isValid(strId)) {
     try {
-      const found = await Model.findById(idVal);
+      const found = await Model.findById(strId);
       if (found) return found;
     } catch (e) {}
   }
 
   try {
-    const found = await Model.findOne({ id: idVal });
+    const found = await Model.findOne({
+      $or: [{ name: strId }, { title: strId }, { fullName: strId }, { propertyName: strId }, { unitName: strId }],
+    });
     if (found) return found;
   } catch (e) {}
 
-  if (typeof idVal === 'string' && idVal.trim().length > 0) {
-    try {
-      const found = await Model.findOne({
-        $or: [{ name: idVal }, { title: idVal }, { fullName: idVal }, { propertyName: idVal }],
+  try {
+    if (Model && Model.collection) {
+      const rawFound = await Model.collection.findOne({
+        $or: [{ id: strId }, { name: strId }, { title: strId }],
       });
-      if (found) return found;
-    } catch (e) {}
-  }
+      if (rawFound) return Model.hydrate(rawFound);
+    }
+  } catch (e) {}
 
   return null;
 }
@@ -909,17 +913,38 @@ async function generateUnitReportData(unitId, fromDate, toDate) {
             : await findEntitySafely(Property, unit.propertyId)))
     : null;
 
-  const validUnitIds = isAll ? [] : filterValidObjectIds([unit._id, unit.id, unitId]);
-  const tenancyQuery = isAll
-    ? { status: 'Active' }
-    : (validUnitIds.length > 0 ? { unitId: { $in: validUnitIds }, status: 'Active' } : { unitId: new mongoose.Types.ObjectId(), status: 'Active' });
-  const tenancy = await Tenancy.findOne(tenancyQuery)
+  const allPossibleUnitIds = [
+    unit?._id,
+    unit?._id?.toString(),
+    unit?.id,
+    unit?.name,
+    unitId,
+  ].filter(Boolean);
+
+  const isUnitMatch = (uRef) => {
+    if (isAll) return true;
+    if (!uRef) return false;
+    const strRef = (uRef._id || uRef.id || uRef?.name || uRef).toString().trim().toLowerCase();
+    return allPossibleUnitIds.some((idVal) => {
+      if (!idVal) return false;
+      const strVal = idVal.toString().trim().toLowerCase();
+      return strRef === strVal;
+    });
+  };
+
+  const allTenancies = await Tenancy.find()
     .populate('customerId')
     .populate('agentId');
+  const tenancy = isAll
+    ? allTenancies.find((t) => t.status === 'Active') || null
+    : allTenancies.find((t) => isUnitMatch(t.unitId) || isUnitMatch(t.unit));
 
-  const pQuery = isAll ? {} : (validUnitIds.length > 0 ? { unitId: { $in: validUnitIds } } : { unitId: new mongoose.Types.ObjectId() });
+  let pQuery = {};
   if (fromDate && toDate) pQuery.dueDate = { $gte: fromDate, $lte: toDate };
-  const payments = await Payment.find(pQuery).sort({ dueDate: -1 });
+  const allPayments = await Payment.find(pQuery).sort({ dueDate: -1 });
+  const payments = isAll
+    ? allPayments
+    : allPayments.filter((p) => isUnitMatch(p.unitId) || isUnitMatch(p.unit));
 
   const totalRent = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const totalPaid = payments.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
