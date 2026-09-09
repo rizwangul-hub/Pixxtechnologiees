@@ -90,9 +90,14 @@ const getUnifiedDashboard = async (req, res) => {
       }
     });
 
-    // 4. EXPENSES
-    const expenses = await Expense.find(expenseFilter);
-    const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    // 4. EXPENSES (Property Expenses + Agent Maintenance Expenses)
+    const propertyExpenses = await Expense.find(expenseFilter);
+    const totalPropertyExpenses = propertyExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+    const agentExpensesList = await AgentExpense.find({ status: { $in: ['Approved', 'Deducted'] } });
+    const totalAgentExpenses = agentExpensesList.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+    const totalExpenses = totalPropertyExpenses + totalAgentExpenses;
 
     // 5. TENANT DOCUMENTS EXPIRY ALERTS
     const todayDate = new Date();
@@ -255,6 +260,8 @@ const getUnifiedDashboard = async (req, res) => {
           monthlyCollectedRent,
           monthlyOutstandingRent,
           totalOverdue,
+          totalPropertyExpenses,
+          totalAgentExpenses,
           totalExpenses,
         },
         paymentInfo: {
@@ -396,10 +403,15 @@ const getAgentDashboardSummary = async (req, res) => {
         assignedUnits: assignedUnitsCount,
         overdueCount,
         totalExpected,
+        totalExpectedAmount: totalExpected,
         totalExpenses,
+        totalApprovedExpenses: totalExpenses,
         netAmount: totalNet,
+        totalNetAmount: totalNet,
         totalReceived,
+        totalPaidAmount: totalReceived,
         totalOutstanding,
+        totalRemainingAmount: totalOutstanding,
         expensesThisMonth,
       },
     });

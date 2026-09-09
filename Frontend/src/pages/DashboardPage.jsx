@@ -83,6 +83,7 @@ export function DashboardPage() {
           pendingAmount: initialCache.financialInfo.monthlyOutstandingRent || 0,
           overdueAmount: initialCache.financialInfo.totalOverdue || 0,
           totalPendingAndOverdue: initialCache.financialInfo.monthlyOutstandingRent || 0,
+          totalExpenses: initialCache.financialInfo.totalExpenses || 0,
         }
       : getFinancialOverview()
   );
@@ -141,6 +142,7 @@ export function DashboardPage() {
           pendingAmount: dash.financialInfo?.monthlyOutstandingRent || 0,
           overdueAmount: dash.financialInfo?.totalOverdue || 0,
           totalPendingAndOverdue: dash.financialInfo?.monthlyOutstandingRent || 0,
+          totalExpenses: dash.financialInfo?.totalExpenses || 0,
         });
 
         if (dash.recentPayments) setRecentPayments(dash.recentPayments);
@@ -235,7 +237,7 @@ export function DashboardPage() {
         {/* 1. QUICK ACTIONS AT TOP */}
         <DashboardQuickActions onRecordPaymentClick={() => handleOpenRecordPaymentModal()} />
 
-        {/* 2. SUMMARY CARDS (8 REAL DATA METRIC CARDS) */}
+        {/* 2. SUMMARY CARDS (9 REAL DATA METRIC CARDS) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1 */}
           <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center space-x-4">
@@ -324,9 +326,9 @@ export function DashboardPage() {
               <AlertTriangle className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Pending / Overdue</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Expenses</p>
               <h3 className="text-xl font-bold text-rose-600 mt-0.5">
-                {formatCurrency(financials.totalPendingAndOverdue)}
+                {formatCurrency(financials.totalExpenses)}
               </h3>
             </div>
           </div>
@@ -344,12 +346,20 @@ export function DashboardPage() {
                 <p className="text-xs text-gray-500">Monthly overview of agent collection settlements and maintenance deductions</p>
               </div>
             </div>
-            <Link
-              to="/agents"
-              className="text-xs font-semibold text-[#04A26F] hover:underline flex items-center gap-1"
-            >
-              Manage Agents <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                to="/agents/expenses"
+                className="text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 hover:bg-amber-100 flex items-center gap-1"
+              >
+                <Receipt className="w-3.5 h-3.5" /> Agent Expenses
+              </Link>
+              <Link
+                to="/agents"
+                className="text-xs font-semibold text-[#04A26F] hover:underline flex items-center gap-1"
+              >
+                Manage Agents <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 pt-2">
@@ -357,7 +367,7 @@ export function DashboardPage() {
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Company Expected</p>
               <h4 className="text-lg font-bold text-gray-900 mt-1">
-                {formatCurrency(agentSummary?.totalExpectedAmount || 0)}
+                {formatCurrency(agentSummary?.totalExpectedAmount ?? agentSummary?.totalExpected ?? 0)}
               </h4>
               <span className="text-[11px] text-gray-400">Agreed monthly agent target</span>
             </div>
@@ -366,7 +376,7 @@ export function DashboardPage() {
             <div className="bg-amber-50/60 p-4 rounded-lg border border-amber-100">
               <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Agent Expenses</p>
               <h4 className="text-lg font-bold text-amber-800 mt-1">
-                {formatCurrency(agentSummary?.totalApprovedExpenses || 0)}
+                {formatCurrency(agentSummary?.totalApprovedExpenses ?? agentSummary?.totalExpenses ?? agentSummary?.expensesThisMonth ?? 0)}
               </h4>
               <span className="text-[11px] text-amber-600">Deducted repairs & maintenance</span>
             </div>
@@ -375,7 +385,7 @@ export function DashboardPage() {
             <div className="bg-blue-50/60 p-4 rounded-lg border border-blue-100">
               <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Net Amount</p>
               <h4 className="text-lg font-bold text-blue-900 mt-1">
-                {formatCurrency(agentSummary?.totalNetAmount || 0)}
+                {formatCurrency(agentSummary?.totalNetAmount ?? agentSummary?.netAmount ?? 0)}
               </h4>
               <span className="text-[11px] text-blue-600">Expected - Approved Expenses</span>
             </div>
@@ -384,7 +394,7 @@ export function DashboardPage() {
             <div className="bg-emerald-50/60 p-4 rounded-lg border border-emerald-100">
               <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Total Received</p>
               <h4 className="text-lg font-bold text-emerald-800 mt-1">
-                {formatCurrency(agentSummary?.totalPaidAmount || 0)}
+                {formatCurrency(agentSummary?.totalPaidAmount ?? agentSummary?.totalReceived ?? 0)}
               </h4>
               <span className="text-[11px] text-emerald-600">Payments collected from agents</span>
             </div>
@@ -393,7 +403,7 @@ export function DashboardPage() {
             <div className="bg-rose-50/60 p-4 rounded-lg border border-rose-100">
               <p className="text-xs font-semibold text-rose-700 uppercase tracking-wider">Outstanding</p>
               <h4 className="text-lg font-bold text-rose-800 mt-1">
-                {formatCurrency(agentSummary?.totalRemainingAmount || 0)}
+                {formatCurrency(agentSummary?.totalRemainingAmount ?? agentSummary?.totalOutstanding ?? 0)}
               </h4>
               <span className="text-[11px] text-rose-600">Remaining agent balance</span>
             </div>
