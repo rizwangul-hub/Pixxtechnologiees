@@ -286,6 +286,28 @@ function getRecent3Months(endDateInput) {
   return months;
 }
 
+function isPaymentInMonth(pay, mInfo) {
+  if (pay.billingMonth && pay.billingYear) {
+    if (Number(pay.billingMonth) === mInfo.month + 1 && Number(pay.billingYear) === mInfo.year) {
+      return true;
+    }
+  }
+
+  const rawDate = pay.paidDate || pay.dueDate || pay.paymentDate || pay.createdAt;
+  if (!rawDate) return false;
+
+  let dObj;
+  if (typeof rawDate === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(rawDate)) {
+    const [dd, mm, yyyy] = rawDate.split('/');
+    dObj = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+  } else {
+    dObj = new Date(rawDate);
+  }
+
+  if (isNaN(dObj.getTime())) return false;
+  return dObj.getFullYear() === mInfo.year && dObj.getMonth() === mInfo.month;
+}
+
 /**
  * 2. LANDLORD REPORT DATA GENERATOR
  */
@@ -376,7 +398,6 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
   const trackingMonths = getRecent3Months(toDate);
   const periodPayments = await Payment.find({
     propertyId: { $in: propertyIds },
-    dueDate: { $gte: trackingMonths[0].startStr, $lte: trackingMonths[2].endStr },
   });
 
   let rowCounter = 1;
@@ -391,8 +412,19 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
         tenancies.find((t) => t.unitId && (t.unitId._id?.toString() === u._id.toString() || t.unitId?.toString() === u._id.toString())) ||
         tenancies.find((t) => t.propertyId && (t.propertyId._id?.toString() === p._id.toString() || t.propertyId?.toString() === p._id.toString()));
 
-      const rent = uTenancy?.monthlyRent || u.monthlyRent || u.price || p.price || 0;
-      const rawMFee = uTenancy?.companyMonthlyAmount || 50;
+      const samplePay = periodPayments.find((pay) => {
+        const payPropStr = pay.propertyId ? pay.propertyId.toString() : '';
+        const payUnitStr = pay.unitId ? pay.unitId.toString() : '';
+        return u.isSynthetic ? payPropStr === p._id.toString() : payUnitStr === u._id.toString();
+      });
+
+      let rent = Number(uTenancy?.monthlyRent || u.monthlyRent || u.price || p.price || samplePay?.amount) || 0;
+      if (rent === 0 && payments && payments.length > 0) {
+        const propPay = payments.find((pay) => pay.propertyId?.toString() === p._id.toString() && pay.amount > 0);
+        if (propPay) rent = propPay.amount;
+      }
+
+      const rawMFee = Number(uTenancy?.companyMonthlyAmount || u.companyMonthlyAmount) || (rent > 0 ? 50 : 0);
       const mFee = rent > 0 ? -Math.abs(rawMFee) : 0;
       const dueDateStr = getOrdinalDay(uTenancy?.paymentDueDay || 1);
       const netRentReceivable = rent + mFee;
@@ -402,23 +434,23 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
       const collections = trackingMonths.map((mInfo) => {
         const mPay = periodPayments.find((pay) => {
           const matchUnit = u.isSynthetic
-            ? pay.propertyId.toString() === p._id.toString()
+            ? pay.propertyId?.toString() === p._id.toString()
             : pay.unitId?.toString() === u._id.toString();
-          const pDate = pay.dueDate || pay.paidDate;
-          return matchUnit && pDate >= mInfo.startStr && pDate <= mInfo.endStr;
+          return matchUnit && isPaymentInMonth(pay, mInfo);
         });
 
-        if (mPay && (mPay.paidAmount > 0 || mPay.status === 'Paid')) {
+        if (mPay && (mPay.paidAmount > 0 || mPay.status === 'Paid' || mPay.amount > 0)) {
           const paidD = mPay.paidDate || mPay.dueDate;
-          const dObj = new Date(paidD);
-          const dateFmt = !isNaN(dObj.getTime())
-            ? `${dObj.getMonth() + 1}/${dObj.getDate()}/${dObj.getFullYear()}`
-            : String(paidD);
+          const dateFmt = typeof paidD === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(paidD)
+            ? paidD
+            : formatUKDate(paidD);
+
+          const paidAmt = mPay.paidAmount > 0 ? mPay.paidAmount : (mPay.amount || netRentReceivable);
           return {
             monthLabel: mInfo.label,
             date: dateFmt,
-            amount: mPay.paidAmount || mPay.amount || netRentReceivable,
-            status: mPay.paidAmount >= (mPay.amount || rent) ? 'Paid' : 'Partial',
+            amount: paidAmt,
+            status: paidAmt >= (mPay.amount || rent) ? 'Paid' : 'Partial',
           };
         } else {
           return {
@@ -646,8 +678,8 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
   // 3-Month Collection Tracker Matrix for Rent Income Report
   const trackingMonths = getRecent3Months(toDate);
   const periodPaymentQuery = propIdList.length > 0
-    ? { propertyId: { $in: propIdList }, dueDate: { $gte: trackingMonths[0].startStr, $lte: trackingMonths[2].endStr } }
-    : { dueDate: { $gte: trackingMonths[0].startStr, $lte: trackingMonths[2].endStr } };
+    ? { propertyId: { $in: propIdList } }
+    : {};
   const periodPayments = await Payment.find(periodPaymentQuery);
 
   let rowCounter = 1;
@@ -659,8 +691,22 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
       tenancies.find((t) => t.unitId && (t.unitId._id?.toString() === u._id?.toString() || t.unitId?.toString() === u._id?.toString() || t.unitId?.toString() === u.id?.toString())) ||
       tenancies.find((t) => t.propertyId && (propIdList.length === 0 || propIdList.some((idVal) => idVal?.toString() === t.propertyId._id?.toString() || idVal?.toString() === t.propertyId?.toString())));
 
-    const rent = uTenancy?.monthlyRent || u.monthlyRent || u.price || property.price || 0;
-    const rawMFee = uTenancy?.companyMonthlyAmount || 50;
+    const samplePay = periodPayments.find((pay) => {
+      const payPropStr = pay.propertyId ? pay.propertyId.toString() : '';
+      const payUnitStr = pay.unitId ? pay.unitId.toString() : '';
+      const targetUnitStr = u._id ? u._id.toString() : u.id ? u.id.toString() : '';
+      return u.isSynthetic
+        ? (propIdList.length === 0 || propIdList.some((idVal) => idVal?.toString() === payPropStr))
+        : (payUnitStr === targetUnitStr);
+    });
+
+    let rent = Number(uTenancy?.monthlyRent || u.monthlyRent || u.price || property.price || samplePay?.amount) || 0;
+    if (rent === 0 && payments && payments.length > 0) {
+      const propPay = payments.find((pay) => pay.amount > 0);
+      if (propPay) rent = propPay.amount;
+    }
+
+    const rawMFee = Number(uTenancy?.companyMonthlyAmount || u.companyMonthlyAmount) || (rent > 0 ? 50 : 0);
     const mFee = rent > 0 ? -Math.abs(rawMFee) : 0;
     const dueDateStr = getOrdinalDay(uTenancy?.paymentDueDay || 1);
     const netRentReceivable = rent + mFee;
@@ -676,21 +722,22 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
         const matchUnit = u.isSynthetic
           ? (propIdList.length === 0 || propIdList.some((idVal) => idVal?.toString() === payPropStr))
           : (payUnitStr === targetUnitStr);
-        const pDate = pay.dueDate || pay.paidDate;
-        return matchUnit && pDate >= mInfo.startStr && pDate <= mInfo.endStr;
+
+        return matchUnit && isPaymentInMonth(pay, mInfo);
       });
 
-      if (mPay && (mPay.paidAmount > 0 || mPay.status === 'Paid')) {
+      if (mPay && (mPay.paidAmount > 0 || mPay.status === 'Paid' || mPay.amount > 0)) {
         const paidD = mPay.paidDate || mPay.dueDate;
-        const dObj = new Date(paidD);
-        const dateFmt = !isNaN(dObj.getTime())
-          ? `${dObj.getMonth() + 1}/${dObj.getDate()}/${dObj.getFullYear()}`
-          : String(paidD);
+        const dateFmt = typeof paidD === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(paidD)
+          ? paidD
+          : formatUKDate(paidD);
+
+        const paidAmt = mPay.paidAmount > 0 ? mPay.paidAmount : (mPay.amount || netRentReceivable);
         return {
           monthLabel: mInfo.label,
           date: dateFmt,
-          amount: mPay.paidAmount || mPay.amount || netRentReceivable,
-          status: mPay.paidAmount >= (mPay.amount || rent) ? 'Paid' : 'Partial',
+          amount: paidAmt,
+          status: paidAmt >= (mPay.amount || rent) ? 'Paid' : 'Partial',
         };
       } else {
         return {

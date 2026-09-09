@@ -428,12 +428,15 @@ async function generateLandlordExcelWorkbook(data) {
       cA.alignment = { horizontal: 'right', vertical: 'middle' };
 
       if (!m.data || m.data.status === 'Unpaid' || !m.data.amount) {
-        // Red background fill for unpaid/missed collection
-        const redFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0000' } };
-        cD.fill = redFill;
-        cA.fill = redFill;
-        cD.value = '';
-        cA.value = '';
+        // Soft red background tint for unpaid/missed collection
+        const softRedFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FEF2F2' } };
+        cD.fill = softRedFill;
+        cA.fill = softRedFill;
+        cD.value = '-';
+        cD.font = { name: 'Calibri', size: 9, color: { argb: '991B1B' } };
+        cA.value = 0;
+        cA.numFmt = '£#,##0.00;[Red](£#,##0.00);"-"';
+        cA.font = { name: 'Calibri', size: 10, color: { argb: '991B1B' } };
       } else {
         cD.value = m.data.date || '';
         cD.font = { name: 'Calibri', size: 9 };
