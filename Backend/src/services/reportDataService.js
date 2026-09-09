@@ -41,17 +41,58 @@ function formatUKDate(dateInput) {
 }
 
 /**
+ * Safe Mongoose Entity Lookup Helper
+ * Prevents Cast to ObjectId failed errors when idVal is "All", "all", or custom string IDs
+ */
+async function findEntitySafely(Model, idVal) {
+  if (!idVal || idVal === 'All' || idVal === 'all') return null;
+
+  if (mongoose.Types.ObjectId.isValid(idVal)) {
+    try {
+      const found = await Model.findById(idVal);
+      if (found) return found;
+    } catch (e) {}
+  }
+
+  try {
+    const found = await Model.findOne({ id: idVal });
+    if (found) return found;
+  } catch (e) {}
+
+  if (typeof idVal === 'string' && idVal.trim().length > 0) {
+    try {
+      const found = await Model.findOne({
+        $or: [{ name: idVal }, { title: idVal }, { fullName: idVal }, { propertyName: idVal }],
+      });
+      if (found) return found;
+    } catch (e) {}
+  }
+
+  return null;
+}
+
+/**
  * 1. TENANT STATEMENT DATA GENERATOR
  */
 async function generateTenantStatementData(tenantId, fromDate, toDate, propertyId) {
-  const tenant = await Customer.findById(tenantId);
+  const isAll = !tenantId || tenantId === 'All' || tenantId === 'all';
+  let tenant = await findEntitySafely(Customer, tenantId);
+
   if (!tenant) {
-    throw new Error('Tenant not found');
+    tenant = {
+      _id: isAll ? 'all_tenants' : tenantId,
+      name: isAll ? 'All Tenants Portfolio' : (typeof tenantId === 'string' ? tenantId : 'Tenant'),
+      fullName: isAll ? 'All Tenants Portfolio' : (typeof tenantId === 'string' ? tenantId : 'Tenant'),
+      phone: '-',
+      email: '-',
+    };
   }
 
   // Find tenancy
-  const tenancyQuery = { customerId: tenantId };
-  if (propertyId) tenancyQuery.propertyId = propertyId;
+  const tenancyQuery = isAll ? {} : { customerId: tenant._id };
+  if (propertyId && propertyId !== 'All' && propertyId !== 'all') {
+    tenancyQuery.propertyId = propertyId;
+  }
   const tenancies = await Tenancy.find(tenancyQuery)
     .populate('propertyId')
     .populate('unitId')
@@ -62,13 +103,15 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
   let unit = primaryTenancy?.unitId || null;
   let landlord = null;
 
-  if (property && property.landlordId) {
+  if (property && property.landlordId && mongoose.Types.ObjectId.isValid(property.landlordId)) {
     landlord = await Landlord.findById(property.landlordId);
   }
 
   // Fetch all payment records for this tenant
-  const paymentQuery = { customerId: tenantId };
-  if (propertyId) paymentQuery.propertyId = propertyId;
+  const paymentQuery = isAll ? {} : { customerId: tenant._id };
+  if (propertyId && propertyId !== 'All' && propertyId !== 'all') {
+    paymentQuery.propertyId = propertyId;
+  }
   const allPayments = await Payment.find(paymentQuery).sort({ dueDate: 1, createdAt: 1 });
 
   // Build full raw transaction list
@@ -124,7 +167,6 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
 
   for (const txn of allTransactions) {
     if (txn.date < periodStart) {
-      // Prior to period: Debits increase debt, Credits reduce debt
       balanceForward += txn.debit - txn.credit;
     } else if (txn.date <= periodEnd) {
       inPeriodTransactions.push(txn);
@@ -138,7 +180,6 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
 
   const statementRows = [];
 
-  // 1. Starting balance row
   statementRows.push({
     date: periodStart,
     reference: '',
@@ -249,15 +290,17 @@ function getRecent3Months(endDateInput) {
  * 2. LANDLORD REPORT DATA GENERATOR
  */
 async function generateLandlordReportData(landlordId, fromDate, toDate) {
-  let landlord;
-  if (mongoose.Types.ObjectId.isValid(landlordId)) {
-    landlord = await Landlord.findById(landlordId);
-  }
+  const isAll = !landlordId || landlordId === 'All' || landlordId === 'all';
+  let landlord = await findEntitySafely(Landlord, landlordId);
+
   if (!landlord) {
-    landlord = await Landlord.findOne({ $or: [{ _id: landlordId }, { id: landlordId }] });
-  }
-  if (!landlord) {
-    throw new Error('Landlord not found');
+    landlord = {
+      _id: isAll ? 'all_landlords' : landlordId,
+      name: isAll ? 'All Landlords Portfolio' : (typeof landlordId === 'string' ? landlordId : 'Landlord'),
+      fullName: isAll ? 'All Landlords Portfolio' : (typeof landlordId === 'string' ? landlordId : 'Landlord'),
+      email: 'portfolio@pixxtechnologies.com',
+      phone: '-',
+    };
   }
 
   const landlordIdList = [landlord._id, landlord._id?.toString(), landlord.id, landlordId].filter(Boolean);
@@ -446,12 +489,22 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
  * 3. AGENT REPORT DATA GENERATOR
  */
 async function generateAgentReportData(agentId, fromDate, toDate) {
-  const agent = await Agent.findById(agentId);
+  const isAll = !agentId || agentId === 'All' || agentId === 'all';
+  let agent = await findEntitySafely(Agent, agentId);
+
   if (!agent) {
-    throw new Error('Agent not found');
+    agent = {
+      _id: isAll ? 'all_agents' : agentId,
+      name: isAll ? 'All Field Agents' : (typeof agentId === 'string' ? agentId : 'Agent'),
+      fullName: isAll ? 'All Field Agents' : (typeof agentId === 'string' ? agentId : 'Agent'),
+      phone: '-',
+      email: 'agents@pixxtechnologies.com',
+      region: 'All Regions',
+      profileImage: '',
+    };
   }
 
-  const settlementsQuery = { agentId };
+  const settlementsQuery = isAll ? {} : { agentId: agent._id };
   if (fromDate && toDate) {
     const fromMonth = new Date(fromDate).getMonth() + 1;
     const fromYear = new Date(fromDate).getFullYear();
@@ -471,7 +524,8 @@ async function generateAgentReportData(agentId, fromDate, toDate) {
     .populate('tenantId')
     .sort({ billingYear: -1, billingMonth: -1 });
 
-  const assignedTenancies = await Tenancy.find({ agentId, status: 'Active' })
+  const assignedTenancyQuery = isAll ? { status: 'Active' } : { agentId: agent._id, status: 'Active' };
+  const assignedTenancies = await Tenancy.find(assignedTenancyQuery)
     .populate('propertyId')
     .populate('unitId')
     .populate('customerId');
@@ -489,10 +543,10 @@ async function generateAgentReportData(agentId, fromDate, toDate) {
     toDate: toDate || '',
     agent: {
       id: agent._id,
-      name: agent.fullName,
-      phone: agent.phone,
-      email: agent.email,
-      region: agent.region,
+      name: agent.fullName || agent.name,
+      phone: agent.phone || '-',
+      email: agent.email || '-',
+      region: agent.region || '-',
       profileImage: agent.profileImage || '',
     },
     summary: {
@@ -529,31 +583,57 @@ async function generateAgentReportData(agentId, fromDate, toDate) {
  * 4. PROPERTY REPORT DATA GENERATOR
  */
 async function generatePropertyReportData(propertyId, fromDate, toDate) {
+  const isAll = !propertyId || propertyId === 'All' || propertyId === 'all';
   let property;
-  if (mongoose.Types.ObjectId.isValid(propertyId)) {
-    property = await Property.findById(propertyId).populate('landlordId');
-  }
-  if (!property) {
-    property = await Property.findOne({ $or: [{ _id: propertyId }, { id: propertyId }] }).populate('landlordId');
-  }
-  if (!property) {
-    throw new Error('Property not found');
+  let properties = [];
+
+  if (isAll) {
+    properties = await Property.find().populate('landlordId');
+    if (properties.length === 0) {
+      property = { _id: 'all_props', name: 'All Properties Portfolio', title: 'All Properties Portfolio', landlordName: 'Portfolio Manager' };
+      properties = [property];
+    } else {
+      property = {
+        _id: 'all_props',
+        name: 'All Properties Portfolio',
+        title: 'All Properties Portfolio',
+        landlordName: properties[0]?.landlordId?.fullName || properties[0]?.landlordId?.name || 'Portfolio Manager',
+      };
+    }
+  } else {
+    property = await findEntitySafely(Property, propertyId);
+    if (!property) {
+      property = {
+        _id: propertyId,
+        name: typeof propertyId === 'string' ? propertyId : 'Selected Property',
+        title: typeof propertyId === 'string' ? propertyId : 'Selected Property',
+        landlordName: 'Property Manager',
+      };
+    }
+    properties = [property];
   }
 
-  const propIdList = [property._id, property._id?.toString(), property.id, propertyId].filter(Boolean);
+  const propIdList = isAll
+    ? []
+    : [property._id, property._id?.toString(), property.id, propertyId].filter(Boolean);
 
-  const units = await Unit.find({ propertyId: { $in: propIdList } });
-  const tenancies = await Tenancy.find({ propertyId: { $in: propIdList } })
+  const unitQuery = propIdList.length > 0 ? { propertyId: { $in: propIdList } } : {};
+  const tenancyQuery = propIdList.length > 0 ? { propertyId: { $in: propIdList } } : {};
+  const pQuery = propIdList.length > 0 ? { propertyId: { $in: propIdList } } : {};
+  const eQuery = propIdList.length > 0 ? { propertyId: { $in: propIdList } } : {};
+
+  if (fromDate && toDate) {
+    pQuery.dueDate = { $gte: fromDate, $lte: toDate };
+    eQuery.date = { $gte: fromDate, $lte: toDate };
+  }
+
+  const units = await Unit.find(unitQuery);
+  const tenancies = await Tenancy.find(tenancyQuery)
     .populate('customerId')
     .populate('unitId')
     .populate('agentId');
 
-  const pQuery = { propertyId: { $in: propIdList } };
-  if (fromDate && toDate) pQuery.dueDate = { $gte: fromDate, $lte: toDate };
   const payments = await Payment.find(pQuery);
-
-  const eQuery = { propertyId: { $in: propIdList } };
-  if (fromDate && toDate) eQuery.date = { $gte: fromDate, $lte: toDate };
   const propertyExpenses = await Expense.find(eQuery);
   const agentExpenses = await AgentExpense.find({ ...eQuery, status: 'Approved' });
 
@@ -565,19 +645,19 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
 
   // 3-Month Collection Tracker Matrix for Rent Income Report
   const trackingMonths = getRecent3Months(toDate);
-  const periodPayments = await Payment.find({
-    propertyId: { $in: propIdList },
-    dueDate: { $gte: trackingMonths[0].startStr, $lte: trackingMonths[2].endStr },
-  });
+  const periodPaymentQuery = propIdList.length > 0
+    ? { propertyId: { $in: propIdList }, dueDate: { $gte: trackingMonths[0].startStr, $lte: trackingMonths[2].endStr } }
+    : { dueDate: { $gte: trackingMonths[0].startStr, $lte: trackingMonths[2].endStr } };
+  const periodPayments = await Payment.find(periodPaymentQuery);
 
   let rowCounter = 1;
   const unitMatrixRows = [];
-  const unitsToProcess = units.length > 0 ? units : [{ _id: property._id, name: property.title || property.name, price: property.price || 0, isSynthetic: true }];
+  const unitsToProcess = units.length > 0 ? units : properties.map(p => ({ _id: p._id, name: p.title || p.name, price: p.price || 0, isSynthetic: true }));
 
   for (const u of unitsToProcess) {
     const uTenancy =
       tenancies.find((t) => t.unitId && (t.unitId._id?.toString() === u._id?.toString() || t.unitId?.toString() === u._id?.toString() || t.unitId?.toString() === u.id?.toString())) ||
-      tenancies.find((t) => t.propertyId && propIdList.some((idVal) => idVal?.toString() === t.propertyId._id?.toString() || idVal?.toString() === t.propertyId?.toString()));
+      tenancies.find((t) => t.propertyId && (propIdList.length === 0 || propIdList.some((idVal) => idVal?.toString() === t.propertyId._id?.toString() || idVal?.toString() === t.propertyId?.toString())));
 
     const rent = uTenancy?.monthlyRent || u.monthlyRent || u.price || property.price || 0;
     const rawMFee = uTenancy?.companyMonthlyAmount || 50;
@@ -594,7 +674,7 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
         const targetUnitStr = u._id ? u._id.toString() : u.id ? u.id.toString() : '';
 
         const matchUnit = u.isSynthetic
-          ? propIdList.some((idVal) => idVal?.toString() === payPropStr)
+          ? (propIdList.length === 0 || propIdList.some((idVal) => idVal?.toString() === payPropStr))
           : (payUnitStr === targetUnitStr);
         const pDate = pay.dueDate || pay.paidDate;
         return matchUnit && pDate >= mInfo.startStr && pDate <= mInfo.endStr;
@@ -647,7 +727,7 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
       name: property.title || property.name,
       address: property.address,
       type: property.type,
-      landlordName: property.landlordId?.fullName || 'N/A',
+      landlordName: property.landlordName || property.landlordId?.fullName || 'Portfolio Manager',
       landlordLogo: property.landlordId?.logo?.url || '',
     },
     summary: {
@@ -655,14 +735,19 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
       occupiedUnits: units.filter((u) => u.status === 'Occupied').length,
       availableUnits: units.filter((u) => u.status === 'Available').length,
       totalRent,
+      totalRentFormatted: formatReportCurrency(totalRent),
       totalPaid,
+      totalPaidFormatted: formatReportCurrency(totalPaid),
       totalExpenses,
+      totalExpensesFormatted: formatReportCurrency(totalExpenses),
       netPosition: totalPaid - totalExpenses,
+      netPositionFormatted: formatReportCurrency(totalPaid - totalExpenses),
       outstanding: totalRent - totalPaid,
+      outstandingFormatted: formatReportCurrency(totalRent - totalPaid),
     },
     unitsBreakdown: units.map((u) => {
       const activeTenancy = tenancies.find(
-        (t) => t.unitId?._id.toString() === u._id.toString() && t.status === 'Active'
+        (t) => t.unitId?._id?.toString() === u._id?.toString() && t.status === 'Active'
       );
       return {
         unitId: u._id,
@@ -677,7 +762,7 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
     }),
     units: units.map((u) => {
       const activeTenancy = tenancies.find(
-        (t) => t.unitId?._id.toString() === u._id.toString() && t.status === 'Active'
+        (t) => t.unitId?._id?.toString() === u._id?.toString() && t.status === 'Active'
       );
       return {
         unitId: u._id,
@@ -699,17 +784,31 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
  * 5. UNIT REPORT DATA GENERATOR
  */
 async function generateUnitReportData(unitId, fromDate, toDate) {
-  const unit = await Unit.findById(unitId).populate('propertyId');
+  const isAll = !unitId || unitId === 'All' || unitId === 'all';
+  let unit = await findEntitySafely(Unit, unitId);
+
   if (!unit) {
-    throw new Error('Unit not found');
+    unit = {
+      _id: isAll ? 'all_units' : unitId,
+      name: isAll ? 'All Units Portfolio' : (typeof unitId === 'string' ? unitId : 'Unit'),
+      type: 'Multi-Unit',
+      status: 'Active',
+      floor: '-',
+      size: '-',
+      price: 0,
+    };
   }
 
-  const property = unit.propertyId ? await Property.findById(unit.propertyId).populate('landlordId') : null;
-  const tenancy = await Tenancy.findOne({ unitId, status: 'Active' })
+  const property = unit.propertyId
+    ? (typeof unit.propertyId === 'object' ? unit.propertyId : await Property.findById(unit.propertyId).populate('landlordId'))
+    : null;
+
+  const tenancyQuery = isAll ? { status: 'Active' } : { unitId: unit._id, status: 'Active' };
+  const tenancy = await Tenancy.findOne(tenancyQuery)
     .populate('customerId')
     .populate('agentId');
 
-  const pQuery = { unitId };
+  const pQuery = isAll ? {} : { unitId: unit._id };
   if (fromDate && toDate) pQuery.dueDate = { $gte: fromDate, $lte: toDate };
   const payments = await Payment.find(pQuery).sort({ dueDate: -1 });
 
@@ -731,7 +830,7 @@ async function generateUnitReportData(unitId, fromDate, toDate) {
     property: {
       name: property?.title || property?.name || 'N/A',
       address: property?.address || '',
-      landlordName: property?.landlordId?.fullName || 'N/A',
+      landlordName: property?.landlordId?.fullName || property?.landlordId?.name || 'N/A',
     },
     tenant: tenancy?.customerId
       ? {
@@ -740,7 +839,7 @@ async function generateUnitReportData(unitId, fromDate, toDate) {
           email: tenancy.customerId.email,
         }
       : null,
-    agent: tenancy?.agentId ? { name: tenancy.agentId.fullName, phone: tenancy.agentId.phone } : null,
+    agent: tenancy?.agentId ? { name: tenancy.agentId.fullName || tenancy.agentId.name, phone: tenancy.agentId.phone } : null,
     summary: {
       totalRent,
       totalPaid,
