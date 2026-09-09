@@ -78,6 +78,19 @@ async function findEntitySafely(Model, idVal) {
   return null;
 }
 
+function filterValidObjectIds(idList) {
+  if (!Array.isArray(idList)) return [];
+  const validMap = new Map();
+  for (const item of idList) {
+    if (!item) continue;
+    const str = (item._id || item.id || item).toString().trim();
+    if (mongoose.Types.ObjectId.isValid(str)) {
+      validMap.set(str, new mongoose.Types.ObjectId(str));
+    }
+  }
+  return Array.from(validMap.values());
+}
+
 /**
  * 1. TENANT STATEMENT DATA GENERATOR
  */
@@ -96,10 +109,21 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
   }
 
   // Find tenancy
-  const tenancyQuery = isAll ? {} : { customerId: tenant._id };
+  const validTenantObjectIds = isAll ? [] : filterValidObjectIds([tenant._id, tenant.id, tenantId]);
+  const tenancyQuery = isAll
+    ? {}
+    : (validTenantObjectIds.length > 0 ? { customerId: { $in: validTenantObjectIds } } : { customerId: new mongoose.Types.ObjectId() });
+
   if (propertyId && propertyId !== 'All' && propertyId !== 'all') {
-    tenancyQuery.propertyId = propertyId;
+    const propDoc = await findEntitySafely(Property, propertyId);
+    const validProps = filterValidObjectIds([propDoc?._id, propDoc?.id, propertyId]);
+    if (validProps.length > 0) {
+      tenancyQuery.propertyId = { $in: validProps };
+    } else {
+      tenancyQuery.propertyId = new mongoose.Types.ObjectId();
+    }
   }
+
   const tenancies = await Tenancy.find(tenancyQuery)
     .populate('propertyId')
     .populate('unitId')
@@ -115,9 +139,18 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
   }
 
   // Fetch all payment records for this tenant
-  const paymentQuery = isAll ? {} : { customerId: tenant._id };
+  const paymentQuery = isAll
+    ? {}
+    : (validTenantObjectIds.length > 0 ? { customerId: { $in: validTenantObjectIds } } : { customerId: new mongoose.Types.ObjectId() });
+
   if (propertyId && propertyId !== 'All' && propertyId !== 'all') {
-    paymentQuery.propertyId = propertyId;
+    const propDoc = await findEntitySafely(Property, propertyId);
+    const validProps = filterValidObjectIds([propDoc?._id, propDoc?.id, propertyId]);
+    if (validProps.length > 0) {
+      paymentQuery.propertyId = { $in: validProps };
+    } else {
+      paymentQuery.propertyId = new mongoose.Types.ObjectId();
+    }
   }
   const allPayments = await Payment.find(paymentQuery).sort({ dueDate: 1, createdAt: 1 });
 
@@ -332,21 +365,26 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
     };
   }
 
-  const landlordIdList = [landlord._id, landlord._id?.toString(), landlord.id, landlordId].filter(Boolean);
-  const properties = await Property.find({ landlordId: { $in: landlordIdList } });
-  const propertyIds = properties.map((p) => p._id);
-  const allPropIdList = [...propertyIds, ...properties.map((p) => p.id), ...properties.map((p) => p._id?.toString())].filter(Boolean);
+  const validLandlordObjectIds = isAll ? [] : filterValidObjectIds([landlord._id, landlord.id, landlordId]);
+  const propQueryFilter = isAll ? {} : (validLandlordObjectIds.length > 0 ? { landlordId: { $in: validLandlordObjectIds } } : { landlordId: new mongoose.Types.ObjectId() });
 
-  const units = await Unit.find({ propertyId: { $in: allPropIdList } });
+  const properties = await Property.find(propQueryFilter);
+  const propertyIds = properties.map((p) => p._id);
+  const validPropObjectIds = isAll ? [] : filterValidObjectIds([...propertyIds, ...properties.map((p) => p.id)]);
+
+  const unitQueryFilter = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
+  const tenancyQueryFilter = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
+
+  const units = await Unit.find(unitQueryFilter);
   const unitIds = units.map((u) => u._id);
 
-  const tenancies = await Tenancy.find({ propertyId: { $in: allPropIdList } })
+  const tenancies = await Tenancy.find(tenancyQueryFilter)
     .populate('customerId')
     .populate('unitId')
     .populate('agentId');
 
   // Payments & Expenses
-  const pQuery = { propertyId: { $in: allPropIdList } };
+  const pQuery = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
   if (fromDate && toDate) {
     pQuery.dueDate = { $gte: fromDate, $lte: toDate };
   }
@@ -650,19 +688,21 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
     properties = [property];
   }
 
-  const propIdList = isAll
+  const validPropObjectIds = isAll
     ? []
-    : [property._id, property._id?.toString(), property.id, propertyId].filter(Boolean);
+    : filterValidObjectIds([property._id, property.id, propertyId]);
 
-  const unitQuery = propIdList.length > 0 ? { propertyId: { $in: propIdList } } : {};
-  const tenancyQuery = propIdList.length > 0 ? { propertyId: { $in: propIdList } } : {};
-  const pQuery = propIdList.length > 0 ? { propertyId: { $in: propIdList } } : {};
-  const eQuery = propIdList.length > 0 ? { propertyId: { $in: propIdList } } : {};
+  const unitQuery = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
+  const tenancyQuery = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
+  const pQuery = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
+  const eQuery = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
 
   if (fromDate && toDate) {
     pQuery.dueDate = { $gte: fromDate, $lte: toDate };
     eQuery.date = { $gte: fromDate, $lte: toDate };
   }
+
+  const periodPaymentQuery = isAll ? {} : (validPropObjectIds.length > 0 ? { propertyId: { $in: validPropObjectIds } } : { propertyId: new mongoose.Types.ObjectId() });
 
   const units = await Unit.find(unitQuery);
   const tenancies = await Tenancy.find(tenancyQuery)
@@ -682,9 +722,6 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
 
   // 3-Month Collection Tracker Matrix for Rent Income Report
   const trackingMonths = getRecent3Months(toDate);
-  const periodPaymentQuery = propIdList.length > 0
-    ? { propertyId: { $in: propIdList } }
-    : {};
   const periodPayments = await Payment.find(periodPaymentQuery);
 
   let rowCounter = 1;
@@ -694,11 +731,11 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
   for (const u of unitsToProcess) {
     const uTenancy =
       tenancies.find((t) => safeIdEquals(t.unitId, u._id)) ||
-      tenancies.find((t) => propIdList.length === 0 || propIdList.some((idVal) => safeIdEquals(idVal, t.propertyId)));
+      tenancies.find((t) => isAll || validPropObjectIds.some((idVal) => safeIdEquals(idVal, t.propertyId)));
 
     const samplePay = periodPayments.find((pay) => {
       return u.isSynthetic
-        ? (propIdList.length === 0 || propIdList.some((idVal) => safeIdEquals(idVal, pay.propertyId)))
+        ? (isAll || validPropObjectIds.some((idVal) => safeIdEquals(idVal, pay.propertyId)))
         : safeIdEquals(pay.unitId, u._id);
     });
 
@@ -845,15 +882,22 @@ async function generateUnitReportData(unitId, fromDate, toDate) {
   }
 
   const property = unit.propertyId
-    ? (typeof unit.propertyId === 'object' ? unit.propertyId : await Property.findById(unit.propertyId).populate('landlordId'))
+    ? (typeof unit.propertyId === 'object'
+        ? unit.propertyId
+        : (mongoose.Types.ObjectId.isValid(unit.propertyId)
+            ? await Property.findById(unit.propertyId).populate('landlordId')
+            : await findEntitySafely(Property, unit.propertyId)))
     : null;
 
-  const tenancyQuery = isAll ? { status: 'Active' } : { unitId: unit._id, status: 'Active' };
+  const validUnitIds = isAll ? [] : filterValidObjectIds([unit._id, unit.id, unitId]);
+  const tenancyQuery = isAll
+    ? { status: 'Active' }
+    : (validUnitIds.length > 0 ? { unitId: { $in: validUnitIds }, status: 'Active' } : { unitId: new mongoose.Types.ObjectId(), status: 'Active' });
   const tenancy = await Tenancy.findOne(tenancyQuery)
     .populate('customerId')
     .populate('agentId');
 
-  const pQuery = isAll ? {} : { unitId: unit._id };
+  const pQuery = isAll ? {} : (validUnitIds.length > 0 ? { unitId: { $in: validUnitIds } } : { unitId: new mongoose.Types.ObjectId() });
   if (fromDate && toDate) pQuery.dueDate = { $gte: fromDate, $lte: toDate };
   const payments = await Payment.find(pQuery).sort({ dueDate: -1 });
 
@@ -901,8 +945,18 @@ async function generatePaymentReportData(filters = {}) {
   const { fromDate, toDate, tenantId, propertyId, status, paymentMethod } = filters;
   const query = {};
 
-  if (tenantId && tenantId !== 'All') query.customerId = tenantId;
-  if (propertyId && propertyId !== 'All') query.propertyId = propertyId;
+  if (tenantId && tenantId !== 'All' && tenantId !== 'all') {
+    const tDoc = await findEntitySafely(Customer, tenantId);
+    const validT = filterValidObjectIds([tDoc?._id, tDoc?.id, tenantId]);
+    if (validT.length > 0) query.customerId = { $in: validT };
+    else query.customerId = new mongoose.Types.ObjectId();
+  }
+  if (propertyId && propertyId !== 'All' && propertyId !== 'all') {
+    const pDoc = await findEntitySafely(Property, propertyId);
+    const validP = filterValidObjectIds([pDoc?._id, pDoc?.id, propertyId]);
+    if (validP.length > 0) query.propertyId = { $in: validP };
+    else query.propertyId = new mongoose.Types.ObjectId();
+  }
   if (status && status !== 'All') query.status = status;
   if (paymentMethod && paymentMethod !== 'All') query.paymentMethod = paymentMethod;
   if (fromDate && toDate) query.dueDate = { $gte: fromDate, $lte: toDate };
@@ -949,12 +1003,19 @@ async function generateExpenseReportData(filters = {}) {
   const { fromDate, toDate, propertyId, category, expenseType } = filters;
 
   const propQuery = {};
-  if (propertyId && propertyId !== 'All') propQuery.propertyId = propertyId;
-  if (category && category !== 'All') propQuery.category = category;
-  if (fromDate && toDate) propQuery.date = { $gte: fromDate, $lte: toDate };
-
   const agentQuery = {};
-  if (propertyId && propertyId !== 'All') agentQuery.propertyId = propertyId;
+
+  if (propertyId && propertyId !== 'All' && propertyId !== 'all') {
+    const pDoc = await findEntitySafely(Property, propertyId);
+    const validP = filterValidObjectIds([pDoc?._id, pDoc?.id, propertyId]);
+    if (validP.length > 0) {
+      propQuery.propertyId = { $in: validP };
+      agentQuery.propertyId = { $in: validP };
+    } else {
+      propQuery.propertyId = new mongoose.Types.ObjectId();
+      agentQuery.propertyId = new mongoose.Types.ObjectId();
+    }
+  }
   if (category && category !== 'All') agentQuery.expenseCategory = category;
   if (fromDate && toDate) agentQuery.date = { $gte: fromDate, $lte: toDate };
 
@@ -1081,8 +1142,18 @@ async function generateMortgageReportData(filters = {}) {
   const { propertyId, landlordId, lenderName, status, fromDate, toDate } = filters;
 
   let query = {};
-  if (propertyId) query.propertyId = propertyId;
-  if (landlordId) query.landlordId = landlordId;
+  if (propertyId && propertyId !== 'All' && propertyId !== 'all') {
+    const pDoc = await findEntitySafely(Property, propertyId);
+    const validP = filterValidObjectIds([pDoc?._id, pDoc?.id, propertyId]);
+    if (validP.length > 0) query.propertyId = { $in: validP };
+    else query.propertyId = new mongoose.Types.ObjectId();
+  }
+  if (landlordId && landlordId !== 'All' && landlordId !== 'all') {
+    const lDoc = await findEntitySafely(Landlord, landlordId);
+    const validL = filterValidObjectIds([lDoc?._id, lDoc?.id, landlordId]);
+    if (validL.length > 0) query.landlordId = { $in: validL };
+    else query.landlordId = new mongoose.Types.ObjectId();
+  }
   if (status && status !== 'All') query.status = status;
   if (lenderName) query.lenderName = new RegExp(lenderName.trim(), 'i');
 

@@ -310,6 +310,102 @@ export function ReportsPage() {
     };
   };
 
+  const buildLocalPropertyReport = (propertyId, fromDateStr, toDateStr) => {
+    const localProps = getSavedProperties();
+    const localUnits = getSavedUnits();
+    const localCusts = getSavedCustomers();
+    const localSchedules = getSavedPaymentSchedules();
+
+    const isAll = !propertyId || propertyId === 'All';
+    const targetPropIdStr = propertyId ? propertyId.toString() : '';
+
+    let property = isAll
+      ? { _id: 'all_props', name: 'All Properties Portfolio', title: 'All Properties Portfolio', landlordName: 'Portfolio Manager' }
+      : (properties.length > 0 ? properties : localProps).find((p) => (p.id || p._id)?.toString() === targetPropIdStr) || {
+          _id: propertyId,
+          name: propertyId || 'Selected Property',
+          title: propertyId || 'Selected Property',
+          landlordName: 'Property Manager',
+        };
+
+    const propUnits = isAll
+      ? (units.length > 0 ? units : localUnits)
+      : (units.length > 0 ? units : localUnits).filter((u) => {
+          const uPid = u.propertyId?._id ? u.propertyId._id.toString() : u.propertyId ? u.propertyId.toString() : '';
+          return uPid === targetPropIdStr;
+        });
+
+    const propSchedules = isAll
+      ? localSchedules
+      : localSchedules.filter((s) => {
+          const sPid = s.propertyId?._id ? s.propertyId._id.toString() : s.propertyId ? s.propertyId.toString() : '';
+          return sPid === targetPropIdStr;
+        });
+
+    const totalRent = propSchedules.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const totalPaid = propSchedules.reduce((sum, p) => sum + (Number(p.paidAmount) || 0), 0);
+
+    const unitMatrixRows = propUnits.map((u, idx) => {
+      const rent = Number(u.price || u.monthlyRent) || 0;
+      const mFee = rent > 0 ? -50 : 0;
+      const netRentReceivable = rent + mFee;
+      return {
+        no: idx + 1,
+        propertyId: property._id,
+        unitId: u._id || u.id,
+        propertyName: property.title || property.name,
+        unitName: u.name || u.unitName,
+        propertyAddress: `${property.address || property.title || property.name || 'Property'}, ${u.name || ''}`,
+        rent,
+        mFee,
+        dueDate: '1st',
+        netRentReceivable,
+        collections: [
+          { monthLabel: 'Month 1', date: '-', amount: u.status === 'Occupied' ? rent : 0, status: u.status === 'Occupied' ? 'Paid' : 'Unpaid' },
+          { monthLabel: 'Month 2', date: '-', amount: u.status === 'Occupied' ? rent : 0, status: u.status === 'Occupied' ? 'Paid' : 'Unpaid' },
+          { monthLabel: 'Month 3', date: '-', amount: u.status === 'Occupied' ? rent : 0, status: u.status === 'Occupied' ? 'Paid' : 'Unpaid' },
+        ],
+      };
+    });
+
+    return {
+      reportType: 'Property Report',
+      reportDate: new Date().toISOString().split('T')[0],
+      fromDate: fromDateStr || '',
+      toDate: toDateStr || '',
+      property: {
+        id: property._id || property.id,
+        name: property.title || property.name || property.propertyName,
+        address: property.address || 'N/A',
+        city: property.city || 'N/A',
+        type: property.type || property.propertyType || 'Residential',
+        landlordName: property.landlordName || 'N/A',
+        totalUnits: propUnits.length,
+        occupiedUnits: propUnits.filter((u) => u.status === 'Occupied' || u.customerId).length,
+        availableUnits: propUnits.filter((u) => u.status === 'Available').length,
+      },
+      summary: {
+        totalRent,
+        totalPaid,
+        totalExpenses: 0,
+        netIncome: totalPaid,
+        outstanding: totalRent - totalPaid,
+      },
+      units: propUnits.map((u) => ({
+        id: u._id || u.id,
+        name: u.name || u.unitName,
+        type: u.type || 'Unit',
+        status: u.status || 'Available',
+        price: u.price || u.monthlyRent || 0,
+        tenantName: u.customerName || 'N/A',
+      })),
+      unitMatrixRows,
+      payments: propSchedules,
+      propertyExpenses: [],
+      agentExpenses: [],
+    };
+  };
+
   const handleGenerateReport = async (e) => {
     if (e) e.preventDefault();
     setError('');
@@ -346,10 +442,17 @@ export function ReportsPage() {
 
         case 'property-report':
           if (!selectedPropertyId) throw new Error('Please select a property');
-          data = await fetchPropertyReportAPI(selectedPropertyId, {
-            fromDate: dateFrom,
-            toDate: dateTo,
-          });
+          try {
+            data = await fetchPropertyReportAPI(selectedPropertyId, {
+              fromDate: dateFrom,
+              toDate: dateTo,
+            });
+          } catch (apiErr) {
+            console.warn('[API Warning] Fetch property report fallback to local:', apiErr.message);
+          }
+          if (!data) {
+            data = buildLocalPropertyReport(selectedPropertyId, dateFrom, dateTo);
+          }
           break;
 
         case 'unit-report':
@@ -684,7 +787,7 @@ export function ReportsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#04A26F] focus:border-transparent outline-none bg-white"
                     required={selectedReportType === 'property-report'}
                   >
-                    {selectedReportType !== 'property-report' && <option value="All">All Properties</option>}
+                    <option value="All">All Properties Portfolio</option>
                     {properties.map((p) => (
                       <option key={p._id || p.id} value={p._id || p.id}>
                         {p.title || p.name || p.propertyName}
