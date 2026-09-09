@@ -5,6 +5,7 @@ import { DashboardQuickActions } from '../components/dashboard/DashboardQuickAct
 import RecordPaymentModal from '../components/payments/RecordPaymentModal';
 import {
   getTotalPropertiesCount,
+  getTotalLandlordsCount,
   getTotalUnitsCount,
   getOccupiedUnitsCount,
   getAvailableUnitsCount,
@@ -28,6 +29,7 @@ import {
 } from '../services/apiData';
 import {
   Building2,
+  UserCheck,
   Layers,
   CheckCircle2,
   Home,
@@ -60,11 +62,11 @@ export function DashboardPage() {
   const initialCache = getCachedDashboard();
 
   const [loading, setLoading] = useState(!initialCache);
+  const [landlordsCount, setLandlordsCount] = useState(
+    initialCache?.propertyInfo?.totalLandlords ?? getTotalLandlordsCount()
+  );
   const [propertiesCount, setPropertiesCount] = useState(
     initialCache?.propertyInfo?.totalProperties ?? getTotalPropertiesCount()
-  );
-  const [unitsCount, setUnitsCount] = useState(
-    initialCache?.propertyInfo?.totalUnits ?? getTotalUnitsCount()
   );
   const [occupiedCount, setOccupiedCount] = useState(
     initialCache?.propertyInfo?.occupiedUnits ?? getOccupiedUnitsCount()
@@ -129,8 +131,8 @@ export function DashboardPage() {
       // Fetch Live Backend Data first
       const dash = await fetchUnifiedDashboardAPI();
       if (dash) {
+        setLandlordsCount(dash.propertyInfo?.totalLandlords || 0);
         setPropertiesCount(dash.propertyInfo?.totalProperties || 0);
-        setUnitsCount(dash.propertyInfo?.totalUnits || 0);
         setOccupiedCount(dash.propertyInfo?.occupiedUnits || 0);
         setAvailableCount(dash.propertyInfo?.availableUnits || 0);
 
@@ -239,8 +241,25 @@ export function DashboardPage() {
 
         {/* 2. SUMMARY CARDS (9 REAL DATA METRIC CARDS) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1 */}
-          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center space-x-4">
+          {/* Card 1: Total Landlords */}
+          <Link
+            to="/landlords"
+            className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center space-x-4 hover:border-[#04A26F]/50 transition-colors"
+          >
+            <div className="w-12 h-12 rounded-lg bg-emerald-50 text-[#04A26F] flex items-center justify-center font-bold text-xl shrink-0">
+              <UserCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Landlords</p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-0.5">{landlordsCount}</h3>
+            </div>
+          </Link>
+
+          {/* Card 2: Total Properties */}
+          <Link
+            to="/properties"
+            className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center space-x-4 hover:border-blue-500/50 transition-colors"
+          >
             <div className="w-12 h-12 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xl shrink-0">
               <Building2 className="w-6 h-6" />
             </div>
@@ -248,18 +267,7 @@ export function DashboardPage() {
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Properties</p>
               <h3 className="text-2xl font-bold text-gray-900 mt-0.5">{propertiesCount}</h3>
             </div>
-          </div>
-
-          {/* Card 2 */}
-          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center space-x-4">
-            <div className="w-12 h-12 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xl shrink-0">
-              <Layers className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Properties</p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-0.5">{unitsCount}</h3>
-            </div>
-          </div>
+          </Link>
 
           {/* Card 3 */}
           <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center space-x-4">

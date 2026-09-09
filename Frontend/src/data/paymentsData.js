@@ -34,95 +34,9 @@ export const paymentTypes = [
   'Credit Card',
 ];
 
-export const demoExpensePayments = [
-  {
-    id: 'exp-pay-1',
-    supplier: 'Claudio Calanna',
-    reference: 'Payment (26 Clarance - Plumber Work - Paid from Old Street Bank Account),',
-    property: '26A Clarence Road GRAYS RM17 6QJ',
-    date: '2025-01-14',
-    account: 'My Bank Account',
-    paymentAmount: 990.0,
-    allocatedAmount: 990.0,
-    unallocatedAmount: 0.0,
-    paymentType: 'Bank Transfer',
-  },
-  {
-    id: 'exp-pay-2',
-    supplier: 'Z&Z Services Ltd',
-    reference: '82 Commo Biler ISSUE - Paid from Old Street Bank',
-    property: '82 COMO STREET',
-    date: '2025-01-13',
-    account: 'My Bank Account',
-    paymentAmount: 500.0,
-    allocatedAmount: 500.0,
-    unallocatedAmount: 0.0,
-    paymentType: 'Bank Transfer',
-  },
-  {
-    id: 'exp-pay-3',
-    supplier: 'Z&Z Services Ltd',
-    reference: '82 Commo Biler ISSUE - Paid from Old Street Bank',
-    property: '82 COMO STREET',
-    date: '2025-01-10',
-    account: 'My Bank Account',
-    paymentAmount: 1200.0,
-    allocatedAmount: 1200.0,
-    unallocatedAmount: 0.0,
-    paymentType: 'Bank Transfer',
-  },
-  {
-    id: 'exp-pay-4',
-    supplier: 'Claudio Calanna',
-    reference: '26 Clarance - Plumber Work - Paid from Old Street Bank Account',
-    property: '26A Clarence Road GRAYS RM17 6QJ',
-    date: '2025-01-06',
-    account: 'My Bank Account',
-    paymentAmount: 10.0,
-    allocatedAmount: 10.0,
-    unallocatedAmount: 0.0,
-    paymentType: 'Bank Transfer',
-  },
-];
+export const demoExpensePayments = [];
 
-export const demoIncomePayments = [
-  {
-    id: 'inc-pay-1',
-    payer: 'John Smith',
-    reference: 'Rent Receipt - Apt 4B',
-    property: '82 COMO STREET',
-    date: '2025-01-15',
-    account: 'My Bank Account',
-    paymentAmount: 1450.0,
-    allocatedAmount: 1450.0,
-    unallocatedAmount: 0.0,
-    paymentType: 'Bank Transfer',
-  },
-  {
-    id: 'inc-pay-2',
-    payer: 'Sarah Williams',
-    reference: 'Deposit Payment',
-    property: '7 Vansittart Street',
-    date: '2025-01-11',
-    account: 'My Bank Account',
-    paymentAmount: 850.0,
-    allocatedAmount: 850.0,
-    unallocatedAmount: 0.0,
-    paymentType: 'Bank Transfer',
-  },
-  {
-    id: 'inc-pay-3',
-    payer: 'ABC Properties Ltd',
-    reference: 'Management Fee Settlement',
-    property: '15 Clarance Road (Shop)',
-    date: '2025-01-05',
-    account: 'My Bank Account',
-    paymentAmount: 620.0,
-    allocatedAmount: 620.0,
-    unallocatedAmount: 0.0,
-    paymentType: 'Bank Transfer',
-  },
-];
+export const demoIncomePayments = [];
 
 const EXPENSE_PAYMENTS_KEY = 'landlordvision_expense_payments';
 const INCOME_PAYMENTS_KEY = 'landlordvision_income_payments';

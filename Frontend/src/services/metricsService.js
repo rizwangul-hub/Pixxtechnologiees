@@ -1,4 +1,5 @@
 import { getSavedProperties, getSavedUnits } from '../data/propertiesData';
+import { getSavedLandlords } from '../data/landlordsData';
 import {
   getSavedCustomers,
   getSavedAgreements,
@@ -29,6 +30,10 @@ export function calculateDaysOverdue(dueDateStr) {
 
 export function getTotalPropertiesCount() {
   return getSavedProperties().length;
+}
+
+export function getTotalLandlordsCount() {
+  return getSavedLandlords().length;
 }
 
 // In the new model, each property IS an individual rentable unit

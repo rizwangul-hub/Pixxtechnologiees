@@ -2,59 +2,7 @@ import { PRESET_LANDLORD_LOGOS } from './presetLandlordLogos';
 
 const STORAGE_KEY = 'pixx_landlords_data';
 
-export const initialLandlords = [
-  {
-    id: 'landlord-1',
-    _id: 'landlord-1',
-    fullName: 'Arthur Pendelton',
-    email: 'arthur.pendelton@example.com',
-    phone: '+44 20 7946 0123',
-    address: '15 High Street, Kensington',
-    country: 'United Kingdom',
-    region: 'Greater London',
-    logo: {
-      url: PRESET_LANDLORD_LOGOS[0].url,
-      publicId: 'best-standard',
-    },
-    notes: 'Primary landlord for commercial plazas in London.',
-    createdAt: '2026-01-10',
-    updatedAt: '2026-01-10',
-  },
-  {
-    id: 'landlord-2',
-    _id: 'landlord-2',
-    fullName: 'Margaret Thatcher',
-    email: 'margaret.t@example.com',
-    phone: '+44 161 496 0234',
-    address: '42 Deansgate',
-    country: 'United Kingdom',
-    region: 'Greater Manchester',
-    logo: {
-      url: PRESET_LANDLORD_LOGOS[1].url,
-      publicId: 'globle-standard',
-    },
-    notes: 'Owns residential complexes and city offices.',
-    createdAt: '2026-01-15',
-    updatedAt: '2026-01-15',
-  },
-  {
-    id: 'landlord-3',
-    _id: 'landlord-3',
-    fullName: 'John Smith',
-    email: 'john.smith@example.com',
-    phone: '+44 20 7946 0912',
-    address: '12 Baker Street',
-    country: 'United Kingdom',
-    region: 'London',
-    logo: {
-      url: PRESET_LANDLORD_LOGOS[2].url,
-      publicId: 'homewards',
-    },
-    notes: 'Overseas investor for luxury heights.',
-    createdAt: '2026-02-01',
-    updatedAt: '2026-02-01',
-  },
-];
+export const initialLandlords = [];
 
 export function getSavedLandlords() {
   const saved = localStorage.getItem(STORAGE_KEY);
