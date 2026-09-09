@@ -40,6 +40,13 @@ function formatUKDate(dateInput) {
   return `${day}/${month}/${year}`;
 }
 
+function safeIdEquals(a, b) {
+  if (!a || !b) return false;
+  const strA = (a._id || a.id || a).toString();
+  const strB = (b._id || b.id || b).toString();
+  return strA === strB;
+}
+
 /**
  * Safe Mongoose Entity Lookup Helper
  * Prevents Cast to ObjectId failed errors when idVal is "All", "all", or custom string IDs
@@ -362,11 +369,11 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
 
   // Breakdown per property
   const propertyBreakdown = properties.map((p) => {
-    const pUnits = units.filter((u) => u.propertyId.toString() === p._id.toString());
-    const pTenancies = tenancies.filter((t) => t.propertyId._id.toString() === p._id.toString());
-    const pPayments = payments.filter((pay) => pay.propertyId.toString() === p._id.toString());
-    const pPropExp = propertyExpenses.filter((e) => e.propertyId.toString() === p._id.toString());
-    const pAgentExp = agentExpenses.filter((e) => e.propertyId.toString() === p._id.toString());
+    const pUnits = units.filter((u) => safeIdEquals(u.propertyId, p._id));
+    const pTenancies = tenancies.filter((t) => safeIdEquals(t.propertyId, p._id));
+    const pPayments = payments.filter((pay) => safeIdEquals(pay.propertyId, p._id));
+    const pPropExp = propertyExpenses.filter((e) => safeIdEquals(e.propertyId, p._id));
+    const pAgentExp = agentExpenses.filter((e) => safeIdEquals(e.propertyId, p._id));
 
     const due = pPayments.reduce((sum, pay) => sum + (pay.amount || 0), 0);
     const paid = pPayments.reduce((sum, pay) => sum + (pay.paidAmount || 0), 0);
@@ -404,23 +411,21 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
   const unitMatrixRows = [];
 
   for (const p of properties) {
-    const pUnits = units.filter((u) => u.propertyId.toString() === p._id.toString());
+    const pUnits = units.filter((u) => safeIdEquals(u.propertyId, p._id));
     const unitsToProcess = pUnits.length > 0 ? pUnits : [{ _id: p._id, name: p.title || p.name, price: p.price || 0, isSynthetic: true }];
 
     for (const u of unitsToProcess) {
       const uTenancy =
-        tenancies.find((t) => t.unitId && (t.unitId._id?.toString() === u._id.toString() || t.unitId?.toString() === u._id.toString())) ||
-        tenancies.find((t) => t.propertyId && (t.propertyId._id?.toString() === p._id.toString() || t.propertyId?.toString() === p._id.toString()));
+        tenancies.find((t) => safeIdEquals(t.unitId, u._id)) ||
+        tenancies.find((t) => safeIdEquals(t.propertyId, p._id));
 
       const samplePay = periodPayments.find((pay) => {
-        const payPropStr = pay.propertyId ? pay.propertyId.toString() : '';
-        const payUnitStr = pay.unitId ? pay.unitId.toString() : '';
-        return u.isSynthetic ? payPropStr === p._id.toString() : payUnitStr === u._id.toString();
+        return u.isSynthetic ? safeIdEquals(pay.propertyId, p._id) : safeIdEquals(pay.unitId, u._id);
       });
 
       let rent = Number(uTenancy?.monthlyRent || u.monthlyRent || u.price || p.price || samplePay?.amount) || 0;
       if (rent === 0 && payments && payments.length > 0) {
-        const propPay = payments.find((pay) => pay.propertyId?.toString() === p._id.toString() && pay.amount > 0);
+        const propPay = payments.find((pay) => safeIdEquals(pay.propertyId, p._id) && pay.amount > 0);
         if (propPay) rent = propPay.amount;
       }
 
@@ -434,8 +439,8 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
       const collections = trackingMonths.map((mInfo) => {
         const mPay = periodPayments.find((pay) => {
           const matchUnit = u.isSynthetic
-            ? pay.propertyId?.toString() === p._id.toString()
-            : pay.unitId?.toString() === u._id.toString();
+            ? safeIdEquals(pay.propertyId, p._id)
+            : safeIdEquals(pay.unitId, u._id);
           return matchUnit && isPaymentInMonth(pay, mInfo);
         });
 
@@ -688,16 +693,13 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
 
   for (const u of unitsToProcess) {
     const uTenancy =
-      tenancies.find((t) => t.unitId && (t.unitId._id?.toString() === u._id?.toString() || t.unitId?.toString() === u._id?.toString() || t.unitId?.toString() === u.id?.toString())) ||
-      tenancies.find((t) => t.propertyId && (propIdList.length === 0 || propIdList.some((idVal) => idVal?.toString() === t.propertyId._id?.toString() || idVal?.toString() === t.propertyId?.toString())));
+      tenancies.find((t) => safeIdEquals(t.unitId, u._id)) ||
+      tenancies.find((t) => propIdList.length === 0 || propIdList.some((idVal) => safeIdEquals(idVal, t.propertyId)));
 
     const samplePay = periodPayments.find((pay) => {
-      const payPropStr = pay.propertyId ? pay.propertyId.toString() : '';
-      const payUnitStr = pay.unitId ? pay.unitId.toString() : '';
-      const targetUnitStr = u._id ? u._id.toString() : u.id ? u.id.toString() : '';
       return u.isSynthetic
-        ? (propIdList.length === 0 || propIdList.some((idVal) => idVal?.toString() === payPropStr))
-        : (payUnitStr === targetUnitStr);
+        ? (propIdList.length === 0 || propIdList.some((idVal) => safeIdEquals(idVal, pay.propertyId)))
+        : safeIdEquals(pay.unitId, u._id);
     });
 
     let rent = Number(uTenancy?.monthlyRent || u.monthlyRent || u.price || property.price || samplePay?.amount) || 0;
@@ -715,13 +717,9 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
 
     const collections = trackingMonths.map((mInfo) => {
       const mPay = periodPayments.find((pay) => {
-        const payPropStr = pay.propertyId ? pay.propertyId.toString() : '';
-        const payUnitStr = pay.unitId ? pay.unitId.toString() : '';
-        const targetUnitStr = u._id ? u._id.toString() : u.id ? u.id.toString() : '';
-
         const matchUnit = u.isSynthetic
-          ? (propIdList.length === 0 || propIdList.some((idVal) => idVal?.toString() === payPropStr))
-          : (payUnitStr === targetUnitStr);
+          ? (propIdList.length === 0 || propIdList.some((idVal) => safeIdEquals(idVal, pay.propertyId)))
+          : safeIdEquals(pay.unitId, u._id);
 
         return matchUnit && isPaymentInMonth(pay, mInfo);
       });
