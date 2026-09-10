@@ -58,6 +58,11 @@ export function DashboardPage() {
       return null;
     }
   };
+  // Clear stale cache on load to ensure accurate live counts
+  useEffect(() => {
+    localStorage.removeItem('pixx_dashboard_cache');
+  }, []);
+
 
   const initialCache = getCachedDashboard();
 
