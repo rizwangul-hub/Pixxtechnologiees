@@ -83,6 +83,21 @@ const propertySchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    country: {
+      type: String,
+      default: 'United Kingdom',
+      trim: true,
+    },
+    agentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Agent',
+      default: null,
+    },
+    agentFee: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     description: {
       type: String,
       default: '',

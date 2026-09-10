@@ -62,6 +62,7 @@ const getProperties = async (req, res) => {
     const total = await Property.countDocuments(filter);
     const properties = await Property.find(filter)
       .populate('landlordId', 'fullName email phone address country region logo')
+      .populate('agentId', 'fullName name agencyName email phone')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum);
@@ -79,7 +80,11 @@ const getProperties = async (req, res) => {
           .populate('agentId', 'name agencyName email phone');
 
         const tenant = activeTenancy?.customerId || null;
-        const agent = activeTenancy?.agentId || null;
+        const assignedAgent = prop.agentId || null;
+        const agent = assignedAgent || activeTenancy?.agentId || null;
+        const agentName = agent ? (agent.fullName || agent.name || agent.agencyName) : null;
+        const agentFee = prop.agentFee ?? 0;
+        const country = prop.country || 'United Kingdom';
         const isOccupied = Boolean(activeTenancy || pObj.customerName);
 
         const inferAssetType = (p) => {
@@ -102,6 +107,11 @@ const getProperties = async (req, res) => {
 
         return {
           ...pObj,
+          country,
+          agentId: assignedAgent?._id || assignedAgent || null,
+          agent: agent || null,
+          agentName,
+          agentFee,
           assetType: resolvedAssetType,
           propertyType: resolvedAssetType,
           monthlyRent: resolvedRent,
@@ -110,8 +120,6 @@ const getProperties = async (req, res) => {
           activeTenancy: activeTenancy || null,
           tenant: tenant || null,
           tenantName: tenant ? tenant.fullName : pObj.customerName || null,
-          agent: agent || null,
-          agentName: agent ? (agent.name || agent.agencyName) : null,
           status: pObj.isArchived ? 'Archived' : (isOccupied ? 'Occupied' : pObj.status),
           totalUnits: 1,
           occupiedUnits: isOccupied ? 1 : 0,
@@ -219,6 +227,18 @@ const createProperty = async (req, res) => {
       status = 'Available';
     }
 
+    // Agent and Agent Fee
+    const rawAgentId = req.body.agentId;
+    let resolvedAgentId = null;
+    if (rawAgentId && rawAgentId !== 'none' && rawAgentId !== '' && mongoose.Types.ObjectId.isValid(rawAgentId)) {
+      resolvedAgentId = rawAgentId;
+    }
+
+    let agentFee = Number(req.body.agentFee);
+    if (isNaN(agentFee) || agentFee < 0) agentFee = 0;
+
+    const country = (req.body.country || 'United Kingdom').trim();
+
     const propertyData = {
       name,
       type,
@@ -226,6 +246,9 @@ const createProperty = async (req, res) => {
       price,
       monthlyRent,
       landlordId: resolvedLandlordId,
+      agentId: resolvedAgentId,
+      agentFee,
+      country: country || 'United Kingdom',
       address: (req.body.address || '').trim(),
       city: (req.body.city || 'London').trim(),
       area: (req.body.area || '').trim(),
@@ -242,7 +265,9 @@ const createProperty = async (req, res) => {
     };
 
     let property = await Property.create(propertyData);
-    property = await Property.findById(property._id).populate('landlordId', 'fullName email phone address country region logo');
+    property = await Property.findById(property._id)
+      .populate('landlordId', 'fullName email phone address country region logo')
+      .populate('agentId', 'fullName name agencyName email phone');
 
     res.status(201).json({
       success: true,
@@ -273,7 +298,9 @@ const getPropertyById = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Property not found' });
     }
 
-    const property = await Property.findById(id).populate('landlordId', 'fullName email phone address country region logo');
+    const property = await Property.findById(id)
+      .populate('landlordId', 'fullName email phone address country region logo')
+      .populate('agentId', 'fullName name agencyName email phone');
     if (!property) {
       return res.status(404).json({ success: false, message: 'Property not found' });
     }
@@ -287,6 +314,12 @@ const getPropertyById = async (req, res) => {
       .populate('agentId', 'name agencyName email phone');
 
     const pObj = property.toObject ? property.toObject() : property;
+    const assignedAgent = property.agentId || null;
+    const agent = assignedAgent || activeTenancy?.agentId || null;
+    const agentName = agent ? (agent.fullName || agent.name || agent.agencyName) : null;
+    const agentFee = property.agentFee ?? 0;
+    const country = property.country || 'United Kingdom';
+
     const inferAssetType = (p) => {
       if (p.assetType && p.assetType !== 'Commercial' && p.assetType !== 'Residential') return p.assetType;
       if (p.propertyType && p.propertyType !== 'Commercial' && p.propertyType !== 'Residential') return p.propertyType;
@@ -309,6 +342,11 @@ const getPropertyById = async (req, res) => {
       success: true,
       data: {
         ...pObj,
+        country,
+        agentId: assignedAgent?._id || assignedAgent || null,
+        agent: agent || null,
+        agentName,
+        agentFee,
         assetType: resolvedAssetType,
         propertyType: resolvedAssetType,
         monthlyRent: resolvedRent,
@@ -316,7 +354,6 @@ const getPropertyById = async (req, res) => {
         assetStatus: resolvedStatus,
         activeTenancy: activeTenancy || null,
         tenant: activeTenancy?.customerId || null,
-        agent: activeTenancy?.agentId || null,
       },
     });
   } catch (error) {
@@ -346,6 +383,21 @@ const updateProperty = async (req, res) => {
     if (req.body.assetType) {
       updateData.assetType = req.body.assetType;
     }
+    if (req.body.country !== undefined) {
+      updateData.country = (req.body.country || 'United Kingdom').trim();
+    }
+    if (req.body.agentId !== undefined) {
+      const rawAgent = req.body.agentId;
+      if (!rawAgent || rawAgent === 'none' || rawAgent === '') {
+        updateData.agentId = null;
+      } else if (mongoose.Types.ObjectId.isValid(rawAgent)) {
+        updateData.agentId = rawAgent;
+      }
+    }
+    if (req.body.agentFee !== undefined) {
+      const fee = Number(req.body.agentFee);
+      updateData.agentFee = isNaN(fee) || fee < 0 ? 0 : fee;
+    }
     if (req.body.monthlyRent !== undefined || req.body.price !== undefined) {
       const rentVal = Number(req.body.monthlyRent ?? req.body.price ?? 0);
       updateData.monthlyRent = rentVal;
@@ -358,7 +410,9 @@ const updateProperty = async (req, res) => {
     const property = await Property.findByIdAndUpdate(req.params.id, updateData, {
       new: true,
       runValidators: true,
-    }).populate('landlordId', 'fullName email phone address country region logo');
+    })
+      .populate('landlordId', 'fullName email phone address country region logo')
+      .populate('agentId', 'fullName name agencyName email phone');
 
     if (!property) {
       return res.status(404).json({ success: false, message: 'Property not found' });

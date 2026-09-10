@@ -128,8 +128,13 @@ export function PropertyDetailPage() {
   const tenant = tenancy?.customerId && typeof tenancy.customerId === 'object' ? tenancy.customerId : property.tenant;
   const tenantName = tenant?.fullName || tenant?.name || tenancy?.tenantName || property.customerName;
 
-  const agent = tenancy?.agentId && typeof tenancy.agentId === 'object' ? tenancy.agentId : property.agent;
+  const agent = (tenancy?.agentId && typeof tenancy.agentId === 'object')
+    ? tenancy.agentId
+    : (property.agentId && typeof property.agentId === 'object')
+    ? property.agentId
+    : property.agent;
   const agentName = agent?.fullName || agent?.name || agent?.agencyName || property.agentName;
+  const agentFee = Number(property.agentFee || tenancy?.companyMonthlyAmount || 0);
 
   const handleDeleteProperty = async () => {
     if (window.confirm(`Are you sure you want to delete "${propName}"?`)) {
@@ -199,7 +204,7 @@ export function PropertyDetailPage() {
                 </div>
                 <p className="text-xs font-semibold text-slate-500 mt-1.5 flex items-center gap-1.5">
                   <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span>{[property.address, property.city, property.county, property.postcode].filter(Boolean).join(', ') || 'Address not specified'}</span>
+                  <span>{[property.address, property.city, property.county, property.postcode, property.country || 'United Kingdom'].filter(Boolean).join(', ') || 'Address not specified'}</span>
                 </p>
               </div>
             </div>
@@ -466,11 +471,11 @@ export function PropertyDetailPage() {
                     <span>{agent?.phone || '—'}</span>
                   </div>
                 </div>
-                {tenancy?.companyMonthlyAmount > 0 && (
+                {agentFee > 0 && (
                   <div className="pt-2 border-t border-purple-100/80 text-[11px] flex items-center justify-between">
-                    <span className="text-slate-500 font-medium">Monthly Management Fee:</span>
+                    <span className="text-slate-500 font-medium">Monthly Management / Agent Fee:</span>
                     <span className="font-mono font-bold text-slate-900">
-                      £{Number(tenancy.companyMonthlyAmount).toLocaleString()}/mo
+                      £{agentFee.toLocaleString()}/mo
                     </span>
                   </div>
                 )}

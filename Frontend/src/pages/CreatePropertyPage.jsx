@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
-import { ArrowLeft, Save, Building, UserCheck } from 'lucide-react';
+import { ArrowLeft, Save, Building, UserCheck, Users } from 'lucide-react';
 import {
   propertyTypes,
   getSavedProperties,
@@ -9,7 +9,7 @@ import {
   updateProperty,
 } from '../data/propertiesData';
 import { getSavedLandlords } from '../data/landlordsData';
-import { fetchLandlordsFromAPI, createPropertyAPI, updatePropertyAPI, fetchPropertyByIdAPI } from '../services/apiData';
+import { fetchLandlordsFromAPI, createPropertyAPI, updatePropertyAPI, fetchPropertyByIdAPI, fetchAgentsAPI } from '../services/apiData';
 
 export function CreatePropertyPage() {
   const navigate = useNavigate();
@@ -20,10 +20,14 @@ export function CreatePropertyPage() {
   const initialLandlordId = searchParams.get('landlordId') || '';
 
   const [landlords, setLandlords] = useState([]);
+  const [agents, setAgents] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
     type: 'Shop',
     landlordId: initialLandlordId,
+    agentId: '',
+    agentFee: '',
+    country: 'United Kingdom',
     address: '',
     city: '',
     area: '',
@@ -56,6 +60,18 @@ export function CreatePropertyPage() {
     };
     loadLandlords();
 
+    const loadAgents = async () => {
+      try {
+        const apiAgents = await fetchAgentsAPI();
+        if (apiAgents && Array.isArray(apiAgents)) {
+          setAgents(apiAgents);
+        }
+      } catch (e) {
+        console.warn('[Create Property Agents Load Notice]', e.message);
+      }
+    };
+    loadAgents();
+
     if (isEditing) {
       const loadExisting = async () => {
         let existing = null;
@@ -73,6 +89,9 @@ export function CreatePropertyPage() {
             name: existing.name || existing.propertyName || '',
             type: existing.assetType || existing.propertyType || existing.type || 'Shop',
             landlordId: existing.landlordId?._id || existing.landlordId || '',
+            agentId: existing.agentId?._id || existing.agentId || '',
+            agentFee: existing.agentFee !== undefined && existing.agentFee !== null && existing.agentFee !== 0 ? existing.agentFee : '',
+            country: existing.country || 'United Kingdom',
             address: existing.address || '',
             city: existing.city || '',
             area: existing.area || '',
@@ -151,6 +170,9 @@ export function CreatePropertyPage() {
         assetStatus: formData.status || 'Available',
         landlordId: formData.landlordId,
         landlordName: selectedL?.fullName || selectedL?.name || '',
+        agentId: formData.agentId ? formData.agentId : null,
+        agentFee: formData.agentFee ? Number(formData.agentFee) : 0,
+        country: formData.country.trim() || 'United Kingdom',
         address: formData.address.trim(),
         city: formData.city.trim(),
         area: formData.area.trim(),
@@ -352,6 +374,50 @@ export function CreatePropertyPage() {
                 />
               </div>
 
+              {/* MANAGING AGENT (OPTIONAL) */}
+              <div className="space-y-1.5 md:col-span-1">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Users className="w-3.5 h-3.5 text-purple-600" />
+                    Managing Agent
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-normal">Leave blank if no agent</span>
+                </label>
+                <select
+                  value={formData.agentId}
+                  onChange={(e) => setFormData({ ...formData, agentId: e.target.value })}
+                  className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 bg-white cursor-pointer font-bold text-slate-900"
+                >
+                  <option value="">No Agent (Direct Landlord Management)</option>
+                  {agents.map((ag) => {
+                    const agId = ag._id || ag.id;
+                    const agName = ag.fullName || ag.name;
+                    return (
+                      <option key={agId} value={agId}>
+                        {agName} {ag.agencyName ? `(${ag.agencyName})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* AGENT FEE */}
+              <div className="space-y-1.5 md:col-span-1">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                  <span>Agent Fee (£/mo)</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Leave blank if no fee</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="e.g. 150 (Leave blank if none)"
+                  value={formData.agentFee}
+                  onChange={(e) => setFormData({ ...formData, agentFee: e.target.value })}
+                  className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 font-bold text-slate-900"
+                />
+              </div>
+
               {/* ADDRESS */}
               <div className="space-y-1.5 md:col-span-2">
                 <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
@@ -417,6 +483,21 @@ export function CreatePropertyPage() {
                   value={formData.county}
                   onChange={(e) => setFormData({ ...formData, county: e.target.value })}
                   className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F]"
+                />
+              </div>
+
+              {/* COUNTRY */}
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                  <span>Country</span>
+                  <span className="text-[10px] text-[#04A26F] font-bold">Default: United Kingdom</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="United Kingdom"
+                  value={formData.country}
+                  onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                  className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F] font-bold text-slate-900"
                 />
               </div>
 

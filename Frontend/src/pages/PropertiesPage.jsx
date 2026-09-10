@@ -267,6 +267,9 @@ export function PropertiesPage() {
                             ? 'bg-amber-50 text-amber-800 border-amber-200'
                             : 'bg-slate-50 text-slate-800 border-slate-200';
 
+                          const agent = (p.agentId && typeof p.agentId === 'object') ? p.agentId : p.agent;
+                          const agentName = agent?.fullName || agent?.name || agent?.agencyName || p.agentName;
+
                           return (
                             <tr key={pid} className="hover:bg-slate-50/80 transition-colors">
                               <td className="py-3.5 px-4 font-extrabold text-slate-900">
@@ -289,7 +292,14 @@ export function PropertiesPage() {
                                 £{monthlyRent.toLocaleString()}/mo
                               </td>
                               <td className="py-3.5 px-4 font-medium text-slate-600 text-xs">
-                                {tenantName}
+                                <div>{tenantName}</div>
+                                {agentName && (
+                                  <div className="text-[10px] text-purple-700 font-bold flex items-center gap-1 mt-0.5">
+                                    <span className="px-1.5 py-0.5 rounded bg-purple-50 border border-purple-200/60">
+                                      Agent: {agentName}
+                                    </span>
+                                  </div>
+                                )}
                               </td>
                               <td className="py-3.5 px-4">
                                 <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${statusColor}`}>
@@ -378,6 +388,9 @@ export function PropertiesPage() {
                         ? 'bg-amber-50 text-amber-800 border-amber-200'
                         : 'bg-slate-50 text-slate-800 border-slate-200';
 
+                      const agent = (p.agentId && typeof p.agentId === 'object') ? p.agentId : p.agent;
+                      const agentName = agent?.fullName || agent?.name || agent?.agencyName || p.agentName;
+
                       return (
                         <tr key={pid} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-3.5 px-4 font-extrabold text-slate-900">
@@ -410,7 +423,14 @@ export function PropertiesPage() {
                             £{monthlyRent.toLocaleString()}/mo
                           </td>
                           <td className="py-3.5 px-4 font-medium text-slate-600 text-xs">
-                            {tenantName}
+                            <div>{tenantName}</div>
+                            {agentName && (
+                              <div className="text-[10px] text-purple-700 font-bold flex items-center gap-1 mt-0.5">
+                                <span className="px-1.5 py-0.5 rounded bg-purple-50 border border-purple-200/60">
+                                  Agent: {agentName}
+                                </span>
+                              </div>
+                            )}
                           </td>
                           <td className="py-3.5 px-4">
                             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${statusColor}`}>
