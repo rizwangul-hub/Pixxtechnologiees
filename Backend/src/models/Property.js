@@ -17,6 +17,13 @@ const propertySchema = new mongoose.Schema(
       default: 'Shop',
       trim: true,
     },
+    assetType: {
+      type: String,
+      default: function () {
+        return this.type || 'Shop';
+      },
+      trim: true,
+    },
     floor: {
       type: String,
       default: 'Ground',
@@ -33,7 +40,7 @@ const propertySchema = new mongoose.Schema(
     },
     price: {
       type: Number,
-      required: [true, 'Price is required'],
+      default: 0,
       min: 0,
     },
     monthlyRent: {
@@ -83,6 +90,13 @@ const propertySchema = new mongoose.Schema(
     status: {
       type: String,
       default: 'Available',
+      trim: true,
+    },
+    assetStatus: {
+      type: String,
+      default: function () {
+        return this.status === 'Active' ? 'Available' : this.status;
+      },
       trim: true,
     },
     customerName: {

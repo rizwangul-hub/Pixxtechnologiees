@@ -182,6 +182,19 @@ export async function createPropertyAPI(propertyData) {
   }
 }
 
+export async function updatePropertyAPI(id, propertyData) {
+  try {
+    const res = await fetchAPI(`/properties/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(propertyData),
+    });
+    return res.data;
+  } catch (e) {
+    console.warn('[API Warning] Update property error:', e.message);
+    throw e;
+  }
+}
+
 // --- UNITS API (Redirected to Properties for backward compatibility) ---
 
 export async function fetchUnitsFromAPI(propertyId, params = {}) {

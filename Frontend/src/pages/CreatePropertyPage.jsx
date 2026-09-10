@@ -9,7 +9,7 @@ import {
   updateProperty,
 } from '../data/propertiesData';
 import { getSavedLandlords } from '../data/landlordsData';
-import { fetchLandlordsFromAPI, createPropertyAPI } from '../services/apiData';
+import { fetchLandlordsFromAPI, createPropertyAPI, updatePropertyAPI, fetchPropertyByIdAPI } from '../services/apiData';
 
 export function CreatePropertyPage() {
   const navigate = useNavigate();
@@ -57,27 +57,38 @@ export function CreatePropertyPage() {
     loadLandlords();
 
     if (isEditing) {
-      const properties = getSavedProperties();
-      const existing = properties.find((p) => p.id === propertyId || p._id === propertyId);
-      if (existing) {
-        setFormData({
-          name: existing.name || existing.propertyName || '',
-          type: existing.type || 'Shop',
-          landlordId: existing.landlordId?._id || existing.landlordId || '',
-          address: existing.address || '',
-          city: existing.city || '',
-          area: existing.area || '',
-          county: existing.county || '',
-          postcode: existing.postcode || '',
-          floor: existing.floor || '',
-          size: existing.size || '',
-          price: existing.price || '',
-          monthlyRent: existing.monthlyRent || existing.price || '',
-          status: existing.status || 'Available',
-          description: existing.description || '',
-          notes: existing.notes || '',
-        });
-      }
+      const loadExisting = async () => {
+        let existing = null;
+        try {
+          existing = await fetchPropertyByIdAPI(propertyId);
+        } catch (e) {}
+
+        if (!existing) {
+          const properties = getSavedProperties();
+          existing = properties.find((p) => p.id === propertyId || p._id === propertyId);
+        }
+
+        if (existing) {
+          setFormData({
+            name: existing.name || existing.propertyName || '',
+            type: existing.assetType || existing.propertyType || existing.type || 'Shop',
+            landlordId: existing.landlordId?._id || existing.landlordId || '',
+            address: existing.address || '',
+            city: existing.city || '',
+            area: existing.area || '',
+            county: existing.county || '',
+            postcode: existing.postcode || '',
+            floor: existing.floor || '',
+            size: existing.size || '',
+            price: existing.monthlyRent || existing.price || '',
+            monthlyRent: existing.monthlyRent || existing.price || '',
+            status: existing.assetStatus || (existing.status === 'Active' ? 'Available' : existing.status) || 'Available',
+            description: existing.description || '',
+            notes: existing.notes || '',
+          });
+        }
+      };
+      loadExisting();
     }
   }, [propertyId, isEditing]);
 
@@ -154,7 +165,13 @@ export function CreatePropertyPage() {
       };
 
       if (isEditing) {
+        try {
+          await updatePropertyAPI(propertyId, payload);
+        } catch (apiErr) {
+          console.warn('[API Update Warning]', apiErr.message);
+        }
         updateProperty(propertyId, payload);
+        setSubmitting(false);
         navigate(`/properties/${propertyId}`);
       } else {
         const resData = await createPropertyAPI(payload);

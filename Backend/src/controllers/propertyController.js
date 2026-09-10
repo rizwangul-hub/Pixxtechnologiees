@@ -82,8 +82,31 @@ const getProperties = async (req, res) => {
         const agent = activeTenancy?.agentId || null;
         const isOccupied = Boolean(activeTenancy || pObj.customerName);
 
+        const inferAssetType = (p) => {
+          if (p.assetType && p.assetType !== 'Commercial' && p.assetType !== 'Residential') return p.assetType;
+          if (p.propertyType && p.propertyType !== 'Commercial' && p.propertyType !== 'Residential') return p.propertyType;
+          const lowerName = (p.name || '').toLowerCase();
+          if (lowerName.includes('shop')) return 'Shop';
+          if (lowerName.includes('flat')) return 'Flat';
+          if (lowerName.includes('office')) return 'Office';
+          if (lowerName.includes('house')) return 'House';
+          if (lowerName.includes('apartment')) return 'Apartment';
+          if (p.type === 'Commercial') return 'Shop';
+          if (p.type === 'Residential') return 'Flat';
+          return p.type || 'Shop';
+        };
+
+        const resolvedAssetType = inferAssetType(pObj);
+        const resolvedRent = Number(pObj.monthlyRent ?? pObj.price ?? 0);
+        const resolvedStatus = pObj.assetStatus || (pObj.status === 'Active' ? 'Available' : pObj.status) || 'Available';
+
         return {
           ...pObj,
+          assetType: resolvedAssetType,
+          propertyType: resolvedAssetType,
+          monthlyRent: resolvedRent,
+          price: resolvedRent,
+          assetStatus: resolvedStatus,
           activeTenancy: activeTenancy || null,
           tenant: tenant || null,
           tenantName: tenant ? tenant.fullName : pObj.customerName || null,
@@ -199,6 +222,7 @@ const createProperty = async (req, res) => {
     const propertyData = {
       name,
       type,
+      assetType: req.body.assetType || type,
       price,
       monthlyRent,
       landlordId: resolvedLandlordId,
@@ -211,6 +235,7 @@ const createProperty = async (req, res) => {
       size: (req.body.size || '').trim(),
       sizeUnit: req.body.sizeUnit || 'sq ft',
       status,
+      assetStatus: req.body.assetStatus || (status === 'Active' ? 'Available' : status),
       description: (req.body.description || '').trim(),
       notes: (req.body.notes || '').trim(),
       managerId: req.manager ? req.manager._id : null,
@@ -262,10 +287,33 @@ const getPropertyById = async (req, res) => {
       .populate('agentId', 'name agencyName email phone');
 
     const pObj = property.toObject ? property.toObject() : property;
+    const inferAssetType = (p) => {
+      if (p.assetType && p.assetType !== 'Commercial' && p.assetType !== 'Residential') return p.assetType;
+      if (p.propertyType && p.propertyType !== 'Commercial' && p.propertyType !== 'Residential') return p.propertyType;
+      const lowerName = (p.name || '').toLowerCase();
+      if (lowerName.includes('shop')) return 'Shop';
+      if (lowerName.includes('flat')) return 'Flat';
+      if (lowerName.includes('office')) return 'Office';
+      if (lowerName.includes('house')) return 'House';
+      if (lowerName.includes('apartment')) return 'Apartment';
+      if (p.type === 'Commercial') return 'Shop';
+      if (p.type === 'Residential') return 'Flat';
+      return p.type || 'Shop';
+    };
+
+    const resolvedAssetType = inferAssetType(pObj);
+    const resolvedRent = Number(pObj.monthlyRent ?? pObj.price ?? 0);
+    const resolvedStatus = pObj.assetStatus || (pObj.status === 'Active' ? 'Available' : pObj.status) || 'Available';
+
     res.status(200).json({
       success: true,
       data: {
         ...pObj,
+        assetType: resolvedAssetType,
+        propertyType: resolvedAssetType,
+        monthlyRent: resolvedRent,
+        price: resolvedRent,
+        assetStatus: resolvedStatus,
         activeTenancy: activeTenancy || null,
         tenant: activeTenancy?.customerId || null,
         agent: activeTenancy?.agentId || null,
@@ -294,6 +342,17 @@ const updateProperty = async (req, res) => {
     }
     if (req.body.propertyType && !req.body.type) {
       updateData.type = req.body.propertyType;
+    }
+    if (req.body.assetType) {
+      updateData.assetType = req.body.assetType;
+    }
+    if (req.body.monthlyRent !== undefined || req.body.price !== undefined) {
+      const rentVal = Number(req.body.monthlyRent ?? req.body.price ?? 0);
+      updateData.monthlyRent = rentVal;
+      updateData.price = rentVal;
+    }
+    if (req.body.assetStatus) {
+      updateData.assetStatus = req.body.assetStatus;
     }
 
     const property = await Property.findByIdAndUpdate(req.params.id, updateData, {

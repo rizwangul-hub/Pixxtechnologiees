@@ -293,7 +293,7 @@ export function PropertiesPage() {
                               </td>
                               <td className="py-3.5 px-4">
                                 <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${statusColor}`}>
-                                  {p.status || 'Active'}
+                                  {displayStatus}
                                 </span>
                               </td>
                               <td className="py-3.5 px-4 text-right">
@@ -414,7 +414,7 @@ export function PropertiesPage() {
                           </td>
                           <td className="py-3.5 px-4">
                             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${statusColor}`}>
-                              {p.status || 'Available'}
+                              {displayStatus}
                             </span>
                           </td>
                           <td className="py-3.5 px-4 text-right">
