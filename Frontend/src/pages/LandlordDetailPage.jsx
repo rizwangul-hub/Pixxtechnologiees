@@ -225,6 +225,7 @@ export default function LandlordDetailPage() {
               properties.map((prop) => {
                 const pid = prop._id || prop.id;
                 const propName = prop.propertyName || prop.name;
+                const rent = prop.monthlyRent || prop.price || 0;
                 const status = prop.assetStatus || (prop.status === 'Active' ? 'Available' : prop.status) || 'Available';
                 const statusColor = status === 'Occupied'
                   ? 'bg-blue-50 text-blue-800 border-blue-200'
