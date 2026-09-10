@@ -1,27 +1,11 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "buildCommand": "cd Frontend && npm install && npm run build",
   "outputDirectory": "Frontend/dist",
   "functions": {
-    "api/index.js": {
-      "includeFiles": [
-        "Backend/src/**",
-        "Backend/node_modules/pdfkit/js/standard-fonts/**",
-        "Backend/node_modules/pdfkit/**",
-        "node_modules/pdfkit/js/standard-fonts/**",
-        "node_modules/pdfkit/**",
-        "Backend/src/assets/**"
-      ]
-    },
-    "api/**/*.js": {
-      "includeFiles": [
-        "Backend/src/**",
-        "Backend/node_modules/pdfkit/js/standard-fonts/**",
-        "Backend/node_modules/pdfkit/**",
-        "node_modules/pdfkit/js/standard-fonts/**",
-        "node_modules/pdfkit/**",
-        "Backend/src/assets/**"
-      ]
+    "api/*.js": {
+      "includeFiles": "{Backend/src/**,node_modules/pdfkit/**}"
     }
   },
   "rewrites": [
