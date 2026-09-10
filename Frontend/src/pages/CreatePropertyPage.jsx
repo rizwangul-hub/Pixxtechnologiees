@@ -97,10 +97,12 @@ export function CreatePropertyPage() {
     setError('');
 
     try {
+      const selectedL = landlords.find((l) => (l._id || l.id) === formData.landlordId);
       const payload = {
         name: formData.name.trim(),
         type: formData.type,
         landlordId: formData.landlordId,
+        landlordName: selectedL?.fullName || selectedL?.name || '',
         address: formData.address.trim(),
         city: formData.city.trim(),
         area: formData.area.trim(),
@@ -119,29 +121,16 @@ export function CreatePropertyPage() {
         updateProperty(propertyId, payload);
         navigate(`/properties/${propertyId}`);
       } else {
-        try {
-          const resData = await createPropertyAPI(payload);
-          if (resData) {
-            saveProperty(resData);
-          }
-        } catch (apiErr) {
-          console.warn('[API Save Warning] Saving locally:', apiErr.message);
-          const selectedL = landlords.find((l) => l.id === formData.landlordId || l._id === formData.landlordId);
-          const newProp = {
-            id: `prop-${Date.now()}`,
-            _id: `prop-${Date.now()}`,
-            ...payload,
-            landlordName: selectedL?.fullName || selectedL?.name || '',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-          saveProperty(newProp);
+        const resData = await createPropertyAPI(payload);
+        if (resData) {
+          saveProperty(resData);
         }
         setSubmitting(false);
         navigate('/properties');
       }
     } catch (err) {
-      setError(err.message || 'Failed to save property.');
+      console.error('[Save Property Error]', err);
+      setError(err.message || 'Failed to save property to server.');
       setSubmitting(false);
     }
   };

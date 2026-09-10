@@ -123,8 +123,10 @@ const getProperties = async (req, res) => {
 // @access  Private
 const createProperty = async (req, res) => {
   try {
-    const landlordId = req.body.landlordId || req.body.landlord;
-    if (!landlordId) {
+    const rawLandlordId = req.body.landlordId || req.body.landlord;
+    const landlordName = (req.body.landlordName || '').trim();
+
+    if (!rawLandlordId && !landlordName) {
       return res.status(400).json({
         success: false,
         message: 'Please select a landlord.',
@@ -132,14 +134,38 @@ const createProperty = async (req, res) => {
       });
     }
 
-    const landlordExists = await Landlord.findById(landlordId);
-    if (!landlordExists) {
-      return res.status(404).json({
-        success: false,
-        message: 'Selected landlord does not exist',
-        errors: ['Invalid landlordId'],
-      });
+    let landlordExists = null;
+    if (rawLandlordId && mongoose.Types.ObjectId.isValid(rawLandlordId)) {
+      landlordExists = await Landlord.findById(rawLandlordId);
     }
+
+    // Fallback search by landlord name if ID is not a Mongo ObjectId or not found
+    if (!landlordExists && landlordName) {
+      landlordExists = await Landlord.findOne({
+        fullName: { $regex: new RegExp(`^${landlordName}$`, 'i') },
+      });
+      if (!landlordExists) {
+        landlordExists = await Landlord.findOne({
+          fullName: { $regex: landlordName, $options: 'i' },
+        });
+      }
+    }
+
+    // If still not found and there are landlords in DB, try matching first one or return clear error
+    if (!landlordExists) {
+      const allLandlords = await Landlord.find({ isArchived: { $ne: true } }).limit(10);
+      if (allLandlords.length === 1) {
+        landlordExists = allLandlords[0];
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Selected landlord could not be found. Please select a valid landlord from the list.',
+          errors: [`Invalid landlord: "${rawLandlordId || landlordName}"`],
+        });
+      }
+    }
+
+    const resolvedLandlordId = landlordExists._id;
 
     const name = (req.body.name || req.body.propertyName || '').trim();
     if (!name) {
@@ -150,25 +176,43 @@ const createProperty = async (req, res) => {
       });
     }
 
-    const price = Number(req.body.price ?? req.body.monthlyRent ?? 0);
-    const monthlyRent = Number(req.body.monthlyRent ?? req.body.price ?? price);
+    // Sanitize price & rent
+    let price = Number(req.body.price ?? req.body.monthlyRent ?? 0);
+    if (isNaN(price) || price < 0) price = 0;
+    let monthlyRent = Number(req.body.monthlyRent ?? req.body.price ?? price);
+    if (isNaN(monthlyRent) || monthlyRent < 0) monthlyRent = price;
+
+    // Sanitize type
+    const validTypes = ['Building', 'House', 'Shop', 'Office', 'Flat', 'Apartment', 'Room', 'Other'];
+    let type = req.body.type || req.body.propertyType || 'Shop';
+    if (!validTypes.includes(type)) {
+      type = 'Other';
+    }
+
+    // Sanitize status
+    const validStatuses = ['Available', 'Occupied', 'Reserved', 'Maintenance', 'Archived'];
+    let status = req.body.status || 'Available';
+    if (!validStatuses.includes(status)) {
+      status = 'Available';
+    }
 
     const propertyData = {
-      ...req.body,
       name,
-      type: req.body.type || req.body.propertyType || 'Shop',
+      type,
       price,
       monthlyRent,
-      landlordId,
-      address: req.body.address || '',
-      city: req.body.city || 'London',
-      area: req.body.area || '',
-      county: req.body.county || '',
-      postcode: req.body.postcode || '',
-      floor: req.body.floor || 'Ground',
-      size: req.body.size || '',
+      landlordId: resolvedLandlordId,
+      address: (req.body.address || '').trim(),
+      city: (req.body.city || 'London').trim(),
+      area: (req.body.area || '').trim(),
+      county: (req.body.county || '').trim(),
+      postcode: (req.body.postcode || '').trim(),
+      floor: (req.body.floor || 'Ground').trim(),
+      size: (req.body.size || '').trim(),
       sizeUnit: req.body.sizeUnit || 'sq ft',
-      status: req.body.status || 'Available',
+      status,
+      description: (req.body.description || '').trim(),
+      notes: (req.body.notes || '').trim(),
       managerId: req.manager ? req.manager._id : null,
     };
 
@@ -181,9 +225,10 @@ const createProperty = async (req, res) => {
       data: property,
     });
   } catch (error) {
+    console.error('[Create Property Error]', error);
     res.status(400).json({
       success: false,
-      message: 'Failed to create property',
+      message: error.message || 'Failed to create property',
       errors: [error.message],
     });
   }
