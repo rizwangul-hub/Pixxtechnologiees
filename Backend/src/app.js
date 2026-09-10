@@ -26,7 +26,7 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const mortgageRoutes = require('./routes/mortgageRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
-const app = express();
+app.set('trust proxy', 1); // Trust Vercel edge proxy for correct client IP handling
 
 // Security HTTP Headers
 app.use(
