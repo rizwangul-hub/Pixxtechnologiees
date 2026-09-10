@@ -26,7 +26,11 @@ async function fetchAPI(endpoint, options = {}) {
     const data = await response.json();
 
     if (!response.ok) {
-      const error = new Error(data.message || 'API request failed');
+      const detailedErrors = Array.isArray(data.errors) && data.errors.length ? data.errors.join('; ') : '';
+      const message = detailedErrors
+        ? `${data.message || 'API request failed'}: ${detailedErrors}`
+        : (data.message || 'API request failed');
+      const error = new Error(message);
       error.status = response.status;
       error.data = data;
       throw error;

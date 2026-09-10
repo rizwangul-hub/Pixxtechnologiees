@@ -14,8 +14,8 @@ const propertySchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['Building', 'House', 'Shop', 'Office', 'Flat', 'Apartment', 'Room', 'Other'],
       default: 'Shop',
+      trim: true,
     },
     floor: {
       type: String,
@@ -82,8 +82,8 @@ const propertySchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['Available', 'Occupied', 'Reserved', 'Maintenance', 'Archived'],
       default: 'Available',
+      trim: true,
     },
     customerName: {
       type: String,

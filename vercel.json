@@ -5,6 +5,7 @@
   "functions": {
     "api/index.js": {
       "includeFiles": [
+        "Backend/src/**",
         "Backend/node_modules/pdfkit/js/standard-fonts/**",
         "Backend/node_modules/pdfkit/**",
         "node_modules/pdfkit/js/standard-fonts/**",
@@ -14,6 +15,7 @@
     },
     "api/**/*.js": {
       "includeFiles": [
+        "Backend/src/**",
         "Backend/node_modules/pdfkit/js/standard-fonts/**",
         "Backend/node_modules/pdfkit/**",
         "node_modules/pdfkit/js/standard-fonts/**",
