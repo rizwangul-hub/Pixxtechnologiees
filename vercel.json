@@ -13,9 +13,7 @@
       "config": { "includeFiles": "Backend/src/**" }
     }
   ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index.js" }
-  ],
+
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
