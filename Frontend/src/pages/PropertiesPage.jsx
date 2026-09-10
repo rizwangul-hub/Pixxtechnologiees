@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
-import { Plus, Download, Search, Eye, Edit, Trash2, Building2, MapPin, UserCheck } from 'lucide-react';
+import { Plus, Download, Search, Eye, Edit, Trash2, Building2, MapPin, UserCheck, Filter } from 'lucide-react';
 import {
   getSavedProperties,
   deleteProperty,
@@ -15,6 +15,7 @@ export function PropertiesPage() {
 
   const [properties, setProperties] = useState(() => getSavedProperties());
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedType, setSelectedType] = useState('All');
 
   const loadProperties = async () => {
     try {
@@ -31,15 +32,33 @@ export function PropertiesPage() {
     loadProperties();
   }, []);
 
+  const typeCounts = useMemo(() => {
+    const counts = { All: properties.length };
+    properties.forEach((p) => {
+      const t = p.assetType || p.propertyType || p.type || 'Other';
+      counts[t] = (counts[t] || 0) + 1;
+    });
+    return counts;
+  }, [properties]);
+
   const filteredProperties = useMemo(() => {
-    if (!searchTerm || !searchTerm.trim()) return properties;
-    const q = searchTerm.toLowerCase().trim();
     return properties.filter((p) => {
+      // Asset Type Filter
+      if (selectedType !== 'All') {
+        const pType = p.assetType || p.propertyType || p.type || 'Other';
+        if (pType.toLowerCase() !== selectedType.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // Search Query Filter
+      if (!searchTerm || !searchTerm.trim()) return true;
+      const q = searchTerm.toLowerCase().trim();
       const name = p.name || p.propertyName || '';
       const address = p.address || '';
       const city = p.city || '';
       const area = p.area || '';
-      const type = p.type || '';
+      const type = p.assetType || p.propertyType || p.type || '';
       const landlord = p.landlordId?.fullName || p.landlordName || '';
       return (
         name.toLowerCase().includes(q) ||
@@ -50,7 +69,7 @@ export function PropertiesPage() {
         landlord.toLowerCase().includes(q)
       );
     });
-  }, [properties, searchTerm]);
+  }, [properties, searchTerm, selectedType]);
 
   const [viewMode, setViewMode] = useState('grouped'); // 'grouped' or 'flat'
 
@@ -146,6 +165,40 @@ export function PropertiesPage() {
           </div>
         </div>
 
+        {/* PROPERTY ASSET TYPE FILTER TABS */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          {['All', 'Shop', 'Flat', 'Office', 'House', 'Apartment', 'Building', 'Room', 'Other'].map((typeKey) => {
+            const count = typeCounts[typeKey] || 0;
+            const isSelected = selectedType === typeKey;
+            // Only show types that have > 0 properties, or the main ones (All, Shop, Flat)
+            if (count === 0 && !['All', 'Shop', 'Flat'].includes(typeKey)) return null;
+
+            return (
+              <button
+                key={typeKey}
+                type="button"
+                onClick={() => setSelectedType(typeKey)}
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 border ${
+                  isSelected
+                    ? 'bg-[#04A26F] text-white border-[#04A26F] shadow-sm'
+                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-2xs'
+                }`}
+              >
+                <span>{typeKey === 'All' ? 'All Properties' : `${typeKey}s`}</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                    isSelected
+                      ? 'bg-white/25 text-white'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* SEARCH & VIEW TOGGLE BAR */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="relative w-full sm:max-w-md">
@@ -197,7 +250,7 @@ export function PropertiesPage() {
               groupedByLandlord.map((group) => (
                 <div key={group.landlordId} className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
                   {/* LANDLORD HEADER BANNER */}
-                  <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
+                  <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between flex-wrap gap-3">
                     <div className="flex items-center gap-3">
                       {group.landlordLogoUrl ? (
                         <img
@@ -230,9 +283,33 @@ export function PropertiesPage() {
                       </div>
                     </div>
 
-                    <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-slate-800 text-emerald-400 border border-slate-700">
-                      {group.properties.length} {group.properties.length === 1 ? 'Property' : 'Properties'}
-                    </span>
+                    {/* LANDLORD PROPERTY TYPE BREAKDOWN BADGES */}
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      {Object.entries(
+                        group.properties.reduce((acc, p) => {
+                          const t = p.assetType || p.propertyType || p.type || 'Shop';
+                          acc[t] = (acc[t] || 0) + 1;
+                          return acc;
+                        }, {})
+                      ).map(([t, count]) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setSelectedType(selectedType === t ? 'All' : t)}
+                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold transition-all cursor-pointer border ${
+                            selectedType === t
+                              ? 'bg-[#04A26F] text-white border-[#04A26F]'
+                              : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
+                          }`}
+                          title={`Click to filter by ${t}`}
+                        >
+                          {count} {t}{count > 1 ? 's' : ''}
+                        </button>
+                      ))}
+                      <span className="px-3 py-1 rounded-full text-xs font-black bg-slate-800 text-emerald-400 border border-slate-700">
+                        {group.properties.length} Total
+                      </span>
+                    </div>
                   </div>
 
                   {/* PROPERTIES TABLE FOR THIS LANDLORD */}
