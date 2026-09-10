@@ -335,7 +335,18 @@ export function PropertiesPage() {
                             || p.activeTenancy?.tenantName
                             || p.customerName
                             || (p.status === 'Occupied' ? 'Occupied' : '—');
-                          const displayStatus = p.assetStatus || (p.status === 'Active' ? 'Available' : p.status);
+                          const isPropertyOccupied = Boolean(
+                            p.status === 'Occupied' ||
+                            p.assetStatus === 'Occupied' ||
+                            p.activeTenancy ||
+                            p.customerName ||
+                            (tenantName && tenantName !== '—')
+                          );
+                          const displayStatus = p.isArchived
+                            ? 'Archived'
+                            : (isPropertyOccupied
+                              ? 'Occupied'
+                              : (p.assetStatus === 'Occupied' ? 'Occupied' : (p.assetStatus || (p.status === 'Active' ? 'Available' : p.status) || 'Available')));
                           const statusColor = displayStatus === 'Occupied'
                             ? 'bg-blue-50 text-blue-800 border-blue-200'
                             : displayStatus === 'Available'
@@ -456,7 +467,18 @@ export function PropertiesPage() {
                         || p.activeTenancy?.tenantName
                         || p.customerName
                         || (p.status === 'Occupied' ? 'Occupied' : '—');
-                      const displayStatus = p.assetStatus || (p.status === 'Active' ? 'Available' : p.status);
+                      const isPropertyOccupied = Boolean(
+                        p.status === 'Occupied' ||
+                        p.assetStatus === 'Occupied' ||
+                        p.activeTenancy ||
+                        p.customerName ||
+                        (tenantName && tenantName !== '—')
+                      );
+                      const displayStatus = p.isArchived
+                        ? 'Archived'
+                        : (isPropertyOccupied
+                          ? 'Occupied'
+                          : (p.assetStatus === 'Occupied' ? 'Occupied' : (p.assetStatus || (p.status === 'Active' ? 'Available' : p.status) || 'Available')));
                       const statusColor = displayStatus === 'Occupied'
                         ? 'bg-blue-50 text-blue-800 border-blue-200'
                         : displayStatus === 'Available'

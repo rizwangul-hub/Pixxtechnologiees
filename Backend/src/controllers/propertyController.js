@@ -103,7 +103,9 @@ const getProperties = async (req, res) => {
 
         const resolvedAssetType = inferAssetType(pObj);
         const resolvedRent = Number(pObj.monthlyRent ?? pObj.price ?? 0);
-        const resolvedStatus = pObj.assetStatus || (pObj.status === 'Active' ? 'Available' : pObj.status) || 'Available';
+        const resolvedStatus = pObj.isArchived
+          ? 'Archived'
+          : (isOccupied ? 'Occupied' : (pObj.assetStatus === 'Occupied' ? 'Occupied' : (pObj.assetStatus || (pObj.status === 'Active' ? 'Available' : pObj.status) || 'Available')));
 
         return {
           ...pObj,
@@ -120,7 +122,7 @@ const getProperties = async (req, res) => {
           activeTenancy: activeTenancy || null,
           tenant: tenant || null,
           tenantName: tenant ? tenant.fullName : pObj.customerName || null,
-          status: pObj.isArchived ? 'Archived' : (isOccupied ? 'Occupied' : pObj.status),
+          status: resolvedStatus,
           totalUnits: 1,
           occupiedUnits: isOccupied ? 1 : 0,
           availableUnits: !isOccupied && !pObj.isArchived ? 1 : 0,
@@ -334,9 +336,13 @@ const getPropertyById = async (req, res) => {
       return p.type || 'Shop';
     };
 
+    const tenant = activeTenancy?.customerId || null;
+    const isOccupied = Boolean(activeTenancy || pObj.customerName);
     const resolvedAssetType = inferAssetType(pObj);
     const resolvedRent = Number(pObj.monthlyRent ?? pObj.price ?? 0);
-    const resolvedStatus = pObj.assetStatus || (pObj.status === 'Active' ? 'Available' : pObj.status) || 'Available';
+    const resolvedStatus = pObj.isArchived
+      ? 'Archived'
+      : (isOccupied ? 'Occupied' : (pObj.assetStatus === 'Occupied' ? 'Occupied' : (pObj.assetStatus || (pObj.status === 'Active' ? 'Available' : pObj.status) || 'Available')));
 
     res.status(200).json({
       success: true,
@@ -352,8 +358,13 @@ const getPropertyById = async (req, res) => {
         monthlyRent: resolvedRent,
         price: resolvedRent,
         assetStatus: resolvedStatus,
+        status: resolvedStatus,
         activeTenancy: activeTenancy || null,
-        tenant: activeTenancy?.customerId || null,
+        tenant: tenant || null,
+        tenantName: tenant ? tenant.fullName : pObj.customerName || null,
+        totalUnits: 1,
+        occupiedUnits: isOccupied ? 1 : 0,
+        availableUnits: !isOccupied && !pObj.isArchived ? 1 : 0,
       },
     });
   } catch (error) {

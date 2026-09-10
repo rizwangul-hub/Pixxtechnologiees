@@ -183,6 +183,29 @@ propertySchema.virtual('unitType').get(function () {
   return this.type;
 });
 
+propertySchema.pre('save', function (next) {
+  if (this.isModified('price') && !this.isModified('monthlyRent')) {
+    this.monthlyRent = this.price;
+  }
+  if (this.isModified('monthlyRent') && !this.isModified('price')) {
+    this.price = this.monthlyRent;
+  }
+  if (!this.assetType && this.type) {
+    this.assetType = this.type;
+  }
+  if (this.status === 'Active') {
+    this.status = 'Available';
+  }
+  if (this.status === 'Occupied') {
+    this.assetStatus = 'Occupied';
+  } else if (this.assetStatus === 'Occupied' && this.status !== 'Occupied') {
+    this.status = 'Occupied';
+  } else if (!this.assetStatus) {
+    this.assetStatus = this.status;
+  }
+  next();
+});
+
 const Property = mongoose.model('Property', propertySchema);
 
 module.exports = Property;

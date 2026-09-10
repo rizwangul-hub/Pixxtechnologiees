@@ -112,7 +112,17 @@ export function PropertyDetailPage() {
   const targetPropertyId = (property._id || property.id || propertyId)?.toString();
   const propName = property.name || property.propertyName || 'Property Details';
   const monthlyRent = property.monthlyRent || property.price || 0;
-  const status = tenancy ? 'Occupied' : (property.assetStatus || (property.status === 'Active' ? 'Available' : property.status) || 'Available');
+  const isPropertyOccupied = Boolean(
+    tenancy ||
+    property.status === 'Occupied' ||
+    property.assetStatus === 'Occupied' ||
+    property.customerName
+  );
+  const status = property.isArchived
+    ? 'Archived'
+    : (isPropertyOccupied
+      ? 'Occupied'
+      : (property.assetStatus === 'Occupied' ? 'Occupied' : (property.assetStatus || (property.status === 'Active' ? 'Available' : property.status) || 'Available')));
 
   const statusColor = status === 'Occupied'
     ? 'bg-blue-50 text-blue-800 border-blue-200'

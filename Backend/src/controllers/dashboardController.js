@@ -48,10 +48,23 @@ const getUnifiedDashboard = async (req, res) => {
     // 1. LANDLORD & INDIVIDUAL PROPERTY INFORMATION
     const totalLandlords = await Landlord.countDocuments({ isArchived: { $ne: true } });
     const totalProperties = await Property.countDocuments(propertyFilter);
-    const occupiedProperties = await Property.countDocuments({ ...propertyFilter, status: 'Occupied' });
-    const availableProperties = await Property.countDocuments({ ...propertyFilter, status: 'Available' });
-    const reservedProperties = await Property.countDocuments({ ...propertyFilter, status: 'Reserved' });
-    const maintenanceProperties = await Property.countDocuments({ ...propertyFilter, status: 'Maintenance' });
+    const occupiedProperties = await Property.countDocuments({
+      ...propertyFilter,
+      $or: [
+        { status: 'Occupied' },
+        { assetStatus: 'Occupied' },
+        { customerName: { $ne: null } }
+      ]
+    });
+    const reservedProperties = await Property.countDocuments({
+      ...propertyFilter,
+      $or: [{ status: 'Reserved' }, { assetStatus: 'Reserved' }]
+    });
+    const maintenanceProperties = await Property.countDocuments({
+      ...propertyFilter,
+      $or: [{ status: 'Maintenance' }, { assetStatus: 'Maintenance' }]
+    });
+    const availableProperties = Math.max(0, totalProperties - occupiedProperties - reservedProperties - maintenanceProperties);
 
     // 2. TENANT INFORMATION
     const totalCustomers = await Customer.countDocuments();

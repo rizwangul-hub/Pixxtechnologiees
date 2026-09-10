@@ -91,6 +91,7 @@ const assignTenancy = async (req, res) => {
 
     // 7. Update Property status to Occupied
     property.status = 'Occupied';
+    property.assetStatus = 'Occupied';
     property.customerName = customer.fullName || customer.name;
     await property.save();
 
@@ -177,6 +178,7 @@ const endTenancy = async (req, res) => {
       if (!otherActiveTenancy) {
         await Property.findByIdAndUpdate(tenancy.propertyId, {
           status: 'Available',
+          assetStatus: 'Available',
           customerName: null,
         });
       }
