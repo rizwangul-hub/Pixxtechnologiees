@@ -3,6 +3,14 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 
+// Prevent harmless third-party / extension observer errors (e.g., reportAllChanges, startTime) from polluting the console
+window.addEventListener('error', (event) => {
+  if (event?.message && (event.message.includes('startTime') || event.message.includes('reportAllChanges'))) {
+    event.stopImmediatePropagation?.();
+    event.preventDefault?.();
+  }
+});
+
 // Purge legacy demo cache from browser storage (preserves login authentication)
 (function purgeLegacyDemoCache() {
   const CLEAN_VERSION = 'pixx_clean_v1';
