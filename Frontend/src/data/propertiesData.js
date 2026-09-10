@@ -57,7 +57,7 @@ export function saveProperty(property) {
 
 export function updateProperty(propertyId, updatedFields) {
   const existing = getSavedProperties();
-  const updated = existing.map((p) => (p.id === propertyId ? { ...p, ...updatedFields, updatedAt: new Date().toISOString() } : p));
+  const updated = existing.map((p) => (p.id === propertyId || p._id === propertyId ? { ...p, ...updatedFields, updatedAt: new Date().toISOString() } : p));
   localStorage.setItem(PROPERTIES_KEY, JSON.stringify(updated));
   return updated;
 }

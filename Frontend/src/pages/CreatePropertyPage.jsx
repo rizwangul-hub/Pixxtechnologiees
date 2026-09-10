@@ -187,12 +187,8 @@ export function CreatePropertyPage() {
       };
 
       if (isEditing) {
-        try {
-          await updatePropertyAPI(propertyId, payload);
-        } catch (apiErr) {
-          console.warn('[API Update Warning]', apiErr.message);
-        }
-        updateProperty(propertyId, payload);
+        const resData = await updatePropertyAPI(propertyId, payload);
+        updateProperty(propertyId, resData || payload);
         setSubmitting(false);
         navigate(`/properties/${propertyId}`);
       } else {
@@ -207,6 +203,7 @@ export function CreatePropertyPage() {
       console.error('[Save Property Error]', err);
       setError(err.message || 'Failed to save property to server.');
       setSubmitting(false);
+      window.alert(`Error saving property: ${err.message || 'Server error'}`);
     }
   };
 
