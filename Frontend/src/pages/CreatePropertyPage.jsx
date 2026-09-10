@@ -81,6 +81,38 @@ export function CreatePropertyPage() {
     }
   }, [propertyId, isEditing]);
 
+  const mapToLegacyType = (t) => {
+    switch (t) {
+      case 'Shop':
+      case 'Office':
+        return 'Commercial';
+      case 'Flat':
+      case 'Apartment':
+      case 'House':
+      case 'Room':
+        return 'Residential';
+      case 'Building':
+        return 'Mixed';
+      default:
+        return 'Commercial';
+    }
+  };
+
+  const mapToLegacyStatus = (s) => {
+    switch (s) {
+      case 'Available':
+      case 'Occupied':
+      case 'Reserved':
+        return 'Active';
+      case 'Maintenance':
+        return 'Under Construction';
+      case 'Archived':
+        return 'Archived';
+      default:
+        return 'Active';
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name.trim()) {
@@ -100,7 +132,12 @@ export function CreatePropertyPage() {
       const selectedL = landlords.find((l) => (l._id || l.id) === formData.landlordId);
       const payload = {
         name: formData.name.trim(),
-        type: formData.type,
+        // Send legacy enum value so servers with older schema never reject
+        type: mapToLegacyType(formData.type),
+        assetType: formData.type,
+        propertyType: formData.type,
+        status: mapToLegacyStatus(formData.status),
+        assetStatus: formData.status || 'Available',
         landlordId: formData.landlordId,
         landlordName: selectedL?.fullName || selectedL?.name || '',
         address: formData.address.trim(),
@@ -112,7 +149,6 @@ export function CreatePropertyPage() {
         size: formData.size.trim(),
         price: Number(formData.monthlyRent || formData.price) || 0,
         monthlyRent: Number(formData.monthlyRent || formData.price) || 0,
-        status: formData.status || 'Available',
         description: formData.description.trim(),
         notes: formData.notes.trim(),
       };

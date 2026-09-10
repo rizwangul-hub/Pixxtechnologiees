@@ -258,11 +258,12 @@ export function PropertiesPage() {
                             || p.activeTenancy?.tenantName
                             || p.customerName
                             || (p.status === 'Occupied' ? 'Occupied' : '—');
-                          const statusColor = p.status === 'Occupied'
+                          const displayStatus = p.assetStatus || (p.status === 'Active' ? 'Available' : p.status);
+                          const statusColor = displayStatus === 'Occupied'
                             ? 'bg-blue-50 text-blue-800 border-blue-200'
-                            : p.status === 'Available'
+                            : displayStatus === 'Available'
                             ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                            : p.status === 'Maintenance'
+                            : displayStatus === 'Maintenance'
                             ? 'bg-amber-50 text-amber-800 border-amber-200'
                             : 'bg-slate-50 text-slate-800 border-slate-200';
 
@@ -275,7 +276,7 @@ export function PropertiesPage() {
                               </td>
                               <td className="py-3.5 px-4 font-semibold text-slate-600">
                                 <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[11px]">
-                                  {p.type}
+                                  {p.assetType || p.propertyType || p.type}
                                 </span>
                               </td>
                               <td className="py-3.5 px-4 font-medium text-slate-600">
@@ -368,11 +369,12 @@ export function PropertiesPage() {
                         || p.activeTenancy?.tenantName
                         || p.customerName
                         || (p.status === 'Occupied' ? 'Occupied' : '—');
-                      const statusColor = p.status === 'Occupied'
+                      const displayStatus = p.assetStatus || (p.status === 'Active' ? 'Available' : p.status);
+                      const statusColor = displayStatus === 'Occupied'
                         ? 'bg-blue-50 text-blue-800 border-blue-200'
-                        : p.status === 'Available'
+                        : displayStatus === 'Available'
                         ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                        : p.status === 'Maintenance'
+                        : displayStatus === 'Maintenance'
                         ? 'bg-amber-50 text-amber-800 border-amber-200'
                         : 'bg-slate-50 text-slate-800 border-slate-200';
 
@@ -395,7 +397,7 @@ export function PropertiesPage() {
                           </td>
                           <td className="py-3.5 px-4 font-semibold text-slate-600">
                             <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[11px]">
-                              {p.type}
+                              {p.assetType || p.propertyType || p.type}
                             </span>
                           </td>
                           <td className="py-3.5 px-4 font-medium text-slate-600">

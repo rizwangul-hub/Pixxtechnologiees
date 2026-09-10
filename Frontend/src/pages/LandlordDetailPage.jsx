@@ -225,8 +225,7 @@ export default function LandlordDetailPage() {
               properties.map((prop) => {
                 const pid = prop._id || prop.id;
                 const propName = prop.propertyName || prop.name;
-                const rent = prop.monthlyRent || prop.price || 0;
-                const status = prop.status || 'Available';
+                const status = prop.assetStatus || (prop.status === 'Active' ? 'Available' : prop.status) || 'Available';
                 const statusColor = status === 'Occupied'
                   ? 'bg-blue-50 text-blue-800 border-blue-200'
                   : status === 'Available'
@@ -244,7 +243,7 @@ export default function LandlordDetailPage() {
                       <div className="flex items-start justify-between">
                         <h3 className="font-bold text-gray-900 text-base">{propName}</h3>
                         <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700">
-                          {prop.type || prop.propertyType}
+                          {prop.assetType || prop.propertyType || prop.type}
                         </span>
                       </div>
                       <p className="text-xs text-gray-500 flex items-center gap-1">
