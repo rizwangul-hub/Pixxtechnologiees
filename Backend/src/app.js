@@ -1,4 +1,5 @@
 const express = require('express');
+const app = express();
 const cors = require('cors');
 const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
@@ -46,6 +47,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
+  'https://pixxtechnologiees.vercel.app',
 ];
 
 app.use(

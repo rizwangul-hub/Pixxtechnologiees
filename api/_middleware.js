@@ -10,6 +10,7 @@ export function middleware(req) {
   const allowedOrigin = origin === 'https://pixxtechnologiees.vercel.app' ? origin : '*';
 
   const corsHeaders = new Headers({
+    'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
