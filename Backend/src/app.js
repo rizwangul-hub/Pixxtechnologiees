@@ -27,6 +27,11 @@ const mortgageRoutes = require('./routes/mortgageRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 app.set('trust proxy', 1); // Trust Vercel edge proxy for correct client IP handling
+// Disable client-side caching for API endpoints
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
+  next();
+});
 
 // Security HTTP Headers
 app.use(
