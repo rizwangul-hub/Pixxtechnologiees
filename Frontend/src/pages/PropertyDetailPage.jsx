@@ -1,38 +1,39 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
 import {
   ArrowLeft,
-  Plus,
-  Download,
   Edit,
   Trash2,
   Building2,
   MapPin,
-  Search,
   CheckCircle2,
   UserCheck,
   AlertTriangle,
-  Layers,
   Landmark,
-  CreditCard,
+  User,
+  Users,
+  Calendar,
+  DollarSign,
+  FileText,
+  Mail,
+  Phone,
+  Globe,
+  Tag,
+  Maximize2,
+  ShieldCheck,
+  Plus,
 } from 'lucide-react';
-import { fetchMortgagesAPI } from '../services/apiData';
 import {
-  getSavedProperties,
-  getUnitsByProperty,
-  getPropertyMetrics,
-  deleteProperty,
-  saveUnit,
-  updateUnit,
-  deleteUnit,
-  exportUnitsToFile,
-} from '../data/propertiesData';
-import { UnitTable } from '../components/properties/UnitTable';
-import { UnitFormModal } from '../components/properties/UnitFormModal';
-import { UnitDetailsModal } from '../components/properties/UnitDetailsModal';
-import AssignUnitModal from '../components/customers/AssignUnitModal';
+  fetchPropertyByIdAPI,
+  fetchTenanciesAPI,
+  fetchMortgagesAPI,
+  deletePropertyAPI,
+  endTenancyAPI,
+} from '../services/apiData';
+import { getSavedProperties, deleteProperty } from '../data/propertiesData';
 import { EntityReportDownloadBar } from '../components/common/EntityReportDownloadBar';
+import { AssignPropertyTenantModal } from '../components/properties/AssignPropertyTenantModal';
 import { formatCurrency } from '../utils/currencyFormatter';
 
 export function PropertyDetailPage() {
@@ -40,59 +41,68 @@ export function PropertyDetailPage() {
   const navigate = useNavigate();
 
   const [property, setProperty] = useState(null);
-  const [units, setUnits] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [tenancy, setTenancy] = useState(null);
+  const [mortgage, setMortgage] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [endingTenancy, setEndingTenancy] = useState(false);
 
-  // Modals state
-  const [isUnitFormOpen, setIsUnitFormOpen] = useState(false);
-  const [editingUnit, setEditingUnit] = useState(null);
+  const loadPropertyData = async () => {
+    try {
+      const [apiProperty, allTenancies, mortgages] = await Promise.all([
+        fetchPropertyByIdAPI(propertyId),
+        fetchTenanciesAPI({ propertyId }),
+        fetchMortgagesAPI({ propertyId }),
+      ]);
 
-  const [isUnitDetailsOpen, setIsUnitDetailsOpen] = useState(false);
-  const [viewingUnit, setViewingUnit] = useState(null);
-  const [propertyMortgage, setPropertyMortgage] = useState(null);
+      if (apiProperty) {
+        setProperty(apiProperty);
+        if (apiProperty.activeTenancy) {
+          setTenancy(apiProperty.activeTenancy);
+        } else if (Array.isArray(allTenancies) && allTenancies.length > 0) {
+          const active = allTenancies.find((t) => t.status === 'Active') || allTenancies[0];
+          setTenancy(active);
+        }
+      } else {
+        // Fallback to local properties
+        const localProps = getSavedProperties();
+        const found = localProps.find((p) => p.id === propertyId || p._id === propertyId);
+        if (found) {
+          setProperty(found);
+        }
+      }
 
-  const [isAssignUnitModalOpen, setIsAssignUnitModalOpen] = useState(false);
-  const [assigningUnit, setAssigningUnit] = useState(null);
+      if (Array.isArray(mortgages) && mortgages.length > 0) {
+        setMortgage(mortgages[0]);
+      }
+    } catch (err) {
+      console.warn('[Property Detail Load Notice]', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const properties = getSavedProperties();
-    const found = properties.find((p) => p.id === propertyId);
-    if (found) {
-      setProperty(found);
-      setUnits(getUnitsByProperty(propertyId));
-    }
-
-    // Fetch Mortgage Record for this property
-    fetchMortgagesAPI({ propertyId }).then((list) => {
-      if (Array.isArray(list) && list.length > 0) {
-        setPropertyMortgage(list[0]);
-      }
-    });
+    loadPropertyData();
   }, [propertyId]);
 
-  const metrics = useMemo(() => {
-    if (!property) return null;
-    return getPropertyMetrics(property.id);
-  }, [property, units]);
-
-  const filteredUnits = useMemo(() => {
-    if (!searchTerm || !searchTerm.trim()) return units;
-    const q = searchTerm.toLowerCase().trim();
-    return units.filter(
-      (u) =>
-        (u.name && u.name.toLowerCase().includes(q)) ||
-        (u.type && u.type.toLowerCase().includes(q)) ||
-        (u.customerName && u.customerName.toLowerCase().includes(q))
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="p-12 text-center text-slate-500 font-bold">
+          Loading property details...
+        </div>
+      </AppLayout>
     );
-  }, [units, searchTerm]);
+  }
 
   if (!property) {
     return (
       <AppLayout>
         <div className="p-8 text-center space-y-4">
-          <p className="text-slate-500 font-bold">Property not found.</p>
-          <Link to="/properties" className="text-[#04A26F] font-extrabold hover:underline">
-            ← Back to Properties
+          <p className="text-slate-500 font-bold text-base">Property not found.</p>
+          <Link to="/properties" className="text-[#04A26F] font-extrabold hover:underline inline-block">
+            &larr; Back to Properties
           </Link>
         </div>
       </AppLayout>
@@ -100,43 +110,58 @@ export function PropertyDetailPage() {
   }
 
   const targetPropertyId = (property._id || property.id || propertyId)?.toString();
+  const propName = property.name || property.propertyName || 'Property Details';
+  const monthlyRent = property.monthlyRent || property.price || 0;
+  const status = tenancy ? 'Occupied' : (property.assetStatus || (property.status === 'Active' ? 'Available' : property.status) || 'Available');
 
-  const handleDeleteProperty = () => {
-    if (window.confirm(`Are you sure you want to delete "${property.name}"? All associated units will also be deleted.`)) {
-      deleteProperty(property.id);
+  const statusColor = status === 'Occupied'
+    ? 'bg-blue-50 text-blue-800 border-blue-200'
+    : status === 'Available'
+    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+    : status === 'Maintenance'
+    ? 'bg-amber-50 text-amber-800 border-amber-200'
+    : 'bg-slate-50 text-slate-800 border-slate-200';
+
+  const landlord = property.landlordId && typeof property.landlordId === 'object' ? property.landlordId : null;
+  const landlordName = landlord?.fullName || landlord?.name || property.landlordName || 'Unassigned';
+
+  const tenant = tenancy?.customerId && typeof tenancy.customerId === 'object' ? tenancy.customerId : property.tenant;
+  const tenantName = tenant?.fullName || tenant?.name || tenancy?.tenantName || property.customerName;
+
+  const agent = tenancy?.agentId && typeof tenancy.agentId === 'object' ? tenancy.agentId : property.agent;
+  const agentName = agent?.fullName || agent?.name || agent?.agencyName || property.agentName;
+
+  const handleDeleteProperty = async () => {
+    if (window.confirm(`Are you sure you want to delete "${propName}"?`)) {
+      try {
+        await deletePropertyAPI(targetPropertyId);
+      } catch (e) {
+        console.warn('API delete error, deleting locally:', e.message);
+      }
+      deleteProperty(targetPropertyId);
       navigate('/properties');
     }
   };
 
-  const handleSaveUnit = (unitData) => {
-    if (editingUnit) {
-      updateUnit(unitData.id, unitData);
-    } else {
-      saveUnit(unitData);
+  const handleEndTenancy = async () => {
+    if (!tenancy?._id) return;
+    if (window.confirm(`Are you sure you want to end the tenancy for "${tenantName}"? The property will become Available.`)) {
+      setEndingTenancy(true);
+      try {
+        await endTenancyAPI(tenancy._id);
+        setTenancy(null);
+        setProperty((prev) => ({ ...prev, status: 'Available', customerName: null }));
+      } catch (e) {
+        alert('Failed to end tenancy: ' + e.message);
+      } finally {
+        setEndingTenancy(false);
+      }
     }
-    setUnits(getUnitsByProperty(property.id));
-  };
-
-  const handleDeleteUnit = (unitId) => {
-    if (window.confirm('Are you sure you want to delete this unit?')) {
-      deleteUnit(unitId);
-      setUnits(getUnitsByProperty(property.id));
-    }
-  };
-
-  const handleExportUnits = (format = 'xlsx') => {
-    exportUnitsToFile(filteredUnits, property.name, format);
-  };
-
-  const handleAssignCustomer = (unit) => {
-    setIsUnitDetailsOpen(false);
-    setAssigningUnit(unit);
-    setIsAssignUnitModalOpen(true);
   };
 
   return (
     <AppLayout>
-      <div className="space-y-6 text-left pb-12">
+      <div className="space-y-6 text-left pb-12 max-w-7xl mx-auto">
         {/* BREADCRUMB */}
         <div className="flex items-center gap-3">
           <Link
@@ -147,39 +172,62 @@ export function PropertyDetailPage() {
             <span>Properties</span>
           </Link>
           <span className="text-xs text-slate-400">/</span>
-          <span className="text-xs font-bold text-slate-900">{property.name}</span>
+          <span className="text-xs font-bold text-slate-900">{propName}</span>
         </div>
 
         {/* Date Range Report & Statement Download Bar */}
-        <EntityReportDownloadBar entityType="property" entityId={targetPropertyId} entityName={property.name} />
+        <EntityReportDownloadBar entityType="property" entityId={targetPropertyId} entityName={propName} />
 
-        {/* HEADER CARD */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-            <div className="flex items-start gap-3">
-              <div className="p-3 rounded-2xl bg-emerald-50 text-[#04A26F] shrink-0">
-                <Building2 className="w-7 h-7" />
+        {/* MAIN PROPERTY HEADER CARD */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+            <div className="flex items-start gap-4">
+              <div className="p-3.5 rounded-2xl bg-emerald-50 text-[#04A26F] shrink-0 shadow-2xs">
+                <Building2 className="w-8 h-8" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2.5">
                   <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                    {property.name}
+                    {propName}
                   </h1>
-                  <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-xs font-bold text-slate-700">
-                    {property.type}
+                  <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-xs font-extrabold text-slate-700">
+                    {property.assetType || property.propertyType || property.type || 'Shop'}
+                  </span>
+                  <span className={`px-3 py-0.5 rounded-full text-xs font-black border ${statusColor}`}>
+                    {status}
                   </span>
                 </div>
-                <p className="text-xs font-semibold text-slate-500 mt-1 flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{[property.address, property.city, property.area].filter(Boolean).join(', ')}</span>
+                <p className="text-xs font-semibold text-slate-500 mt-1.5 flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>{[property.address, property.city, property.county, property.postcode].filter(Boolean).join(', ') || 'Address not specified'}</span>
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 self-start sm:self-auto">
+              {status !== 'Occupied' ? (
+                <button
+                  type="button"
+                  onClick={() => setIsAssignModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-extrabold text-white bg-[#04A26F] hover:bg-[#038b5e] rounded-lg transition-colors cursor-pointer shadow-xs"
+                >
+                  <UserCheck className="w-4 h-4 stroke-[2.5]" />
+                  <span>Assign Tenant</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={endingTenancy}
+                  onClick={handleEndTenancy}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors cursor-pointer"
+                >
+                  <span>{endingTenancy ? 'Ending...' : 'End Tenancy'}</span>
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={() => navigate(`/properties/${property.id}/edit`)}
+                onClick={() => navigate(`/properties/${targetPropertyId}/edit`)}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
               >
                 <Edit className="w-3.5 h-3.5" />
@@ -197,258 +245,335 @@ export function PropertyDetailPage() {
             </div>
           </div>
 
-          {property.description && (
-            <p className="text-xs text-slate-600 font-medium leading-relaxed">
-              {property.description}
-            </p>
-          )}
+          {/* KEY FINANCIAL & PHYSICAL ATTRIBUTES */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Monthly Rent</span>
+              <div className="text-2xl font-black text-[#04A26F]">
+                £{Number(monthlyRent).toLocaleString()}
+                <span className="text-xs font-semibold text-slate-500 block">/ month</span>
+              </div>
+            </div>
 
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Floor</span>
+              <div className="text-xl font-black text-slate-900">
+                {property.floor || 'Ground'}
+              </div>
+              <span className="text-[10px] font-semibold text-slate-400 block">Level</span>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Floor Area</span>
+              <div className="text-xl font-black text-slate-900">
+                {property.size ? `${property.size} ${property.sizeUnit || 'sq ft'}` : 'Standard'}
+              </div>
+              <span className="text-[10px] font-semibold text-slate-400 block">Dimensions</span>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Current Status</span>
+              <div className="pt-0.5">
+                <span className={`inline-block px-3 py-1 rounded-full text-xs font-black border ${statusColor}`}>
+                  {status}
+                </span>
+              </div>
+              <span className="text-[10px] font-semibold text-slate-400 block">Occupancy</span>
+            </div>
+          </div>
+
+          {property.description && (
+            <div className="text-xs text-slate-600 bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Description</span>
+              <p className="font-medium leading-relaxed">{property.description}</p>
+            </div>
+          )}
+        </div>
+
+        {/* 2-COLUMN GRID: LANDLORD & TENANT DETAILS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* LANDLORD INFORMATION CARD */}
-          {(property.landlordId || property.landlordName) && (
-            <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-100">
-              <div className="flex items-center gap-3">
-                {property.landlordId?.logo?.url ? (
-                  <img
-                    src={property.landlordId.logo.url}
-                    alt={property.landlordId.fullName}
-                    className="w-10 h-10 rounded-lg object-cover border border-emerald-200 shrink-0"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-lg bg-[#04A26F] text-white font-black text-sm flex items-center justify-center shrink-0">
-                    {(property.landlordId?.fullName || property.landlordName || 'L')[0]}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-[#04A26F] flex items-center justify-center font-bold">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-900">Property Landlord</h2>
+                  <p className="text-[11px] text-slate-500 font-medium">Owner of this property asset</p>
+                </div>
+              </div>
+              {landlord?._id && (
+                <Link
+                  to={`/landlords/${landlord._id}`}
+                  className="text-xs font-bold text-[#04A26F] hover:underline"
+                >
+                  View Profile &rarr;
+                </Link>
+              )}
+            </div>
+
+            <div className="flex items-start gap-3 bg-emerald-50/50 p-4 rounded-xl border border-emerald-100/80">
+              {landlord?.logo?.url ? (
+                <img
+                  src={landlord.logo.url}
+                  alt={landlordName}
+                  className="w-12 h-12 rounded-xl object-contain bg-white p-1 border border-emerald-200 shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-[#04A26F] text-white font-black text-base flex items-center justify-center shrink-0">
+                  {landlordName[0]?.toUpperCase()}
+                </div>
+              )}
+              <div className="space-y-1 text-xs">
+                <div className="font-extrabold text-slate-900 text-sm">{landlordName}</div>
+                <div className="text-slate-600 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{landlord?.email || 'No email recorded'}</span>
+                </div>
+                <div className="text-slate-600 flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{landlord?.phone || 'No phone recorded'}</span>
+                </div>
+                {landlord?.country && (
+                  <div className="text-slate-600 flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{landlord.country} {landlord.region ? `(${landlord.region})` : ''}</span>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+
+          {/* TENANT INFORMATION CARD */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <User className="w-4 h-4" />
+                </div>
                 <div>
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 block">
-                    Property Landlord
+                  <h2 className="text-base font-extrabold text-slate-900">Current Tenant</h2>
+                  <p className="text-[11px] text-slate-500 font-medium">Renting party & active tenancy</p>
+                </div>
+              </div>
+              {tenant?._id && (
+                <Link
+                  to={`/tenants/${tenant._id}`}
+                  className="text-xs font-bold text-blue-600 hover:underline"
+                >
+                  View Tenant &rarr;
+                </Link>
+              )}
+            </div>
+
+            {tenantName ? (
+              <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/80 space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="font-extrabold text-slate-900 text-sm">{tenantName}</div>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800">
+                    Active Tenancy
                   </span>
-                  {property.landlordId?._id ? (
-                    <Link
-                      to={`/landlords/${property.landlordId._id}`}
-                      className="font-extrabold text-slate-900 hover:text-[#04A26F] hover:underline text-sm"
-                    >
-                      {property.landlordId.fullName || property.landlordName}
-                    </Link>
-                  ) : (
-                    <span className="font-extrabold text-slate-900 text-sm">
-                      {property.landlordName || 'Assigned Landlord'}
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-slate-600">
+                  <div className="flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{tenant?.email || '—'}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{tenant?.phone || '—'}</span>
+                  </div>
+                </div>
+
+                {tenancy && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-blue-100/80 text-[11px]">
+                    <div>
+                      <span className="text-slate-400 font-bold block uppercase text-[9px]">Start Date</span>
+                      <span className="font-bold text-slate-800">{tenancy.startDate || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-bold block uppercase text-[9px]">Due Day</span>
+                      <span className="font-bold text-slate-800">Day {tenancy.paymentDueDay || 1} of month</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-bold block uppercase text-[9px]">Agreed Rent</span>
+                      <span className="font-mono font-extrabold text-[#04A26F]">
+                        £{Number(tenancy.monthlyRent || monthlyRent).toLocaleString()}/mo
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-2">
+                <p className="text-xs font-semibold text-slate-500">No tenant currently occupying this property.</p>
+                <button
+                  type="button"
+                  onClick={() => setIsAssignModalOpen(true)}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#04A26F] text-white text-xs font-bold rounded-lg hover:bg-[#038b5e] transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Assign Tenant</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 2-COLUMN GRID: MANAGING AGENT & MORTGAGE/FINANCING */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* MANAGING AGENT CARD */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                  <Users className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-900">Managing Agent / Agency</h2>
+                  <p className="text-[11px] text-slate-500 font-medium">Assigned managing agent details</p>
+                </div>
+              </div>
+              {agent?._id && (
+                <Link
+                  to={`/agents/${agent._id}`}
+                  className="text-xs font-bold text-purple-600 hover:underline"
+                >
+                  Agent Profile &rarr;
+                </Link>
+              )}
+            </div>
+
+            {agentName ? (
+              <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100/80 space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="font-extrabold text-slate-900 text-sm">{agentName}</div>
+                  {agent?.agencyName && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">
+                      {agent.agencyName}
                     </span>
                   )}
                 </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-4 text-slate-600 font-medium text-xs">
-                {property.landlordId?.email && (
-                  <div>
-                    <span className="text-[10px] text-slate-400 block font-bold">Email</span>
-                    <span>{property.landlordId.email}</span>
+                <div className="grid grid-cols-2 gap-2 text-slate-600">
+                  <div className="flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{agent?.email || '—'}</span>
                   </div>
-                )}
-                {property.landlordId?.phone && (
-                  <div>
-                    <span className="text-[10px] text-slate-400 block font-bold">Phone</span>
-                    <span>{property.landlordId.phone}</span>
+                  <div className="flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{agent?.phone || '—'}</span>
                   </div>
-                )}
-                {property.landlordId?.country && (
-                  <div>
-                    <span className="text-[10px] text-slate-400 block font-bold">Location</span>
-                    <span>{property.landlordId.country}</span>
+                </div>
+                {tenancy?.companyMonthlyAmount > 0 && (
+                  <div className="pt-2 border-t border-purple-100/80 text-[11px] flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Monthly Management Fee:</span>
+                    <span className="font-mono font-bold text-slate-900">
+                      £{Number(tenancy.companyMonthlyAmount).toLocaleString()}/mo
+                    </span>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="p-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <p className="text-xs font-semibold text-slate-500">
+                  No managing agent assigned (direct landlord management).
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* MORTGAGE & PROPERTY FINANCING CARD */}
-          <div className="pt-4 border-t border-slate-100">
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Landmark className="w-4 h-4 text-[#04A26F]" />
-                  <span className="font-extrabold text-xs text-slate-900 uppercase tracking-wider">
-                    Mortgage & Financing
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-[#04A26F] flex items-center justify-center font-bold">
+                  <Landmark className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-900">Mortgage & Financing</h2>
+                  <p className="text-[11px] text-slate-500 font-medium">Bank loans and financing records</p>
+                </div>
+              </div>
+
+              {mortgage ? (
+                <Link
+                  to={`/mortgages/${mortgage._id || mortgage.id}`}
+                  className="text-xs font-bold text-[#04A26F] hover:underline"
+                >
+                  View Mortgage &rarr;
+                </Link>
+              ) : (
+                <Link
+                  to={`/mortgages?propertyId=${targetPropertyId}`}
+                  className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                >
+                  + Add Mortgage
+                </Link>
+              )}
+            </div>
+
+            {mortgage ? (
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-slate-900 text-sm">{mortgage.lenderName}</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {mortgage.status || 'Active'}
                   </span>
                 </div>
 
-                {propertyMortgage ? (
-                  <Link
-                    to={`/mortgages/${propertyMortgage._id || propertyMortgage.id}`}
-                    className="px-3 py-1.5 bg-[#04A26F] hover:bg-[#03885c] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-2xs"
-                  >
-                    View Mortgage
-                  </Link>
-                ) : (
-                  <Link
-                    to={`/mortgages?propertyId=${property.id}`}
-                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
-                  >
-                    + Add Mortgage
-                  </Link>
-                )}
-              </div>
-
-              {propertyMortgage ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs pt-1">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
                   <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Lender</span>
-                    <span className="font-extrabold text-slate-900">{propertyMortgage.lenderName}</span>
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Original Loan</span>
+                    <span className="font-mono font-bold text-slate-800">
+                      {formatCurrency(mortgage.originalLoanAmount)}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Original Amount</span>
-                    <span className="font-mono font-bold text-slate-800">{formatCurrency(propertyMortgage.originalLoanAmount)}</span>
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Outstanding</span>
+                    <span className="font-mono font-black text-amber-900">
+                      {formatCurrency(mortgage.currentOutstandingBalance)}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Outstanding Balance</span>
-                    <span className="font-mono font-black text-amber-900">{formatCurrency(propertyMortgage.currentOutstandingBalance)}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Monthly Payment</span>
-                    <span className="font-mono font-bold text-slate-900">{formatCurrency(propertyMortgage.monthlyPayment)}</span>
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Monthly Pay</span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {formatCurrency(mortgage.monthlyPayment)}
+                    </span>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-400 font-bold block uppercase">Interest Rate</span>
-                    <span className="font-bold text-slate-800">{propertyMortgage.interestRate ? `${propertyMortgage.interestRate}%` : '0%'}</span>
+                    <span className="font-bold text-slate-800">{mortgage.interestRate ? `${mortgage.interestRate}%` : '0%'}</span>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Next Payment</span>
+                  <div className="sm:col-span-2">
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Next Due Date</span>
                     <span className="font-bold text-slate-800">
-                      {propertyMortgage.nextPaymentDate ? new Date(propertyMortgage.nextPaymentDate).toLocaleDateString() : '-'}
+                      {mortgage.nextPaymentDate ? new Date(mortgage.nextPaymentDate).toLocaleDateString() : '—'}
                     </span>
                   </div>
                 </div>
-              ) : (
-                <p className="text-xs text-slate-500 font-medium">
-                  No mortgage recorded for this property.
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* METRICS SUMMARY CARDS GRID */}
-        {metrics && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Units</span>
-              <div className="text-2xl font-black text-slate-900">{metrics.totalUnits}</div>
-            </div>
-
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-500">Occupied</span>
-              <div className="text-2xl font-black text-blue-700">{metrics.occupiedUnits}</div>
-            </div>
-
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">Available</span>
-              <div className="text-2xl font-black text-emerald-700">{metrics.availableUnits}</div>
-            </div>
-
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Reserved</span>
-              <div className="text-2xl font-black text-amber-700">{metrics.reservedUnits}</div>
-            </div>
-
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-1 col-span-2 sm:col-span-1 lg:col-span-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#04A26F]">Expected Rent</span>
-              <div className="text-xl font-black text-[#04A26F]">
-                {formatCurrency(metrics.expectedMonthlyRent)}
-                <span className="text-[10px] text-slate-400 font-semibold block">/ month</span>
               </div>
-            </div>
+            ) : (
+              <div className="p-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <p className="text-xs font-semibold text-slate-500">No mortgage recorded for this property.</p>
+              </div>
+            )}
           </div>
-        )}
-
-        {/* UNITS SECTION HEADER & SEARCH */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                <Layers className="w-5 h-5 text-[#04A26F]" />
-                <span>Units in {property.name}</span>
-              </h2>
-              <p className="text-xs font-semibold text-slate-500 mt-1">
-                Buildings, shops, offices, flats, and rooms registered inside this property.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingUnit(null);
-                  setIsUnitFormOpen(true);
-                }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-extrabold text-white bg-[#04A26F] hover:bg-[#038b5e] active:bg-[#02754e] rounded-lg transition-all cursor-pointer shadow-xs"
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Add Unit</span>
-              </button>
-            </div>
-          </div>
-
-          {/* SEARCH UNITS */}
-          <div className="relative max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              placeholder="Search units by name, type, or customer name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 focus:border-[#04A26F]"
-            />
-          </div>
-
-          {/* UNITS TABLE */}
-          <UnitTable
-            units={filteredUnits}
-            onViewUnit={(unit) => {
-              setViewingUnit(unit);
-              setIsUnitDetailsOpen(true);
-            }}
-            onEditUnit={(unit) => {
-              setEditingUnit(unit);
-              setIsUnitFormOpen(true);
-            }}
-            onDeleteUnit={handleDeleteUnit}
-          />
         </div>
 
-        {/* UNIT FORM MODAL */}
-        <UnitFormModal
-          isOpen={isUnitFormOpen}
-          onClose={() => setIsUnitFormOpen(false)}
-          onSave={handleSaveUnit}
-          propertyId={property.id}
-          initialData={editingUnit}
-        />
-
-        {/* UNIT DETAILS MODAL */}
-        <UnitDetailsModal
-          isOpen={isUnitDetailsOpen}
-          onClose={() => setIsUnitDetailsOpen(false)}
-          unit={viewingUnit}
-          propertyName={property.name}
-          onAssignCustomer={handleAssignCustomer}
-        />
-
-        {/* ASSIGN UNIT MODAL */}
-        <AssignUnitModal
-          isOpen={isAssignUnitModalOpen}
-          onClose={() => {
-            setIsAssignUnitModalOpen(false);
-            setAssigningUnit(null);
-          }}
-          customer={null}
-          initialPropertyId={property?.id || property?._id}
-          initialUnitId={assigningUnit?.id || assigningUnit?._id}
+        {/* ASSIGN TENANT MODAL */}
+        <AssignPropertyTenantModal
+          isOpen={isAssignModalOpen}
+          onClose={() => setIsAssignModalOpen(false)}
+          property={property}
           onSuccess={() => {
-            setUnits(getUnitsByProperty(property.id));
-            setIsAssignUnitModalOpen(false);
-            setAssigningUnit(null);
+            loadPropertyData();
+            setIsAssignModalOpen(false);
           }}
         />
       </div>
     </AppLayout>
   );
 }
+

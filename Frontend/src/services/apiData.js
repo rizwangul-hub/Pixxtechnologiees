@@ -132,6 +132,43 @@ export async function fetchLandlordPropertiesAPI(landlordId) {
   return [];
 }
 
+export async function fetchPropertyByIdAPI(id) {
+  try {
+    const res = await fetchAPI(`/properties/${id}`);
+    if (res.success && res.data) {
+      return res.data;
+    }
+  } catch (e) {
+    console.warn('[API Warning] Fetch property by ID error:', e.message);
+  }
+  return null;
+}
+
+export async function deletePropertyAPI(id) {
+  try {
+    const res = await fetchAPI(`/properties/${id}`, {
+      method: 'DELETE',
+    });
+    return res;
+  } catch (e) {
+    console.warn('[API Warning] Delete property error:', e.message);
+    throw e;
+  }
+}
+
+export async function fetchTenanciesAPI(params = {}) {
+  try {
+    const query = new URLSearchParams(params).toString();
+    const res = await fetchAPI(`/tenancies${query ? `?${query}` : ''}`);
+    if (res.success && Array.isArray(res.data)) {
+      return res.data;
+    }
+  } catch (e) {
+    console.warn('[API Warning] Fetch tenancies error:', e.message);
+  }
+  return [];
+}
+
 export async function createPropertyAPI(propertyData) {
   try {
     const res = await fetchAPI('/properties', {
