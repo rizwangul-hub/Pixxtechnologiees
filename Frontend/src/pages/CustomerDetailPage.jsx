@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Clock,
   XCircle,
+  History,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { EntityReportDownloadBar } from '../components/common/EntityReportDownloadBar';
@@ -29,6 +30,7 @@ import {
   getCustomerMetrics,
   terminateAgreement,
 } from '../data/customersData';
+import { fetchCustomerByIdAPI, fetchPaymentsAPI } from '../services/apiData';
 import { formatCurrency } from '../utils/currencyFormatter';
 
 export default function CustomerDetailPage() {
@@ -46,6 +48,9 @@ export default function CustomerDetailPage() {
     totalPending: 0,
     totalOverdue: 0,
   });
+  // Data fetched from backend API (tenancy, payments with opening balance)
+  const [apiPayments, setApiPayments] = useState([]);
+  const [openingBalance, setOpeningBalance] = useState(0);
 
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedScheduleForPayment, setSelectedScheduleForPayment] = useState(null);
@@ -68,6 +73,29 @@ export default function CustomerDetailPage() {
 
       setMetrics(getCustomerMetrics(customerId));
     }
+
+    // Also fetch live data from backend API to get opening balance
+    const fetchLiveData = async () => {
+      try {
+        const [apiCust, apiPays] = await Promise.allSettled([
+          fetchCustomerByIdAPI(customerId),
+          fetchPaymentsAPI({ customer: customerId }),
+        ]);
+
+        // Extract API payments
+        const livePays = apiPays.status === 'fulfilled' ? (apiPays.value?.data || apiPays.value || []) : [];
+        setApiPayments(livePays);
+
+        // Sum opening balance from all Opening Balance payment records
+        const obTotal = livePays
+          .filter((p) => p.paymentType === 'Opening Balance')
+          .reduce((sum, p) => sum + (p.remainingAmount || 0), 0);
+        setOpeningBalance(obTotal);
+      } catch (e) {
+        console.warn('[CustomerDetailPage] API fetch warning:', e.message);
+      }
+    };
+    fetchLiveData();
   };
 
   useEffect(() => {
@@ -183,7 +211,7 @@ export default function CustomerDetailPage() {
           </div>
 
           {/* Metrics Overview */}
-          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-2 gap-4">
             <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between">
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Received</p>
@@ -214,6 +242,20 @@ export default function CustomerDetailPage() {
               <p className="text-xs text-rose-600 font-medium mt-3 flex items-center space-x-1">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 <span>Action Required</span>
+              </p>
+            </div>
+
+            {/* Opening Balance card — shows prior period unpaid debt */}
+            <div className={`p-5 rounded-xl border shadow-sm flex flex-col justify-between ${openingBalance > 0 ? 'bg-amber-50 border-amber-300' : 'bg-white border-gray-200'}`}>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Opening Balance</p>
+                <h3 className={`text-2xl font-bold mt-2 ${openingBalance > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
+                  {formatCurrency(openingBalance)}
+                </h3>
+              </div>
+              <p className={`text-xs font-medium mt-3 flex items-center space-x-1 ${openingBalance > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
+                <History className="w-3.5 h-3.5" />
+                <span>Prior Unpaid Rent</span>
               </p>
             </div>
           </div>
@@ -381,6 +423,46 @@ export default function CustomerDetailPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Opening Balance rows from API — shown when present */}
+          {apiPayments.filter((p) => p.paymentType === 'Opening Balance').length > 0 && (
+            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <History className="w-4 h-4 text-amber-600" />
+                <span className="text-sm font-extrabold text-amber-800">Opening Balance — Prior Unpaid Rent</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-amber-100 text-amber-900 font-bold uppercase">
+                      <th className="py-2 px-3">Description</th>
+                      <th className="py-2 px-3">Total Owed</th>
+                      <th className="py-2 px-3">Paid</th>
+                      <th className="py-2 px-3">Remaining</th>
+                      <th className="py-2 px-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {apiPayments
+                      .filter((p) => p.paymentType === 'Opening Balance')
+                      .map((p) => (
+                        <tr key={p._id} className="border-t border-amber-200">
+                          <td className="py-2 px-3 font-semibold text-amber-900">{p.notes || 'Opening Balance'}</td>
+                          <td className="py-2 px-3 font-bold text-amber-800">{formatCurrency(p.amount)}</td>
+                          <td className="py-2 px-3 font-bold text-emerald-700">{formatCurrency(p.paidAmount)}</td>
+                          <td className="py-2 px-3 font-bold text-rose-700">{formatCurrency(p.remainingAmount)}</td>
+                          <td className="py-2 px-3">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.remainingAmount <= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'}`}>
+                              {p.remainingAmount <= 0 ? 'Cleared' : 'Outstanding'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Payment Receipts History */}

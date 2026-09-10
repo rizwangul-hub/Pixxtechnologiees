@@ -24,6 +24,8 @@ const assignTenancy = async (req, res) => {
       monthlyRent,
       paymentDueDay,
       securityDeposit,
+      openingBalance,
+      billingStartDate,
       notes,
     } = req.body;
 
@@ -72,6 +74,8 @@ const assignTenancy = async (req, res) => {
       });
     }
 
+    const openingBalanceAmount = Number(openingBalance) || 0;
+
     // 6. Create Tenancy
     const tenancy = await Tenancy.create({
       customerId,
@@ -85,9 +89,36 @@ const assignTenancy = async (req, res) => {
       monthlyRent: Number(monthlyRent) || 0,
       paymentDueDay: Number(paymentDueDay) || 1,
       securityDeposit: Number(securityDeposit) || 0,
+      openingBalance: openingBalanceAmount,
+      billingStartDate: billingStartDate || '',
       status: 'Active',
       notes: notes || '',
     });
+
+    // 6a. If openingBalance > 0, create an Opening Balance payment record
+    if (openingBalanceAmount > 0) {
+      const Payment = require('../models/Payment');
+      const todayStr = new Date().toISOString().split('T')[0];
+      try {
+        await Payment.create({
+          customerId,
+          propertyId: targetPropertyId,
+          tenancyId: tenancy._id,
+          amount: openingBalanceAmount,
+          paidAmount: 0,
+          remainingAmount: openingBalanceAmount,
+          dueDate: todayStr,
+          billingMonth: 0,   // 0 = special Opening Balance marker (not a real month)
+          billingYear: 0,    // 0 = special Opening Balance marker
+          status: 'Overdue', // Opening balances are always overdue (prior period)
+          paymentType: 'Opening Balance',
+          paymentMethod: 'Cash',
+          notes: `Opening balance brought forward – prior unpaid rent before ${billingStartDate || startDate}`,
+        });
+      } catch (obErr) {
+        console.warn('[Opening Balance Warning] Could not create opening balance payment:', obErr.message);
+      }
+    }
 
     // 7. Update Property status to Occupied
     property.status = 'Occupied';

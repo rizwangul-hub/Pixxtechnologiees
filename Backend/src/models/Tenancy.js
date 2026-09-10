@@ -76,6 +76,19 @@ const tenancySchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    // Opening balance: unpaid rent from before the billing start date
+    openingBalance: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    // billingStartDate: the date from which monthly payment records are generated.
+    // Payments from before this date are represented by openingBalance.
+    // Format: 'YYYY-MM-DD' or 'YYYY-MM'. Defaults to startDate if not set.
+    billingStartDate: {
+      type: String,
+      default: '',
+    },
     notes: {
       type: String,
       default: '',

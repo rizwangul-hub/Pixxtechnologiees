@@ -45,7 +45,9 @@ async function generateMonthlyPayments() {
     for (const tenancy of activeTenancies) {
       if (!tenancy.monthlyRent || tenancy.monthlyRent <= 0) continue;
 
-      const startYM = parseYearMonth(tenancy.startDate);
+      // Use billingStartDate if set (e.g. '2026-01'), otherwise use startDate
+      const effectiveBillingStart = tenancy.billingStartDate || tenancy.startDate;
+      const startYM = parseYearMonth(effectiveBillingStart);
       if (!startYM) continue;
 
       const startYear = startYM.year;

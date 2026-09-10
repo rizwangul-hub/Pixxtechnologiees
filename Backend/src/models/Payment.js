@@ -68,6 +68,12 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    // 'Rent' = normal monthly rent, 'Opening Balance' = prior unpaid balance brought forward
+    paymentType: {
+      type: String,
+      enum: ['Rent', 'Opening Balance', 'Security Deposit', 'Other'],
+      default: 'Rent',
+    },
   },
   {
     timestamps: true,
@@ -80,7 +86,7 @@ paymentSchema.index({ tenancyId: 1 });
 paymentSchema.index({ status: 1 });
 paymentSchema.index({ dueDate: 1 });
 paymentSchema.index({ billingMonth: 1, billingYear: 1 });
-paymentSchema.index({ tenancyId: 1, billingMonth: 1, billingYear: 1 }, { unique: true });
+paymentSchema.index({ tenancyId: 1, billingMonth: 1, billingYear: 1, paymentType: 1 }, { unique: true });
 
 const Payment = mongoose.model('Payment', paymentSchema);
 

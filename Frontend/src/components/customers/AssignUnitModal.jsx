@@ -28,6 +28,8 @@ export default function AssignUnitModal({ isOpen, onClose, customer, initialProp
     securityDeposit: '',
     paymentFrequency: 'Monthly',
     dueDayOfMonth: 5,
+    openingBalance: '',
+    billingStartDate: '2026-01-01',
     notes: '',
   });
 
@@ -206,6 +208,8 @@ export default function AssignUnitModal({ isOpen, onClose, customer, initialProp
           monthlyRent: Number(formData.monthlyOrSalePrice) || 0,
           paymentDueDay: Number(formData.dueDayOfMonth) || 1,
           securityDeposit: Number(formData.securityDeposit) || 0,
+          openingBalance: Number(formData.openingBalance) || 0,
+          billingStartDate: formData.billingStartDate || '',
           notes: formData.notes,
         });
       } catch (e) {
@@ -529,6 +533,46 @@ export default function AssignUnitModal({ isOpen, onClose, customer, initialProp
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#04A26F] text-sm"
               placeholder="Special conditions, advance rent notes..."
             />
+          </div>
+
+          {/* Opening Balance — for historical tenancies with prior unpaid rent */}
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-start gap-2">
+              <div className="mt-0.5 text-amber-600">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              </div>
+              <div>
+                <p className="text-xs font-extrabold text-amber-800">Opening Balance (Prior Unpaid Rent)</p>
+                <p className="text-[10px] text-amber-700 leading-snug mt-0.5">
+                  For tenants renting for years — enter total unpaid rent before the billing start date.
+                  System will only auto-generate monthly records from the billing start date onwards.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-amber-900 mb-1">Opening Balance (£)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.openingBalance}
+                  onChange={(e) => setFormData({ ...formData, openingBalance: e.target.value })}
+                  className="w-full px-3 py-2 text-xs bg-white border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  placeholder="e.g. 3600 (leave blank if none)"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-amber-900 mb-1">Billing Start Date</label>
+                <input
+                  type="date"
+                  value={formData.billingStartDate}
+                  onChange={(e) => setFormData({ ...formData, billingStartDate: e.target.value })}
+                  className="w-full px-3 py-2 text-xs bg-white border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+                <p className="text-[10px] text-amber-700 mt-0.5">Monthly records from this date (default: Jan 2026)</p>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-100">
