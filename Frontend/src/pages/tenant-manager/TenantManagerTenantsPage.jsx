@@ -11,6 +11,7 @@ import {
   exportTenantsToExcel,
 } from '../../data/tenantsData';
 import { downloadFileAPI } from '../../services/api';
+import { fetchCustomersFromAPI } from '../../services/apiData';
 
 export function TenantManagerTenantsPage() {
   const navigate = useNavigate();
@@ -28,7 +29,27 @@ export function TenantManagerTenantsPage() {
   });
 
   useEffect(() => {
-    setTenants(getSavedTenants());
+    const loadTenants = async () => {
+      const customers = await fetchCustomersFromAPI();
+
+      if (Array.isArray(customers)) {
+        setTenants(
+          customers.map((customer) => ({
+            ...customer,
+            id: customer._id || customer.id,
+            name: customer.fullName || customer.name,
+            email1: customer.email,
+            phone1: customer.phone,
+            property: customer.propertyName || customer.property || '',
+            tenancies: customer.tenancies || [],
+          }))
+        );
+      } else {
+        setTenants(getSavedTenants());
+      }
+    };
+
+    loadTenants();
   }, []);
 
   // Extract unique property names for dropdown

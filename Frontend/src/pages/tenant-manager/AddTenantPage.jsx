@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { AppLayout } from '../../components/layout/AppLayout';
 import { ArrowLeft, Save, Plus, UserCheck, Edit } from 'lucide-react';
 import { demoContacts, saveTenant } from '../../data/tenantsData';
+import { createCustomerAPI } from '../../services/apiData';
 
 export function AddTenantPage() {
   const navigate = useNavigate();
@@ -10,7 +11,7 @@ export function AddTenantPage() {
   const [newContactName, setNewContactName] = useState('');
   const [isAddingNew, setIsAddingNew] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const nameToSave = isAddingNew ? newContactName : selectedContact;
 
@@ -55,8 +56,20 @@ export function AddTenantPage() {
       ],
     };
 
-    saveTenant(newTenant);
-    navigate('/tenant-manager/tenants');
+    try {
+      await createCustomerAPI({
+        name: newTenant.name,
+        phone: newTenant.phone1,
+        email: newTenant.email1,
+        address: newTenant.street,
+        city: newTenant.city,
+        notes: newTenant.notes,
+      });
+      navigate('/tenant-manager/tenants');
+    } catch (error) {
+      saveTenant(newTenant);
+      alert(`Tenant could not be saved to the backend: ${error.message}`);
+    }
   };
 
   return (
