@@ -43,12 +43,15 @@ const paymentSchema = new mongoose.Schema(
     billingMonth: {
       type: Number,
       required: [true, 'Billing month is required'],
-      min: 1,
+      // 0 is a special marker for Opening Balance records (not a real month)
+      min: 0,
       max: 12,
     },
     billingYear: {
       type: Number,
       required: [true, 'Billing year is required'],
+      // 0 is a special marker for Opening Balance records
+      min: 0,
     },
     status: {
       type: String,
@@ -86,7 +89,10 @@ paymentSchema.index({ tenancyId: 1 });
 paymentSchema.index({ status: 1 });
 paymentSchema.index({ dueDate: 1 });
 paymentSchema.index({ billingMonth: 1, billingYear: 1 });
-paymentSchema.index({ tenancyId: 1, billingMonth: 1, billingYear: 1, paymentType: 1 }, { unique: true });
+paymentSchema.index(
+  { tenancyId: 1, billingMonth: 1, billingYear: 1, paymentType: 1 },
+  { unique: true, partialFilterExpression: { billingMonth: { $gt: 0 } } }
+);
 
 const Payment = mongoose.model('Payment', paymentSchema);
 

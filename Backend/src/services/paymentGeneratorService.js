@@ -81,6 +81,7 @@ async function generateMonthlyPayments() {
             tenancyId: tenancy._id,
             billingMonth: m,
             billingYear: y,
+            paymentType: { $ne: 'Opening Balance' },
           });
 
           if (!existingPayment) {
