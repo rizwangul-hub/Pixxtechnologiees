@@ -301,7 +301,7 @@ export default function LandlordDetailPage() {
               </div>
               <div>
                 <h2 className="text-base font-bold text-gray-900">Property Financing & Mortgages</h2>
-                <p className="text-xs text-gray-500">Overview of mortgage loans registered against this landlord's properties</p>
+                <p className="text-xs text-gray-500">Individual & Collective mortgage facilities registered for this landlord</p>
               </div>
             </div>
 
@@ -318,62 +318,149 @@ export default function LandlordDetailPage() {
               <p className="text-xs font-semibold">No mortgages currently recorded for this landlord's properties.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-gray-100 text-gray-600 font-extrabold uppercase text-[10px] tracking-wider">
-                  <tr>
-                    <th className="py-2.5 px-3">Property</th>
-                    <th className="py-2.5 px-3">Lender / Bank</th>
-                    <th className="py-2.5 px-3">Original Loan</th>
-                    <th className="py-2.5 px-3">Outstanding Balance</th>
-                    <th className="py-2.5 px-3">Monthly Payment</th>
-                    <th className="py-2.5 px-3">Next Due Date</th>
-                    <th className="py-2.5 px-3">Status</th>
-                    <th className="py-2.5 px-3 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
-                  {landlordMortgages.map((m) => (
-                    <tr key={m._id || m.id} className="hover:bg-gray-50">
-                      <td className="py-3 px-3 font-bold text-gray-900">
-                        {m.propertyId?.name || 'Property'}
-                      </td>
-                      <td className="py-3 px-3 text-gray-800">{m.lenderName}</td>
-                      <td className="py-3 px-3 font-mono font-bold text-gray-800">
-                        £{(m.originalLoanAmount || 0).toLocaleString()}
-                      </td>
-                      <td className="py-3 px-3 font-mono font-black text-amber-900">
-                        £{(m.currentOutstandingBalance || 0).toLocaleString()}
-                      </td>
-                      <td className="py-3 px-3 font-mono font-bold text-gray-900">
-                        £{(m.monthlyPayment || 0).toLocaleString()}
-                      </td>
-                      <td className="py-3 px-3 text-gray-600">
-                        {m.nextPaymentDate ? new Date(m.nextPaymentDate).toLocaleDateString() : '-'}
-                      </td>
-                      <td className="py-3 px-3">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                            m.status === 'Active'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}
-                        >
-                          {m.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <Link
-                          to={`/mortgages/${m._id || m.id}`}
-                          className="text-xs font-bold text-[#04A26F] hover:underline"
-                        >
-                          View Details
-                        </Link>
-                      </td>
+            <div className="space-y-4">
+              {/* Landlord Mortgage KPI summary cards */}
+              {(() => {
+                const activeM = landlordMortgages.filter((m) => m.status === 'Active');
+                const indCount = activeM.filter((m) => (m.mortgageType || 'Individual Property') === 'Individual Property').length;
+                const colCount = activeM.filter((m) => m.mortgageType === 'Collective / Group').length;
+                const totalDebt = activeM.reduce((sum, m) => sum + (Number(m.currentOutstandingBalance) || 0), 0);
+                const totalMonthly = activeM.reduce((sum, m) => sum + (Number(m.monthlyPayment) || 0), 0);
+
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                        Mortgage Facilities
+                      </span>
+                      <p className="text-lg font-black text-gray-900 mt-0.5">
+                        {activeM.length} Active {activeM.length === 1 ? 'Facility' : 'Facilities'}
+                      </p>
+                      <p className="text-[11px] text-gray-500">
+                        {indCount} Individual • {colCount} Collective
+                      </p>
+                    </div>
+
+                    <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                        Total Outstanding Debt
+                      </span>
+                      <p className="text-lg font-black text-amber-900 mt-0.5">
+                        £{totalDebt.toLocaleString()}
+                      </p>
+                      <p className="text-[11px] text-gray-500">
+                        Calculated strictly once per facility
+                      </p>
+                    </div>
+
+                    <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                        Total Monthly Outflow
+                      </span>
+                      <p className="text-lg font-black text-emerald-800 mt-0.5">
+                        £{totalMonthly.toLocaleString()}/mo
+                      </p>
+                      <p className="text-[11px] text-gray-500">
+                        Combined active mortgage payments
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-gray-100 text-gray-600 font-extrabold uppercase text-[10px] tracking-wider">
+                    <tr>
+                      <th className="py-2.5 px-3">Facility / Property</th>
+                      <th className="py-2.5 px-3">Type</th>
+                      <th className="py-2.5 px-3">Secured Properties</th>
+                      <th className="py-2.5 px-3">Lender / Bank</th>
+                      <th className="py-2.5 px-3">Facility Loan</th>
+                      <th className="py-2.5 px-3">Outstanding</th>
+                      <th className="py-2.5 px-3">Monthly Payment</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3 text-right">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
+                    {landlordMortgages.map((m) => {
+                      const isCollective = m.mortgageType === 'Collective / Group' || (m.properties && m.properties.length > 1);
+                      const securedProps = (m.properties || [])
+                        .filter((p) => p.status !== 'Released')
+                        .map((p) => p.propertyId?.name || 'Property');
+                      const primaryName = m.propertyId?.name || securedProps[0] || 'Unassigned';
+
+                      return (
+                        <tr key={m._id || m.id} className="hover:bg-gray-50">
+                          <td className="py-3 px-3 font-bold text-gray-900">
+                            <div>
+                              <span>{isCollective ? (m.mortgageReference || 'Collective Facility') : primaryName}</span>
+                              {m.mortgageAccountNumber && (
+                                <span className="block font-mono font-normal text-[10px] text-gray-400">
+                                  Acc: {m.mortgageAccountNumber}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                isCollective
+                                  ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                  : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                              }`}
+                            >
+                              {isCollective ? 'Collective' : 'Individual'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-gray-800">
+                            {isCollective ? (
+                              <div>
+                                <span className="font-extrabold text-purple-900">{securedProps.length} Properties</span>
+                                <p className="text-[10px] text-gray-500 max-w-xs truncate" title={securedProps.join(', ')}>
+                                  {securedProps.join(', ') || 'None'}
+                                </p>
+                              </div>
+                            ) : (
+                              <span>{primaryName}</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-gray-800">{m.lenderName}</td>
+                          <td className="py-3 px-3 font-mono font-bold text-gray-800">
+                            £{(m.originalLoanAmount || 0).toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3 font-mono font-black text-amber-900">
+                            £{(m.currentOutstandingBalance || 0).toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3 font-mono font-bold text-gray-900">
+                            £{(m.monthlyPayment || 0).toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                m.status === 'Active'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-gray-100 text-gray-600'
+                              }`}
+                            >
+                              {m.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <Link
+                              to={`/mortgages/${m._id || m.id}`}
+                              className="text-xs font-bold text-[#04A26F] hover:underline"
+                            >
+                              View Details
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

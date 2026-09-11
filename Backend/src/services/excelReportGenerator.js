@@ -1168,43 +1168,315 @@ async function generateFinancialSummaryExcel(data) {
 }
 
 async function generateMortgageExcelWorkbook(data) {
-  return renderExcelReportWorkbook({
-    reportTitle: 'MORTGAGE & FINANCING REPORT',
-    generatedAt: formatUKDate(data.generatedAt),
-    periodText: 'Active Mortgages',
-    summaryKPIs: [
-      { label: 'Original Borrowing', numValue: data.summary.totalOriginalLoan, value: data.summary.totalOriginalLoanFormatted },
-      { label: 'Current Outstanding Debt', numValue: data.summary.totalOutstanding, value: data.summary.totalOutstandingFormatted },
-      { label: 'Monthly Commitments', numValue: data.summary.totalMonthlyPayments, value: data.summary.totalMonthlyPaymentsFormatted },
-    ],
-    columns: [
-      { key: 'propertyName', label: 'Property', width: 24 },
-      { key: 'lenderName', label: 'Lender', width: 20 },
-      { key: 'accountNo', label: 'Account #', width: 18 },
-      { key: 'loanFormatted', numKey: 'loan', label: 'Original Loan (£)', align: 'right', isCurrency: true, width: 18 },
-      { key: 'outstandingFormatted', numKey: 'outstanding', label: 'Current Debt (£)', align: 'right', isCurrency: true, width: 18 },
-      { key: 'monthlyFormatted', numKey: 'monthly', label: 'Monthly Payment (£)', align: 'right', isCurrency: true, width: 18 },
-      { key: 'status', label: 'Status', width: 14 },
-    ],
-    rows: (data.rows || []).map((r) => ({
-      propertyName: r.propertyName,
-      lenderName: r.lenderName,
-      accountNo: r.mortgageAccountNumber || '-',
-      loan: r.originalLoanAmount,
-      loanFormatted: r.originalLoanAmountFormatted,
-      outstanding: r.currentOutstandingBalance,
-      outstandingFormatted: r.currentOutstandingBalanceFormatted,
-      monthly: r.monthlyPayment,
-      monthlyFormatted: r.monthlyPaymentFormatted,
-      status: r.status,
-    })),
-    totalRow: {
-      propertyName: 'TOTALS',
-      loan: data.summary.totalOriginalLoan,
-      outstanding: data.summary.totalOutstanding,
-      monthly: data.summary.totalMonthlyPayments,
-    },
+  const MortgagePayment = require('../models/MortgagePayment');
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'PixxTechnologies Property Management';
+  workbook.created = new Date();
+
+  const generatedDateStr = formatUKDate(data.generatedAt || new Date());
+  const rows = data.rows || [];
+  const summary = data.summary || {};
+
+  // Helper for sheet header
+  const applySheetHeader = (sheet, title, colCount) => {
+    sheet.mergeCells(1, 1, 1, colCount);
+    const titleCell = sheet.getCell('A1');
+    titleCell.value = `PIXXTECHNOLOGIES - ${title.toUpperCase()}`;
+    titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF04A26F' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(1).height = 32;
+
+    sheet.getCell('A3').value = 'Report Generated:';
+    sheet.getCell('B3').value = generatedDateStr;
+    sheet.getCell('A3').font = { bold: true, size: 10, color: { argb: 'FF475569' } };
+    sheet.getCell('B3').font = { size: 10, color: { argb: 'FF0F172A' } };
+
+    sheet.getCell('D3').value = 'Report Scope:';
+    sheet.getCell('E3').value = 'Active & Portfolio Mortgages';
+    sheet.getCell('D3').font = { bold: true, size: 10, color: { argb: 'FF475569' } };
+    sheet.getCell('E3').font = { size: 10, color: { argb: 'FF0F172A' } };
+  };
+
+  // ----------------------------------------------------
+  // SHEET 1: MORTGAGE SUMMARY
+  // ----------------------------------------------------
+  const sheetSummary = workbook.addWorksheet('Mortgage Summary');
+  applySheetHeader(sheetSummary, 'Mortgage Portfolio Executive Summary', 5);
+
+  sheetSummary.mergeCells('A5', 'E5');
+  const kpiBanner = sheetSummary.getCell('A5');
+  kpiBanner.value = 'KEY FINANCIAL PORTFOLIO METRICS';
+  kpiBanner.font = { bold: true, size: 11, color: { argb: 'FF0F172A' } };
+  kpiBanner.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+  sheetSummary.getRow(5).height = 24;
+
+  const kpiItems = [
+    { label: 'Total Mortgage Facilities', val: rows.length, isNum: true },
+    { label: 'Individual Property Mortgages', val: rows.filter((r) => r.mortgageType !== 'Collective / Group').length, isNum: true },
+    { label: 'Collective / Group Mortgages', val: rows.filter((r) => r.mortgageType === 'Collective / Group').length, isNum: true },
+    { label: 'Total Original Facilities Borrowing', val: summary.totalOriginalLoan || 0, isCur: true },
+    { label: 'Current Total Outstanding Debt', val: summary.totalOutstanding || 0, isCur: true },
+    { label: 'Total Monthly Commitments', val: summary.totalMonthlyPayments || 0, isCur: true },
+  ];
+
+  let sumRow = 6;
+  kpiItems.forEach((item) => {
+    sheetSummary.getCell(`A${sumRow}`).value = item.label;
+    sheetSummary.getCell(`A${sumRow}`).font = { bold: true, size: 10, color: { argb: 'FF475569' } };
+    const vCell = sheetSummary.getCell(`C${sumRow}`);
+    vCell.value = item.val;
+    if (item.isCur) {
+      vCell.numFmt = CURRENCY_FORMAT;
+      vCell.font = { bold: true, size: 11, color: { argb: 'FF04A26F' } };
+    } else {
+      vCell.font = { bold: true, size: 11, color: { argb: 'FF0F172A' } };
+    }
+    sumRow++;
   });
+
+  sheetSummary.columns = [
+    { width: 34 },
+    { width: 5 },
+    { width: 25 },
+    { width: 16 },
+    { width: 28 },
+  ];
+
+  // ----------------------------------------------------
+  // SHEET 2: MORTGAGE FACILITIES
+  // ----------------------------------------------------
+  const sheetFacilities = workbook.addWorksheet('Mortgage Facilities');
+  applySheetHeader(sheetFacilities, 'Mortgage Facilities Master List', 11);
+
+  const facCols = [
+    { key: 'ref', label: 'Facility Ref', width: 18 },
+    { key: 'type', label: 'Mortgage Type', width: 20 },
+    { key: 'landlord', label: 'Landlord', width: 24 },
+    { key: 'lender', label: 'Lender / Bank', width: 22 },
+    { key: 'securedProps', label: 'Secured Properties', width: 34 },
+    { key: 'origAmount', label: 'Facility Amount (£)', width: 20, isCur: true },
+    { key: 'balance', label: 'Outstanding (£)', width: 20, isCur: true },
+    { key: 'monthly', label: 'Monthly (£)', width: 18, isCur: true },
+    { key: 'rate', label: 'Interest Rate (%)', width: 16 },
+    { key: 'nextDue', label: 'Next Due Date', width: 16 },
+    { key: 'status', label: 'Status', width: 14 },
+  ];
+
+  let facRow = 6;
+  const facHeaderRow = sheetFacilities.getRow(facRow);
+  facCols.forEach((col, i) => {
+    const c = facHeaderRow.getCell(i + 1);
+    c.value = col.label;
+    c.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+    c.alignment = { horizontal: col.isCur ? 'right' : 'left', vertical: 'middle' };
+  });
+  facHeaderRow.height = 24;
+  facRow++;
+
+  rows.forEach((r) => {
+    const rowObj = sheetFacilities.getRow(facRow);
+    rowObj.getCell(1).value = r.mortgageReference || r.mortgageAccountNumber || '-';
+    rowObj.getCell(2).value = r.mortgageType || 'Individual Property';
+    rowObj.getCell(3).value = r.landlordName || 'N/A';
+    rowObj.getCell(4).value = r.lenderName || '';
+    rowObj.getCell(5).value = r.propertyName || 'Property';
+
+    const c6 = rowObj.getCell(6);
+    c6.value = Number(r.originalLoanAmount) || 0;
+    c6.numFmt = CURRENCY_FORMAT;
+
+    const c7 = rowObj.getCell(7);
+    c7.value = Number(r.currentOutstandingBalance) || 0;
+    c7.numFmt = CURRENCY_FORMAT;
+
+    const c8 = rowObj.getCell(8);
+    c8.value = Number(r.monthlyPayment) || 0;
+    c8.numFmt = CURRENCY_FORMAT;
+
+    rowObj.getCell(9).value = r.interestRate ? `${r.interestRate}%` : '0%';
+    rowObj.getCell(10).value = r.nextPaymentDate || '-';
+    rowObj.getCell(11).value = r.status || 'Active';
+
+    rowObj.height = 20;
+    facRow++;
+  });
+
+  // Totals row
+  const facTotalRow = sheetFacilities.getRow(facRow);
+  facTotalRow.getCell(1).value = 'TOTALS';
+  facTotalRow.getCell(1).font = { bold: true };
+  const t6 = facTotalRow.getCell(6);
+  t6.value = Number(summary.totalOriginalLoan) || 0;
+  t6.numFmt = CURRENCY_FORMAT;
+  t6.font = { bold: true };
+  const t7 = facTotalRow.getCell(7);
+  t7.value = Number(summary.totalOutstanding) || 0;
+  t7.numFmt = CURRENCY_FORMAT;
+  t7.font = { bold: true };
+  const t8 = facTotalRow.getCell(8);
+  t8.value = Number(summary.totalMonthlyPayments) || 0;
+  t8.numFmt = CURRENCY_FORMAT;
+  t8.font = { bold: true };
+  facTotalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+  sheetFacilities.columns = facCols.map((c) => ({ width: c.width }));
+
+  // ----------------------------------------------------
+  // SHEET 3: SECURED PROPERTIES
+  // ----------------------------------------------------
+  const sheetProps = workbook.addWorksheet('Secured Properties');
+  applySheetHeader(sheetProps, 'Secured Properties & Allocations', 8);
+
+  const propCols = [
+    { label: 'Facility Ref', width: 18 },
+    { label: 'Facility Type', width: 20 },
+    { label: 'Lender', width: 20 },
+    { label: 'Property Name', width: 28 },
+    { label: 'Property Address', width: 34 },
+    { label: 'Property Allocation (£)', width: 24, isCur: true },
+    { label: 'Secured Date', width: 16 },
+    { label: 'Relationship Status', width: 18 },
+  ];
+
+  let pRow = 6;
+  const pHeaderRow = sheetProps.getRow(pRow);
+  propCols.forEach((col, i) => {
+    const c = pHeaderRow.getCell(i + 1);
+    c.value = col.label;
+    c.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+    c.alignment = { horizontal: col.isCur ? 'right' : 'left', vertical: 'middle' };
+  });
+  pHeaderRow.height = 24;
+  pRow++;
+
+  rows.forEach((r) => {
+    const securedList = r.securedProperties && r.securedProperties.length > 0
+      ? r.securedProperties
+      : [{ name: r.propertyName, address: r.propertyAddress, allocatedAmount: r.originalLoanAmount, status: 'Active' }];
+
+    securedList.forEach((sp) => {
+      const rowObj = sheetProps.getRow(pRow);
+      rowObj.getCell(1).value = r.mortgageReference || r.mortgageAccountNumber || '-';
+      rowObj.getCell(2).value = r.mortgageType || 'Individual Property';
+      rowObj.getCell(3).value = r.lenderName || '';
+      rowObj.getCell(4).value = sp.name || 'Property';
+      rowObj.getCell(5).value = sp.address || '-';
+
+      const aCell = rowObj.getCell(6);
+      if (sp.allocatedAmount) {
+        aCell.value = Number(sp.allocatedAmount);
+        aCell.numFmt = CURRENCY_FORMAT;
+      } else {
+        aCell.value = 'Not Allocated';
+      }
+
+      rowObj.getCell(7).value = r.startDate || '-';
+      rowObj.getCell(8).value = sp.status || 'Active';
+      rowObj.height = 20;
+      pRow++;
+    });
+  });
+
+  sheetProps.columns = propCols.map((c) => ({ width: c.width }));
+
+  // ----------------------------------------------------
+  // SHEET 4: MORTGAGE PAYMENTS
+  // ----------------------------------------------------
+  const sheetPayments = workbook.addWorksheet('Mortgage Payments');
+  applySheetHeader(sheetPayments, 'Mortgage Facility Payment Ledger', 9);
+
+  const payCols = [
+    { label: 'Facility Ref', width: 18 },
+    { label: 'Payment Date', width: 16 },
+    { label: 'Lender', width: 20 },
+    { label: 'Total Paid (£)', width: 18, isCur: true },
+    { label: 'Principal Portion (£)', width: 20, isCur: true },
+    { label: 'Interest Portion (£)', width: 20, isCur: true },
+    { label: 'Remaining Balance (£)', width: 22, isCur: true },
+    { label: 'Payment Method', width: 18 },
+    { label: 'Reference / Notes', width: 28 },
+  ];
+
+  let pyRow = 6;
+  const pyHeaderRow = sheetPayments.getRow(pyRow);
+  payCols.forEach((col, i) => {
+    const c = pyHeaderRow.getCell(i + 1);
+    c.value = col.label;
+    c.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+    c.alignment = { horizontal: col.isCur ? 'right' : 'left', vertical: 'middle' };
+  });
+  pyHeaderRow.height = 24;
+  pyRow++;
+
+  const mIds = rows.map((r) => r.mortgageId).filter(Boolean);
+  const paymentLogs = await MortgagePayment.find({ mortgageId: { $in: mIds } })
+    .populate('mortgageId', 'mortgageReference mortgageAccountNumber lenderName')
+    .sort({ paymentDate: -1 });
+
+  let totalPaidSum = 0;
+  let totalPrinSum = 0;
+  let totalIntSum = 0;
+
+  paymentLogs.forEach((p) => {
+    const rowObj = sheetPayments.getRow(pyRow);
+    const mtgRef = p.mortgageId?.mortgageReference || p.mortgageId?.mortgageAccountNumber || '-';
+    const lender = p.mortgageId?.lenderName || '-';
+
+    rowObj.getCell(1).value = mtgRef;
+    rowObj.getCell(2).value = p.paymentDate ? formatUKDate(p.paymentDate) : '-';
+    rowObj.getCell(3).value = lender;
+
+    const c4 = rowObj.getCell(4);
+    c4.value = Number(p.totalPayment) || 0;
+    c4.numFmt = CURRENCY_FORMAT;
+    totalPaidSum += c4.value;
+
+    const c5 = rowObj.getCell(5);
+    c5.value = Number(p.principalAmount) || 0;
+    c5.numFmt = CURRENCY_FORMAT;
+    totalPrinSum += c5.value;
+
+    const c6 = rowObj.getCell(6);
+    c6.value = Number(p.interestAmount) || 0;
+    c6.numFmt = CURRENCY_FORMAT;
+    totalIntSum += c6.value;
+
+    const c7 = rowObj.getCell(7);
+    c7.value = Number(p.remainingBalance) || 0;
+    c7.numFmt = CURRENCY_FORMAT;
+
+    rowObj.getCell(8).value = p.paymentMethod || 'Bank Transfer';
+    rowObj.getCell(9).value = p.reference ? `${p.reference} ${p.notes || ''}`.trim() : (p.notes || '-');
+
+    rowObj.height = 20;
+    pyRow++;
+  });
+
+  // Totals for payments
+  const pyTotalRow = sheetPayments.getRow(pyRow);
+  pyTotalRow.getCell(1).value = 'TOTALS';
+  pyTotalRow.getCell(1).font = { bold: true };
+  const pt4 = pyTotalRow.getCell(4);
+  pt4.value = totalPaidSum;
+  pt4.numFmt = CURRENCY_FORMAT;
+  pt4.font = { bold: true };
+  const pt5 = pyTotalRow.getCell(5);
+  pt5.value = totalPrinSum;
+  pt5.numFmt = CURRENCY_FORMAT;
+  pt5.font = { bold: true };
+  const pt6 = pyTotalRow.getCell(6);
+  pt6.value = totalIntSum;
+  pt6.numFmt = CURRENCY_FORMAT;
+  pt6.font = { bold: true };
+  pyTotalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+
+  sheetPayments.columns = payCols.map((c) => ({ width: c.width }));
+
+  return await workbook.xlsx.writeBuffer();
 }
 
 module.exports = {

@@ -1004,6 +1004,43 @@ export async function recordMortgagePaymentAPI(mortgageId, paymentData) {
   }
 }
 
+export async function addPropertyToMortgageAPI(mortgageId, propertyData) {
+  try {
+    const res = await fetchAPI(`/mortgages/${mortgageId}/properties`, {
+      method: 'POST',
+      body: JSON.stringify(propertyData),
+    });
+    return res.data;
+  } catch (e) {
+    console.warn('[API Warning] Add property to mortgage error:', e.message);
+    throw e;
+  }
+}
+
+export async function removePropertyFromMortgageAPI(mortgageId, propertyId) {
+  try {
+    const res = await fetchAPI(`/mortgages/${mortgageId}/properties/${propertyId}`, {
+      method: 'DELETE',
+    });
+    return res;
+  } catch (e) {
+    console.warn('[API Warning] Remove property from mortgage error:', e.message);
+    throw e;
+  }
+}
+
+export async function fetchPropertyMortgagesAPI(propertyId) {
+  try {
+    const res = await fetchAPI(`/mortgages/property/${propertyId}`);
+    if (res.success && Array.isArray(res.data)) {
+      return res.data;
+    }
+  } catch (e) {
+    console.warn('[API Warning] Fetch property mortgages error:', e.message);
+  }
+  return [];
+}
+
 export async function fetchMortgageReportAPI(params = {}) {
   try {
     const query = new URLSearchParams(params).toString();

@@ -11,6 +11,7 @@ import {
   UserCheck,
   AlertTriangle,
   Landmark,
+  Layers,
   User,
   Users,
   Calendar,
@@ -43,6 +44,7 @@ export function PropertyDetailPage() {
   const [property, setProperty] = useState(null);
   const [tenancy, setTenancy] = useState(null);
   const [mortgage, setMortgage] = useState(null);
+  const [mortgagesList, setMortgagesList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [endingTenancy, setEndingTenancy] = useState(false);
@@ -74,6 +76,10 @@ export function PropertyDetailPage() {
 
       if (Array.isArray(mortgages) && mortgages.length > 0) {
         setMortgage(mortgages[0]);
+        setMortgagesList(mortgages);
+      } else {
+        setMortgage(null);
+        setMortgagesList([]);
       }
     } catch (err) {
       console.warn('[Property Detail Load Notice]', err.message);
@@ -512,66 +518,144 @@ export function PropertyDetailPage() {
                 </div>
               </div>
 
-              {mortgage ? (
-                <Link
-                  to={`/mortgages/${mortgage._id || mortgage.id}`}
-                  className="text-xs font-bold text-[#04A26F] hover:underline"
-                >
-                  View Mortgage &rarr;
-                </Link>
-              ) : (
+              <div className="flex items-center gap-2">
+                {mortgagesList.length > 0 && (
+                  <Link
+                    to="/mortgages"
+                    className="text-xs font-bold text-[#04A26F] hover:underline"
+                  >
+                    All Mortgages &rarr;
+                  </Link>
+                )}
                 <Link
                   to={`/mortgages?propertyId=${targetPropertyId}`}
                   className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
                 >
                   + Add Mortgage
                 </Link>
-              )}
+              </div>
             </div>
 
-            {mortgage ? (
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-slate-900 text-sm">{mortgage.lenderName}</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    {mortgage.status || 'Active'}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Original Loan</span>
-                    <span className="font-mono font-bold text-slate-800">
-                      {formatCurrency(mortgage.originalLoanAmount)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Outstanding</span>
-                    <span className="font-mono font-black text-amber-900">
-                      {formatCurrency(mortgage.currentOutstandingBalance)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Monthly Pay</span>
-                    <span className="font-mono font-bold text-slate-900">
-                      {formatCurrency(mortgage.monthlyPayment)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Interest Rate</span>
-                    <span className="font-bold text-slate-800">{mortgage.interestRate ? `${mortgage.interestRate}%` : '0%'}</span>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Next Due Date</span>
-                    <span className="font-bold text-slate-800">
-                      {mortgage.nextPaymentDate ? new Date(mortgage.nextPaymentDate).toLocaleDateString() : '—'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ) : (
+            {mortgagesList.length === 0 ? (
               <div className="p-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
                 <p className="text-xs font-semibold text-slate-500">No mortgage recorded for this property.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {mortgagesList.map((m) => {
+                  const isCollective = m.mortgageType === 'Collective / Group' || (m.properties && m.properties.length > 1);
+                  const curPropId = (property?._id || property?.id || propertyId)?.toString();
+                  const allocItem = (m.properties || []).find(
+                    (p) => (p.propertyId?._id || p.propertyId?.id || p.propertyId)?.toString() === curPropId
+                  );
+                  const otherCount = (m.properties || []).filter(
+                    (p) => p.status !== 'Released' && (p.propertyId?._id || p.propertyId?.id || p.propertyId)?.toString() !== curPropId
+                  ).length;
+                  const allocAmount = Number(allocItem?.allocatedAmount) || 0;
+
+                  return (
+                    <div
+                      key={m._id || m.id}
+                      className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3 text-xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-slate-900 text-sm">
+                              {m.lenderName}
+                            </span>
+                            {m.mortgageReference && (
+                              <span className="font-mono text-[10px] text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                                {m.mortgageReference}
+                              </span>
+                            )}
+                          </div>
+                          {isCollective ? (
+                            <p className="text-[11px] text-purple-700 font-medium mt-0.5">
+                              Collective Facility {otherCount > 0 ? `• Secured alongside ${otherCount} other ${otherCount === 1 ? 'property' : 'properties'}` : ''}
+                            </p>
+                          ) : (
+                            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                              Individual Property Mortgage
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                              isCollective
+                                ? 'bg-purple-100 text-purple-800'
+                                : 'bg-indigo-100 text-indigo-800'
+                            }`}
+                          >
+                            {isCollective ? 'Collective Facility' : 'Individual'}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {m.status || 'Active'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
+                        {isCollective && (
+                          <div>
+                            <span className="text-[10px] text-purple-600 font-bold block uppercase">Property Allocation</span>
+                            <span className="font-mono font-black text-purple-900">
+                              {allocAmount > 0 ? formatCurrency(allocAmount) : 'General Security'}
+                            </span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold block uppercase">
+                            {isCollective ? 'Facility Total Loan' : 'Original Loan'}
+                          </span>
+                          <span className="font-mono font-bold text-slate-800">
+                            {formatCurrency(m.originalLoanAmount)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold block uppercase">
+                            {isCollective ? 'Facility Outstanding' : 'Outstanding'}
+                          </span>
+                          <span className="font-mono font-black text-amber-900">
+                            {formatCurrency(m.currentOutstandingBalance)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold block uppercase">Monthly Payment</span>
+                          <span className="font-mono font-bold text-slate-900">
+                            {formatCurrency(m.monthlyPayment)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold block uppercase">Interest Rate</span>
+                          <span className="font-bold text-slate-800">{m.interestRate ? `${m.interestRate}%` : '0%'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold block uppercase">Next Due Date</span>
+                          <span className="font-bold text-slate-800">
+                            {m.nextPaymentDate ? new Date(m.nextPaymentDate).toLocaleDateString() : '—'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px]">
+                        <span className="text-slate-400">
+                          {isCollective
+                            ? 'Single facility liability applies across all secured properties'
+                            : 'Direct property mortgage'}
+                        </span>
+                        <Link
+                          to={`/mortgages/${m._id || m.id}`}
+                          className="font-bold text-[#04A26F] hover:underline"
+                        >
+                          View Facility Details &rarr;
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

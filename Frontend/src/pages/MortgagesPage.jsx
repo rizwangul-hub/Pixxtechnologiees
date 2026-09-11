@@ -4,22 +4,21 @@ import {
   Landmark,
   Plus,
   Search,
-  Filter,
   Building2,
   UserCheck,
   CreditCard,
   Calendar,
-  Eye,
   Edit,
   Trash2,
   DollarSign,
   Loader2,
   AlertCircle,
   TrendingDown,
-  CheckCircle,
   X,
-  FileText,
-  Upload,
+  Layers,
+  CheckSquare,
+  Square,
+  Info,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout/AppLayout';
 import {
@@ -49,6 +48,7 @@ export function MortgagesPage() {
   const [selectedProperty, setSelectedProperty] = useState(searchParams.get('propertyId') || '');
   const [selectedLandlord, setSelectedLandlord] = useState(searchParams.get('landlordId') || '');
   const [selectedStatus, setSelectedStatus] = useState('All');
+  const [selectedMortgageType, setSelectedMortgageType] = useState('All');
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -57,11 +57,15 @@ export function MortgagesPage() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentTargetMortgage, setPaymentTargetMortgage] = useState(null);
 
-  // Form states for Add / Edit Mortgage
+  // Form state for Add / Edit Mortgage Facility
   const [formData, setFormData] = useState({
-    propertyId: '',
-    landlordName: '',
+    landlordId: '',
+    mortgageType: 'Individual Property', // 'Individual Property' | 'Collective / Group'
+    propertyId: '', // single property for Individual
+    selectedPropertyIds: [], // multiple properties for Collective
+    allocations: {}, // propertyId -> allocatedAmount
     lenderName: '',
+    mortgageReference: '',
     mortgageAccountNumber: '',
     originalLoanAmount: '',
     currentOutstandingBalance: '',
@@ -96,7 +100,7 @@ export function MortgagesPage() {
 
   useEffect(() => {
     loadData();
-  }, [selectedProperty, selectedLandlord, selectedStatus]);
+  }, [selectedProperty, selectedLandlord, selectedStatus, selectedMortgageType]);
 
   const loadData = async () => {
     setLoading(true);
@@ -106,6 +110,7 @@ export function MortgagesPage() {
           propertyId: selectedProperty,
           landlordId: selectedLandlord,
           status: selectedStatus,
+          mortgageType: selectedMortgageType,
         }),
         fetchMortgageSummaryAPI(),
         fetchPropertiesFromAPI(),
@@ -129,44 +134,37 @@ export function MortgagesPage() {
     const q = searchQuery.toLowerCase();
     const lender = (m.lenderName || '').toLowerCase();
     const ref = (m.mortgageAccountNumber || '').toLowerCase();
+    const mRef = (m.mortgageReference || '').toLowerCase();
     const propName = (m.propertyId?.name || '').toLowerCase();
     const landlordName = (m.landlordId?.fullName || '').toLowerCase();
-    return lender.includes(q) || ref.includes(q) || propName.includes(q) || landlordName.includes(q);
+    const securedNames = (m.properties || [])
+      .map((p) => (p.propertyId?.name || '').toLowerCase())
+      .join(' ');
+
+    return (
+      lender.includes(q) ||
+      ref.includes(q) ||
+      mRef.includes(q) ||
+      propName.includes(q) ||
+      securedNames.includes(q) ||
+      landlordName.includes(q)
+    );
   });
 
-  // Handle Property Select in Add/Edit Form to auto-populate Landlord
-  const handlePropertyChangeInForm = (propId) => {
-    const selectedProp = properties.find((p) => (p._id || p.id) === propId);
-    let landlordName = '';
-    if (selectedProp) {
-      if (selectedProp.landlordId?.fullName) {
-        landlordName = selectedProp.landlordId.fullName;
-      } else if (selectedProp.landlordId) {
-        const foundL = landlords.find((l) => (l._id || l.id) === selectedProp.landlordId);
-        if (foundL) landlordName = foundL.fullName;
-      }
-    }
-
-    setFormData((prev) => ({
-      ...prev,
-      propertyId: propId,
-      landlordName: landlordName || (selectedProp ? 'Landlord Assigned' : ''),
-    }));
-  };
+  // Get available properties for the currently selected landlord in the form
+  const landlordProperties = properties.filter((p) => {
+    if (!formData.landlordId) return false;
+    const lId = p.landlordId?._id || p.landlordId;
+    return lId?.toString() === formData.landlordId.toString();
+  });
 
   // Open Add Modal
   const handleOpenAddModal = () => {
     setEditingMortgage(null);
     setFormError('');
-    const defaultProp = properties[0];
-    let lName = '';
-    if (defaultProp) {
-      if (defaultProp.landlordId?.fullName) lName = defaultProp.landlordId.fullName;
-      else {
-        const found = landlords.find((l) => (l._id || l.id) === defaultProp.landlordId);
-        if (found) lName = found.fullName;
-      }
-    }
+
+    const defaultLandlord = landlords[0];
+    const defLandlordId = defaultLandlord ? (defaultLandlord._id || defaultLandlord.id) : '';
 
     const todayStr = new Date().toISOString().split('T')[0];
     const nextMonth = new Date();
@@ -174,9 +172,13 @@ export function MortgagesPage() {
     const nextMonthStr = nextMonth.toISOString().split('T')[0];
 
     setFormData({
-      propertyId: defaultProp ? (defaultProp._id || defaultProp.id) : '',
-      landlordName: lName,
+      landlordId: defLandlordId,
+      mortgageType: 'Individual Property',
+      propertyId: '',
+      selectedPropertyIds: [],
+      allocations: {},
       lenderName: '',
+      mortgageReference: '',
       mortgageAccountNumber: '',
       originalLoanAmount: '',
       currentOutstandingBalance: '',
@@ -186,7 +188,6 @@ export function MortgagesPage() {
       startDate: todayStr,
       termMonths: '300',
       maturityDate: '',
-      endDate: '',
       nextPaymentDate: nextMonthStr,
       status: 'Active',
       notes: '',
@@ -199,11 +200,33 @@ export function MortgagesPage() {
     if (e) e.stopPropagation();
     setEditingMortgage(m);
     setFormError('');
-    const matDateStr = m.maturityDate ? new Date(m.maturityDate).toISOString().split('T')[0] : (m.endDate ? new Date(m.endDate).toISOString().split('T')[0] : '');
+
+    const matDateStr = m.maturityDate
+      ? new Date(m.maturityDate).toISOString().split('T')[0]
+      : m.endDate
+      ? new Date(m.endDate).toISOString().split('T')[0]
+      : '';
+
+    const initialPropertyIds = (m.properties && m.properties.length > 0)
+      ? m.properties.map((p) => (p.propertyId?._id || p.propertyId)?.toString()).filter(Boolean)
+      : [m.propertyId?._id?.toString() || m.propertyId?.toString()].filter(Boolean);
+
+    const initialAllocations = {};
+    (m.properties || []).forEach((p) => {
+      const pid = (p.propertyId?._id || p.propertyId)?.toString();
+      if (pid && p.allocatedAmount) {
+        initialAllocations[pid] = String(p.allocatedAmount);
+      }
+    });
+
     setFormData({
-      propertyId: m.propertyId?._id || m.propertyId || '',
-      landlordName: m.landlordId?.fullName || '',
+      landlordId: (m.landlordId?._id || m.landlordId)?.toString() || '',
+      mortgageType: m.mortgageType || 'Individual Property',
+      propertyId: m.propertyId?._id || m.propertyId || initialPropertyIds[0] || '',
+      selectedPropertyIds: initialPropertyIds,
+      allocations: initialAllocations,
       lenderName: m.lenderName || '',
+      mortgageReference: m.mortgageReference || m.mortgageAccountNumber || '',
       mortgageAccountNumber: m.mortgageAccountNumber || '',
       originalLoanAmount: m.originalLoanAmount || '',
       currentOutstandingBalance: m.currentOutstandingBalance || '',
@@ -213,7 +236,6 @@ export function MortgagesPage() {
       startDate: m.startDate ? new Date(m.startDate).toISOString().split('T')[0] : '',
       termMonths: m.termMonths || '',
       maturityDate: matDateStr,
-      endDate: matDateStr,
       nextPaymentDate: m.nextPaymentDate ? new Date(m.nextPaymentDate).toISOString().split('T')[0] : '',
       status: m.status || 'Active',
       notes: m.notes || '',
@@ -221,30 +243,132 @@ export function MortgagesPage() {
     setIsAddModalOpen(true);
   };
 
+  // Toggle property selection for Collective Mortgages
+  const togglePropertySelection = (propId) => {
+    setFormData((prev) => {
+      const exists = prev.selectedPropertyIds.includes(propId);
+      const updated = exists
+        ? prev.selectedPropertyIds.filter((id) => id !== propId)
+        : [...prev.selectedPropertyIds, propId];
+
+      const newAlloc = { ...prev.allocations };
+      if (exists) delete newAlloc[propId];
+
+      return {
+        ...prev,
+        selectedPropertyIds: updated,
+        allocations: newAlloc,
+      };
+    });
+  };
+
+  // Update allocation amount for a property in Collective Mortgage
+  const handleAllocationChange = (propId, val) => {
+    setFormData((prev) => ({
+      ...prev,
+      allocations: {
+        ...prev.allocations,
+        [propId]: val,
+      },
+    }));
+  };
+
   // Submit Add / Edit Form
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
 
-    if (!formData.propertyId) {
-      setFormError('Please select a Property.');
+    if (!formData.landlordId) {
+      setFormError('Step 1: Please select a Landlord.');
       return;
     }
+
+    if (formData.mortgageType === 'Individual Property') {
+      if (!formData.propertyId) {
+        setFormError('Step 2: Please select a Property for this individual mortgage.');
+        return;
+      }
+    } else {
+      if (!formData.selectedPropertyIds || formData.selectedPropertyIds.length === 0) {
+        setFormError('Step 2: Please select at least one property for this Collective Mortgage facility.');
+        return;
+      }
+    }
+
     if (!formData.lenderName.trim()) {
       setFormError('Please enter Lender / Bank name.');
       return;
     }
-    if (!formData.originalLoanAmount || Number(formData.originalLoanAmount) <= 0) {
-      setFormError('Original Loan Amount must be greater than 0.');
+
+    const origAmount = Number(formData.originalLoanAmount);
+    if (isNaN(origAmount) || origAmount <= 0) {
+      setFormError('Original Loan Amount must be greater than £0.');
       return;
+    }
+
+    // Allocation validation
+    if (formData.mortgageType === 'Collective / Group') {
+      let totalAllocated = 0;
+      for (const pid of formData.selectedPropertyIds) {
+        const val = Number(formData.allocations[pid]) || 0;
+        if (val < 0) {
+          setFormError('Property allocations cannot be negative.');
+          return;
+        }
+        totalAllocated += val;
+      }
+      if (totalAllocated > 0 && totalAllocated > origAmount) {
+        setFormError(
+          `Total property allocations (£${totalAllocated.toLocaleString()}) cannot exceed the mortgage facility amount (£${origAmount.toLocaleString()}).`
+        );
+        return;
+      }
     }
 
     setFormSubmitting(true);
     try {
-      if (editingMortgage) {
-        await updateMortgageAPI(editingMortgage._id || editingMortgage.id, formData);
+      let propertiesPayload = [];
+      if (formData.mortgageType === 'Individual Property') {
+        propertiesPayload = [
+          {
+            propertyId: formData.propertyId,
+            allocatedAmount: origAmount,
+            status: 'Active',
+          },
+        ];
       } else {
-        await createMortgageAPI(formData);
+        propertiesPayload = formData.selectedPropertyIds.map((pid) => ({
+          propertyId: pid,
+          allocatedAmount: Number(formData.allocations[pid]) || 0,
+          status: 'Active',
+        }));
+      }
+
+      const payload = {
+        landlordId: formData.landlordId,
+        mortgageType: formData.mortgageType,
+        propertyId: formData.mortgageType === 'Individual Property' ? formData.propertyId : formData.selectedPropertyIds[0],
+        properties: propertiesPayload,
+        lenderName: formData.lenderName.trim(),
+        mortgageReference: (formData.mortgageReference || formData.mortgageAccountNumber || '').trim(),
+        mortgageAccountNumber: (formData.mortgageAccountNumber || formData.mortgageReference || '').trim(),
+        originalLoanAmount: origAmount,
+        currentOutstandingBalance: formData.currentOutstandingBalance ? Number(formData.currentOutstandingBalance) : origAmount,
+        interestRate: Number(formData.interestRate) || 0,
+        monthlyPayment: Number(formData.monthlyPayment) || 0,
+        paymentFrequency: formData.paymentFrequency,
+        startDate: formData.startDate,
+        termMonths: Number(formData.termMonths) || 0,
+        maturityDate: formData.maturityDate || null,
+        nextPaymentDate: formData.nextPaymentDate,
+        status: formData.status,
+        notes: formData.notes.trim(),
+      };
+
+      if (editingMortgage) {
+        await updateMortgageAPI(editingMortgage._id || editingMortgage.id, payload);
+      } else {
+        await createMortgageAPI(payload);
       }
       setIsAddModalOpen(false);
       loadData();
@@ -308,9 +432,10 @@ export function MortgagesPage() {
   // Delete Mortgage
   const handleDeleteMortgage = async (m, e) => {
     if (e) e.stopPropagation();
+    const refDisplay = m.mortgageReference || m.mortgageAccountNumber || m.lenderName;
     if (
       !window.confirm(
-        `Are you sure you want to delete mortgage for "${m.propertyId?.name || 'Property'}" (${m.lenderName})? This will also remove payment records.`
+        `Are you sure you want to delete mortgage facility "${refDisplay}" (${m.lenderName})? This will also remove associated payment history.`
       )
     ) {
       return;
@@ -331,6 +456,12 @@ export function MortgagesPage() {
     })}`;
   };
 
+  // Helper for allocation sum in modal
+  const totalAllocatedSum = Object.values(formData.allocations).reduce(
+    (acc, v) => acc + (Number(v) || 0),
+    0
+  );
+
   return (
     <AppLayout>
       <div className="space-y-6 text-left pb-12">
@@ -341,10 +472,10 @@ export function MortgagesPage() {
               <div className="p-2 rounded-xl bg-emerald-50 text-[#04A26F] border border-emerald-100">
                 <Landmark className="w-6 h-6" />
               </div>
-              <span>Mortgage Management</span>
+              <span>Mortgage Facility Management</span>
             </h1>
             <p className="text-xs text-slate-500 font-medium mt-1">
-              Track property mortgage loans, outstanding balances, monthly bank payments, and property financing.
+              Manage bank mortgage loans, individual and collective group facilities, repayments, and secured property allocations.
             </p>
           </div>
 
@@ -354,7 +485,7 @@ export function MortgagesPage() {
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#04A26F] hover:bg-[#03885c] text-white text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Add Mortgage</span>
+            <span>Add Mortgage Facility</span>
           </button>
         </div>
 
@@ -362,20 +493,20 @@ export function MortgagesPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
             <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-              <span>Active Mortgages</span>
+              <span>Active Facilities</span>
               <Building2 className="w-4 h-4 text-emerald-600" />
             </div>
             <p className="text-2xl font-black text-slate-900">
               {summary?.activeMortgagesCount || 0}
             </p>
-            <p className="text-[11px] text-slate-400 font-medium">
-              Out of {summary?.totalMortgages || 0} total records
+            <p className="text-[11px] text-slate-500 font-medium">
+              {summary?.individualCount ?? 0} Individual • {summary?.collectiveCount ?? 0} Collective
             </p>
           </div>
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
             <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-              <span>Total Outstanding Balance</span>
+              <span>Total Outstanding Debt</span>
               <TrendingDown className="w-4 h-4 text-amber-600" />
             </div>
             <p className="text-2xl font-black text-amber-900">
@@ -388,7 +519,7 @@ export function MortgagesPage() {
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
             <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-              <span>Monthly Mortgage Payments</span>
+              <span>Monthly Commitments</span>
               <CreditCard className="w-4 h-4 text-blue-600" />
             </div>
             <p className="text-2xl font-black text-slate-900">
@@ -416,7 +547,7 @@ export function MortgagesPage() {
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search property, lender, ref..."
+              placeholder="Search facility, lender, ref, property..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 text-slate-800"
@@ -425,6 +556,17 @@ export function MortgagesPage() {
 
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+            {/* Mortgage Type Filter */}
+            <select
+              value={selectedMortgageType}
+              onChange={(e) => setSelectedMortgageType(e.target.value)}
+              className="px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-[#04A26F]/20 text-slate-700 cursor-pointer"
+            >
+              <option value="All">All Mortgage Types</option>
+              <option value="Individual Property">Individual Mortgages</option>
+              <option value="Collective / Group">Collective / Group Mortgages</option>
+            </select>
+
             {/* Property Filter */}
             <select
               value={selectedProperty}
@@ -448,7 +590,7 @@ export function MortgagesPage() {
               <option value="">All Landlords</option>
               {landlords.map((l) => (
                 <option key={l._id || l.id} value={l._id || l.id}>
-                  {l.fullName}
+                  {l.fullName || l.name}
                 </option>
               ))}
             </select>
@@ -463,16 +605,16 @@ export function MortgagesPage() {
               <option value="Active">Active</option>
               <option value="Paid Off">Paid Off</option>
               <option value="Closed">Closed</option>
-              <option value="Pending">Pending</option>
             </select>
 
-            {(selectedProperty || selectedLandlord || selectedStatus !== 'All' || searchQuery) && (
+            {(selectedProperty || selectedLandlord || selectedStatus !== 'All' || selectedMortgageType !== 'All' || searchQuery) && (
               <button
                 type="button"
                 onClick={() => {
                   setSelectedProperty('');
                   setSelectedLandlord('');
                   setSelectedStatus('All');
+                  setSelectedMortgageType('All');
                   setSearchQuery('');
                 }}
                 className="px-3 py-2 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors cursor-pointer"
@@ -483,22 +625,22 @@ export function MortgagesPage() {
           </div>
         </div>
 
-        {/* MORTGAGE LIST TABLE */}
+        {/* MORTGAGE FACILITIES LIST TABLE */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           {loading ? (
             <div className="p-12 text-center text-slate-400 space-y-2">
               <Loader2 className="w-8 h-8 animate-spin text-[#04A26F] mx-auto" />
-              <p className="text-xs font-bold">Loading Mortgages...</p>
+              <p className="text-xs font-bold">Loading Mortgage Facilities...</p>
             </div>
           ) : filteredMortgages.length === 0 ? (
             <div className="p-12 text-center text-slate-500 space-y-3">
               <Landmark className="w-10 h-10 text-slate-300 mx-auto" />
               <div>
-                <p className="font-extrabold text-slate-800 text-sm">No Mortgages Found</p>
+                <p className="font-extrabold text-slate-800 text-sm">No Mortgage Facilities Found</p>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  {searchQuery || selectedProperty || selectedLandlord || selectedStatus !== 'All'
-                    ? 'No mortgage records matched your search or filters.'
-                    : 'Click "Add Mortgage" above to record a new mortgage loan for a property.'}
+                  {searchQuery || selectedProperty || selectedLandlord || selectedStatus !== 'All' || selectedMortgageType !== 'All'
+                    ? 'No mortgage facilities matched your search or filters.'
+                    : 'Click "Add Mortgage Facility" above to record an individual or group mortgage loan.'}
                 </p>
               </div>
             </div>
@@ -507,13 +649,14 @@ export function MortgagesPage() {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-900 text-white font-extrabold uppercase tracking-wider text-[11px]">
                   <tr>
-                    <th className="py-3.5 px-4">Property</th>
+                    <th className="py-3.5 px-4">Facility Ref & Bank</th>
+                    <th className="py-3.5 px-4">Type</th>
                     <th className="py-3.5 px-4">Landlord</th>
-                    <th className="py-3.5 px-4">Lender / Bank</th>
-                    <th className="py-3.5 px-4">Original Loan</th>
+                    <th className="py-3.5 px-4">Secured Properties</th>
+                    <th className="py-3.5 px-4">Facility Amount</th>
                     <th className="py-3.5 px-4">Outstanding</th>
                     <th className="py-3.5 px-4">Monthly Payment</th>
-                    <th className="py-3.5 px-4">Interest Rate</th>
+                    <th className="py-3.5 px-4">Rate</th>
                     <th className="py-3.5 px-4">Next Payment</th>
                     <th className="py-3.5 px-4">Status</th>
                     <th className="py-3.5 px-4 text-right">Actions</th>
@@ -522,8 +665,14 @@ export function MortgagesPage() {
                 <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
                   {filteredMortgages.map((m) => {
                     const mId = m._id || m.id;
-                    const propName = m.propertyId?.name || 'Unassigned';
                     const landlordName = m.landlordId?.fullName || 'Unassigned';
+                    const isCollective = m.mortgageType === 'Collective / Group';
+                    const refDisplay = m.mortgageReference || m.mortgageAccountNumber || '-';
+
+                    // Collect secured property names
+                    const securedList = (m.properties && m.properties.length > 0)
+                      ? m.properties.map((p) => p.propertyId?.name).filter(Boolean)
+                      : [m.propertyId?.name].filter(Boolean);
 
                     return (
                       <tr
@@ -531,12 +680,27 @@ export function MortgagesPage() {
                         onClick={() => navigate(`/mortgages/${mId}`)}
                         className="hover:bg-slate-50/80 transition cursor-pointer"
                       >
-                        {/* Property */}
+                        {/* Reference & Lender */}
                         <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-2">
-                            <Building2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                            <span className="font-extrabold text-slate-900">{propName}</span>
-                          </div>
+                          <span className="font-extrabold text-slate-900 block text-xs">
+                            {refDisplay}
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-medium">
+                            {m.lenderName}
+                          </span>
+                        </td>
+
+                        {/* Mortgage Type */}
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                              isCollective
+                                ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            }`}
+                          >
+                            {isCollective ? 'Collective' : 'Individual'}
+                          </span>
                         </td>
 
                         {/* Landlord */}
@@ -547,17 +711,28 @@ export function MortgagesPage() {
                           </div>
                         </td>
 
-                        {/* Lender */}
+                        {/* Secured Properties */}
                         <td className="py-3.5 px-4">
-                          <span className="font-bold text-slate-900">{m.lenderName}</span>
-                          {m.mortgageAccountNumber && (
-                            <span className="block text-[10px] text-slate-400 font-mono">
-                              Ref: {m.mortgageAccountNumber}
-                            </span>
+                          {isCollective ? (
+                            <div className="flex items-center gap-1.5" title={securedList.join(', ')}>
+                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 font-extrabold text-[11px]">
+                                {securedList.length} Properties
+                              </span>
+                              <span className="text-[11px] text-slate-500 truncate max-w-[140px]">
+                                {securedList.slice(0, 2).join(', ')}{securedList.length > 2 ? '...' : ''}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span className="font-bold text-slate-900 truncate max-w-[160px]">
+                                {securedList[0] || m.propertyId?.name || 'Unassigned'}
+                              </span>
+                            </div>
                           )}
                         </td>
 
-                        {/* Original Amount */}
+                        {/* Original Facility Amount */}
                         <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
                           {formatCurrency(m.originalLoanAmount)}
                         </td>
@@ -614,7 +789,7 @@ export function MortgagesPage() {
                             <button
                               type="button"
                               onClick={(e) => handleOpenPaymentModal(m, e)}
-                              title="Record Payment"
+                              title="Record Facility Payment"
                               className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#04A26F] rounded-lg font-extrabold text-[11px] transition-colors border border-emerald-200 cursor-pointer"
                             >
                               + Pay
@@ -622,7 +797,7 @@ export function MortgagesPage() {
                             <button
                               type="button"
                               onClick={(e) => handleOpenEditModal(m, e)}
-                              title="Edit Mortgage"
+                              title="Edit Facility"
                               className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
                             >
                               <Edit className="w-3.5 h-3.5" />
@@ -630,7 +805,7 @@ export function MortgagesPage() {
                             <button
                               type="button"
                               onClick={(e) => handleDeleteMortgage(m, e)}
-                              title="Delete Mortgage"
+                              title="Delete Facility"
                               className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -646,16 +821,16 @@ export function MortgagesPage() {
           )}
         </div>
 
-        {/* MODAL 1: ADD / EDIT MORTGAGE MODAL */}
+        {/* MODAL 1: ADD / EDIT MORTGAGE FACILITY MODAL */}
         {isAddModalOpen && (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden text-left animate-fade-in max-h-[90vh] flex flex-col">
+            <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden text-left animate-fade-in max-h-[92vh] flex flex-col">
               {/* Modal Header */}
               <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
                 <div className="flex items-center gap-2">
                   <Landmark className="w-5 h-5 text-[#04A26F]" />
                   <span className="font-extrabold text-sm">
-                    {editingMortgage ? 'Edit Mortgage Record' : 'Add New Mortgage'}
+                    {editingMortgage ? 'Edit Mortgage Facility' : 'Create Mortgage Facility'}
                   </span>
                 </div>
                 <button
@@ -668,7 +843,7 @@ export function MortgagesPage() {
               </div>
 
               {/* Form Content */}
-              <form onSubmit={handleFormSubmit} className="p-6 space-y-4 overflow-y-auto">
+              <form onSubmit={handleFormSubmit} className="p-6 space-y-5 overflow-y-auto">
                 {formError && (
                   <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700 flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
@@ -676,41 +851,206 @@ export function MortgagesPage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  {/* Property Selector */}
-                  <div>
-                    <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                      Property *
-                    </label>
-                    <select
-                      required
-                      value={formData.propertyId}
-                      onChange={(e) => handlePropertyChangeInForm(e.target.value)}
-                      disabled={Boolean(editingMortgage)}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 cursor-pointer"
+                {/* STEP 1: SELECT LANDLORD */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                  <label className="block font-black text-slate-800 uppercase tracking-wider text-[11px]">
+                    Step 1: Select Landlord (Facility Owner) *
+                  </label>
+                  <select
+                    required
+                    value={formData.landlordId}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        landlordId: e.target.value,
+                        propertyId: '',
+                        selectedPropertyIds: [],
+                        allocations: {},
+                      }))
+                    }
+                    disabled={Boolean(editingMortgage)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 cursor-pointer"
+                  >
+                    <option value="">Choose Landlord...</option>
+                    {landlords.map((l) => (
+                      <option key={l._id || l.id} value={l._id || l.id}>
+                        {l.fullName || l.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* STEP 2: SELECT MORTGAGE TYPE */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                  <label className="block font-black text-slate-800 uppercase tracking-wider text-[11px]">
+                    Step 2: Select Mortgage Type *
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          mortgageType: 'Individual Property',
+                          selectedPropertyIds: prev.propertyId ? [prev.propertyId] : [],
+                        }))
+                      }
+                      className={`p-3 rounded-xl text-left border transition-all cursor-pointer ${
+                        formData.mortgageType === 'Individual Property'
+                          ? 'bg-emerald-50 border-[#04A26F] text-[#04A26F] ring-2 ring-[#04A26F]/20'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
                     >
-                      <option value="">Select Property...</option>
-                      {properties.map((p) => (
-                        <option key={p._id || p.id} value={p._id || p.id}>
-                          {p.name} ({p.city || 'London'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                      <div className="font-extrabold text-xs">Individual Property</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        One mortgage facility secured against exactly 1 property.
+                      </div>
+                    </button>
 
-                  {/* Landlord Name (Auto-filled) */}
-                  <div>
-                    <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                      Landlord (Auto-Assigned)
-                    </label>
-                    <input
-                      type="text"
-                      readOnly
-                      value={formData.landlordName || 'Select property first'}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-slate-600 bg-slate-100 outline-none"
-                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          mortgageType: 'Collective / Group',
+                          selectedPropertyIds: prev.propertyId
+                            ? [prev.propertyId]
+                            : prev.selectedPropertyIds,
+                        }))
+                      }
+                      className={`p-3 rounded-xl text-left border transition-all cursor-pointer ${
+                        formData.mortgageType === 'Collective / Group'
+                          ? 'bg-purple-50 border-purple-600 text-purple-800 ring-2 ring-purple-600/20'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="font-extrabold text-xs">Collective / Group</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        One mortgage facility securing multiple properties together.
+                      </div>
+                    </button>
                   </div>
+                </div>
 
+                {/* STEP 3: PROPERTY SELECTION BASED ON TYPE */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-xs">
+                  {formData.mortgageType === 'Individual Property' ? (
+                    <div>
+                      <label className="block font-black text-slate-800 uppercase tracking-wider text-[11px] mb-1">
+                        Select Property *
+                      </label>
+                      <select
+                        required
+                        value={formData.propertyId}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            propertyId: e.target.value,
+                            selectedPropertyIds: [e.target.value],
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 cursor-pointer"
+                      >
+                        <option value="">Choose Property belonging to Landlord...</option>
+                        {landlordProperties.map((p) => (
+                          <option key={p._id || p.id} value={p._id || p.id}>
+                            {p.name} ({p.city || 'London'})
+                          </option>
+                        ))}
+                      </select>
+                      {landlordProperties.length === 0 && (
+                        <p className="text-[10px] text-amber-600 mt-1 font-semibold">
+                          No properties found for this landlord. Add properties to this landlord first.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="block font-black text-slate-800 uppercase tracking-wider text-[11px]">
+                          Select Secured Properties (Multiple) *
+                        </label>
+                        <span className="text-[10px] font-bold text-purple-700">
+                          {formData.selectedPropertyIds.length} properties selected
+                        </span>
+                      </div>
+
+                      {landlordProperties.length === 0 ? (
+                        <p className="text-[10px] text-amber-600 font-semibold">
+                          No properties found for this landlord. Add properties first.
+                        </p>
+                      ) : (
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {landlordProperties.map((p) => {
+                            const pId = (p._id || p.id)?.toString();
+                            const isChecked = formData.selectedPropertyIds.includes(pId);
+
+                            return (
+                              <div
+                                key={pId}
+                                className={`p-2.5 rounded-xl border transition-all ${
+                                  isChecked
+                                    ? 'bg-purple-50/70 border-purple-300'
+                                    : 'bg-white border-slate-200'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <label
+                                    onClick={() => togglePropertySelection(pId)}
+                                    className="flex items-center gap-2 cursor-pointer font-bold text-slate-800 select-none flex-1"
+                                  >
+                                    {isChecked ? (
+                                      <CheckSquare className="w-4 h-4 text-purple-600 shrink-0" />
+                                    ) : (
+                                      <Square className="w-4 h-4 text-slate-400 shrink-0" />
+                                    )}
+                                    <span>{p.name}</span>
+                                    <span className="text-[10px] text-slate-400 font-normal">
+                                      ({p.city || 'London'})
+                                    </span>
+                                  </label>
+
+                                  {isChecked && (
+                                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                      <span className="text-[10px] font-bold text-slate-500">
+                                        Alloc (£):
+                                      </span>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="any"
+                                        placeholder="Optional"
+                                        value={formData.allocations[pId] || ''}
+                                        onChange={(e) =>
+                                          handleAllocationChange(pId, e.target.value)
+                                        }
+                                        className="w-24 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Optional allocation tracker */}
+                      {totalAllocatedSum > 0 && (
+                        <div className="p-2 bg-purple-100/70 rounded-lg text-[11px] font-bold text-purple-900 flex items-center justify-between">
+                          <span>Total Property Allocations:</span>
+                          <span className="font-mono">
+                            £{totalAllocatedSum.toLocaleString()} / £
+                            {Number(formData.originalLoanAmount || 0).toLocaleString()} Facility
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* FACILITY SPECIFICATION FIELDS */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                   {/* Lender / Bank Name */}
                   <div>
                     <label className="block font-extrabold text-slate-700 uppercase mb-1">
@@ -719,23 +1059,29 @@ export function MortgagesPage() {
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Barclays, HSBC, Lloyds Bank"
+                      placeholder="e.g. Barclays, HSBC, Quantum Mortgages"
                       value={formData.lenderName}
                       onChange={(e) => setFormData({ ...formData, lenderName: e.target.value })}
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                     />
                   </div>
 
-                  {/* Mortgage Account / Reference */}
+                  {/* Mortgage Reference Code */}
                   <div>
                     <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                      Mortgage Account / Ref (Optional)
+                      Mortgage Facility Ref (e.g. M001)
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. MTG-98421-UK"
-                      value={formData.mortgageAccountNumber}
-                      onChange={(e) => setFormData({ ...formData, mortgageAccountNumber: e.target.value })}
+                      placeholder="e.g. M001 or MTG-98421-UK"
+                      value={formData.mortgageReference}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          mortgageReference: e.target.value,
+                          mortgageAccountNumber: e.target.value,
+                        })
+                      }
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                     />
                   </div>
@@ -743,14 +1089,14 @@ export function MortgagesPage() {
                   {/* Original Loan Amount */}
                   <div>
                     <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                      Original Loan Amount (£) *
+                      Original Facility Amount (£) *
                     </label>
                     <input
                       type="number"
                       required
                       min="1"
                       step="any"
-                      placeholder="e.g. 240000"
+                      placeholder="e.g. 500000"
                       value={formData.originalLoanAmount}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -767,16 +1113,18 @@ export function MortgagesPage() {
                   {/* Current Outstanding Balance */}
                   <div>
                     <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                      Current Outstanding Balance (£) *
+                      Current Facility Balance (£) *
                     </label>
                     <input
                       type="number"
                       required
                       min="0"
                       step="any"
-                      placeholder="e.g. 198500"
+                      placeholder="e.g. 400000"
                       value={formData.currentOutstandingBalance}
-                      onChange={(e) => setFormData({ ...formData, currentOutstandingBalance: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, currentOutstandingBalance: e.target.value })
+                      }
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-amber-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                     />
                   </div>
@@ -791,9 +1139,11 @@ export function MortgagesPage() {
                       required
                       min="0"
                       step="any"
-                      placeholder="e.g. 1200"
+                      placeholder="e.g. 5000"
                       value={formData.monthlyPayment}
-                      onChange={(e) => setFormData({ ...formData, monthlyPayment: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, monthlyPayment: e.target.value })
+                      }
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                     />
                   </div>
@@ -809,7 +1159,9 @@ export function MortgagesPage() {
                       step="0.01"
                       placeholder="e.g. 4.5"
                       value={formData.interestRate}
-                      onChange={(e) => setFormData({ ...formData, interestRate: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, interestRate: e.target.value })
+                      }
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                     />
                   </div>
@@ -817,7 +1169,7 @@ export function MortgagesPage() {
                   {/* Start Date */}
                   <div>
                     <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                      Start Date *
+                      Facility Start Date *
                     </label>
                     <input
                       type="date"
@@ -828,21 +1180,15 @@ export function MortgagesPage() {
                     />
                   </div>
 
-                  {/* Mortgage End Date / Maturity Date */}
+                  {/* Maturity Date */}
                   <div>
                     <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                      Mortgage End Date / Maturity Date
+                      Maturity Date / End Date
                     </label>
                     <input
                       type="date"
-                      value={formData.maturityDate || formData.endDate || ''}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          maturityDate: e.target.value,
-                          endDate: e.target.value,
-                        }))
-                      }
+                      value={formData.maturityDate}
+                      onChange={(e) => setFormData({ ...formData, maturityDate: e.target.value })}
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                     />
                   </div>
@@ -850,13 +1196,15 @@ export function MortgagesPage() {
                   {/* Next Payment Date */}
                   <div>
                     <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                      Next Payment Due Date *
+                      Next Due Date *
                     </label>
                     <input
                       type="date"
                       required
                       value={formData.nextPaymentDate}
-                      onChange={(e) => setFormData({ ...formData, nextPaymentDate: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, nextPaymentDate: e.target.value })
+                      }
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                     />
                   </div>
@@ -864,12 +1212,12 @@ export function MortgagesPage() {
                   {/* Status */}
                   <div>
                     <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                      Status
+                      Facility Status
                     </label>
                     <select
                       value={formData.status}
                       onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-slate-800 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 cursor-pointer"
                     >
                       <option value="Active">Active</option>
                       <option value="Paid Off">Paid Off</option>
@@ -877,53 +1225,44 @@ export function MortgagesPage() {
                       <option value="Pending">Pending</option>
                     </select>
                   </div>
-
-                  {/* Term Months */}
-                  <div>
-                    <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                      Term (Months)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="e.g. 300 (25 years)"
-                      value={formData.termMonths}
-                      onChange={(e) => setFormData({ ...formData, termMonths: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
-                    />
-                  </div>
                 </div>
 
                 {/* Notes */}
-                <div>
+                <div className="text-xs">
                   <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                    Notes & Remarks
+                    Facility Notes & Terms
                   </label>
                   <textarea
                     rows={2}
-                    placeholder="Additional mortgage notes, fix rate expiry, bank contact details..."
+                    placeholder="Enter security details, mortgage terms, early repayment conditions..."
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-medium text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20 resize-none"
                   />
                 </div>
 
-                {/* Modal Footer */}
-                <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                {/* Modal Actions */}
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setIsAddModalOpen(false)}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={formSubmitting}
-                    className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-extrabold text-white bg-[#04A26F] hover:bg-[#03885c] rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2.5 rounded-xl bg-[#04A26F] hover:bg-[#03885c] text-white text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
-                    {formSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    <span>{editingMortgage ? 'Save Changes' : 'Create Mortgage'}</span>
+                    {formSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Saving Facility...</span>
+                      </>
+                    ) : (
+                      <span>{editingMortgage ? 'Update Facility' : 'Create Facility'}</span>
+                    )}
                   </button>
                 </div>
               </form>
@@ -931,17 +1270,19 @@ export function MortgagesPage() {
           </div>
         )}
 
-        {/* MODAL 2: RECORD MORTGAGE PAYMENT MODAL */}
+        {/* MODAL 2: RECORD PAYMENT MODAL */}
         {isPaymentModalOpen && paymentTargetMortgage && (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden text-left animate-fade-in">
-              {/* Header */}
+            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden text-left animate-fade-in flex flex-col">
               <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
                 <div className="flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-[#04A26F]" />
-                  <span className="font-extrabold text-sm">
-                    Record Bank Payment for {paymentTargetMortgage.propertyId?.name || 'Property'}
-                  </span>
+                  <CreditCard className="w-5 h-5 text-[#04A26F]" />
+                  <div>
+                    <span className="font-extrabold text-sm block">Record Mortgage Payment</span>
+                    <span className="text-[10px] text-slate-400">
+                      {paymentTargetMortgage.mortgageReference || paymentTargetMortgage.lenderName}
+                    </span>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -952,30 +1293,30 @@ export function MortgagesPage() {
                 </button>
               </div>
 
-              {/* Current Status Banner */}
-              <div className="p-4 bg-amber-50 border-b border-amber-100 flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-slate-500 font-medium">Current Outstanding Balance:</span>
-                  <p className="text-base font-black text-amber-900">
-                    {formatCurrency(paymentTargetMortgage.currentOutstandingBalance)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="text-slate-500 font-medium">Lender:</span>
-                  <p className="font-bold text-slate-800">{paymentTargetMortgage.lenderName}</p>
-                </div>
-              </div>
-
-              {/* Payment Form */}
-              <form onSubmit={handlePaymentSubmit} className="p-6 space-y-4">
+              <form onSubmit={handlePaymentSubmit} className="p-6 space-y-4 text-xs">
                 {paymentError && (
-                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700 flex items-center gap-2">
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl font-bold text-rose-700 flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{paymentError}</span>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                  <div className="flex justify-between text-slate-500 font-bold">
+                    <span>Current Facility Balance:</span>
+                    <span className="font-mono font-black text-amber-900">
+                      {formatCurrency(paymentTargetMortgage.currentOutstandingBalance)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-slate-500 font-bold">
+                    <span>Monthly Commitment:</span>
+                    <span className="font-mono text-slate-900">
+                      {formatCurrency(paymentTargetMortgage.monthlyPayment)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block font-extrabold text-slate-700 uppercase mb-1">
                       Payment Date *
@@ -984,7 +1325,9 @@ export function MortgagesPage() {
                       type="date"
                       required
                       value={paymentForm.paymentDate}
-                      onChange={(e) => setPaymentForm({ ...paymentForm, paymentDate: e.target.value })}
+                      onChange={(e) =>
+                        setPaymentForm({ ...paymentForm, paymentDate: e.target.value })
+                      }
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                     />
                   </div>
@@ -998,40 +1341,46 @@ export function MortgagesPage() {
                       required
                       min="0.01"
                       step="any"
-                      placeholder="e.g. 1200"
+                      placeholder="e.g. 5000"
                       value={paymentForm.totalPayment}
-                      onChange={(e) => setPaymentForm({ ...paymentForm, totalPayment: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
+                      onChange={(e) =>
+                        setPaymentForm({ ...paymentForm, totalPayment: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono font-black text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                     />
                   </div>
 
                   <div>
                     <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                      Principal Amount (£) (Optional)
+                      Principal Portion (£)
                     </label>
                     <input
                       type="number"
                       min="0"
                       step="any"
-                      placeholder="e.g. 700"
+                      placeholder="Optional"
                       value={paymentForm.principalAmount}
-                      onChange={(e) => setPaymentForm({ ...paymentForm, principalAmount: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
+                      onChange={(e) =>
+                        setPaymentForm({ ...paymentForm, principalAmount: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                     />
                   </div>
 
                   <div>
                     <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                      Interest Amount (£) (Optional)
+                      Interest Portion (£)
                     </label>
                     <input
                       type="number"
                       min="0"
                       step="any"
-                      placeholder="e.g. 500"
+                      placeholder="Optional"
                       value={paymentForm.interestAmount}
-                      onChange={(e) => setPaymentForm({ ...paymentForm, interestAmount: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
+                      onChange={(e) =>
+                        setPaymentForm({ ...paymentForm, interestAmount: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                     />
                   </div>
 
@@ -1041,59 +1390,70 @@ export function MortgagesPage() {
                     </label>
                     <select
                       value={paymentForm.paymentMethod}
-                      onChange={(e) => setPaymentForm({ ...paymentForm, paymentMethod: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white cursor-pointer"
+                      onChange={(e) =>
+                        setPaymentForm({ ...paymentForm, paymentMethod: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                     >
                       <option value="Bank Transfer">Bank Transfer</option>
                       <option value="Direct Debit">Direct Debit</option>
                       <option value="Standing Order">Standing Order</option>
+                      <option value="Debit Card">Debit Card</option>
                       <option value="Cheque">Cheque</option>
-                      <option value="Other">Other</option>
                     </select>
                   </div>
 
                   <div>
                     <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                      Reference / Transaction ID
+                      Next Due Date
                     </label>
                     <input
-                      type="text"
-                      placeholder="e.g. BANK-PAY-8821"
-                      value={paymentForm.reference}
-                      onChange={(e) => setPaymentForm({ ...paymentForm, reference: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white"
+                      type="date"
+                      value={paymentForm.nextPaymentDate}
+                      onChange={(e) =>
+                        setPaymentForm({ ...paymentForm, nextPaymentDate: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                     />
                   </div>
                 </div>
 
                 <div>
                   <label className="block font-extrabold text-slate-700 uppercase mb-1">
-                    Advance Next Due Date To:
+                    Bank Reference / Transaction ID
                   </label>
                   <input
-                    type="date"
-                    value={paymentForm.nextPaymentDate}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, nextPaymentDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white cursor-pointer"
+                    type="text"
+                    placeholder="e.g. TXN-892418-LENDER"
+                    value={paymentForm.reference}
+                    onChange={(e) =>
+                      setPaymentForm({ ...paymentForm, reference: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#04A26F]/20"
                   />
                 </div>
 
-                {/* Footer Buttons */}
-                <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setIsPaymentModalOpen(false)}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={paymentSubmitting}
-                    className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-extrabold text-white bg-[#04A26F] hover:bg-[#03885c] rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2.5 rounded-xl bg-[#04A26F] hover:bg-[#03885c] text-white text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
-                    {paymentSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    <span>Confirm & Record Payment</span>
+                    {paymentSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Recording...</span>
+                      </>
+                    ) : (
+                      <span>Record Payment</span>
+                    )}
                   </button>
                 </div>
               </form>

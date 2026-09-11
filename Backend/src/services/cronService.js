@@ -3,6 +3,8 @@ const { checkAndProcessDocumentExpiries } = require('./documentExpiryService');
 const Mortgage = require('../models/Mortgage');
 const Notification = require('../models/Notification');
 
+const { migrateMortgageFacilities } = require('../scripts/migrateMortgageFacilities');
+
 async function checkUpcomingMortgagePaymentAlerts() {
   try {
     const today = new Date();
@@ -15,7 +17,9 @@ async function checkUpcomingMortgagePaymentAlerts() {
     const mortgagesDue = await Mortgage.find({
       status: 'Active',
       nextPaymentDate: { $gte: today, $lte: sevenDaysFromNow },
-    }).populate('propertyId', 'name');
+    })
+      .populate('propertyId', 'name')
+      .populate('properties.propertyId', 'name');
 
     for (const m of mortgagesDue) {
       const existingNotif = await Notification.findOne({
@@ -26,11 +30,15 @@ async function checkUpcomingMortgagePaymentAlerts() {
 
       if (!existingNotif) {
         const dateStr = new Date(m.nextPaymentDate).toISOString().split('T')[0];
+        const propNames = (m.properties && m.properties.length > 0)
+          ? m.properties.map((p) => p.propertyId?.name).filter(Boolean).join(', ')
+          : (m.propertyId?.name || 'Property');
+
         await Notification.create({
           title: 'Mortgage Payment Due Soon',
-          message: `Mortgage payment of £${m.monthlyPayment.toLocaleString()} for ${m.propertyId?.name || 'Property'} (${m.lenderName}) is due on ${dateStr}.`,
+          message: `Mortgage payment of £${m.monthlyPayment.toLocaleString()} for ${propNames} (${m.lenderName}) is due on ${dateStr}.`,
           type: 'General',
-          propertyId: m.propertyId?._id || m.propertyId,
+          propertyId: m.propertyId?._id || m.properties?.[0]?.propertyId?._id || null,
           isRead: false,
         });
       }
@@ -58,6 +66,16 @@ function initCronService() {
     })
     .catch((err) => {
       console.error('❌ [Cron Service] Error during document expiry check:', err);
+    });
+
+  migrateMortgageFacilities()
+    .then((res) => {
+      if (res.migratedCount > 0) {
+        console.log(`✅ [Cron Service] Mortgage facility migration complete. Upgraded ${res.migratedCount} records.`);
+      }
+    })
+    .catch((err) => {
+      console.error('❌ [Cron Service] Error during mortgage facility migration check:', err);
     });
 
   checkUpcomingMortgagePaymentAlerts()

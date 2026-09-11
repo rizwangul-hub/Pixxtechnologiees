@@ -400,7 +400,7 @@ export function ReportsPage() {
         name: property.title || property.name || property.propertyName,
         address: property.address || 'N/A',
         city: property.city || 'N/A',
-        type: property.type || property.propertyType || 'Residential',
+        type: property.assetType || property.propertyType || property.type || 'Residential',
         landlordName: property.landlordName || 'N/A',
         totalUnits: propUnits.length,
         occupiedUnits: occupiedCount,

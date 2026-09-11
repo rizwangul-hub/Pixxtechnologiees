@@ -17,6 +17,11 @@ import {
   CheckCircle,
   Clock,
   Trash2,
+  Layers,
+  ShieldCheck,
+  CheckCircle2,
+  XCircle,
+  ArrowRight,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout/AppLayout';
 import {
@@ -24,6 +29,9 @@ import {
   fetchMortgagePaymentsAPI,
   recordMortgagePaymentAPI,
   deleteMortgageAPI,
+  addPropertyToMortgageAPI,
+  removePropertyFromMortgageAPI,
+  fetchPropertiesFromAPI,
 } from '../services/apiData';
 
 export function MortgageDetailPage() {
@@ -34,6 +42,7 @@ export function MortgageDetailPage() {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [landlordProperties, setLandlordProperties] = useState([]);
 
   // Payment modal state
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -47,9 +56,19 @@ export function MortgageDetailPage() {
     notes: '',
     nextPaymentDate: '',
   });
-
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState('');
+
+  // Add property modal state (for collective mortgages)
+  const [isAddPropModalOpen, setIsAddPropModalOpen] = useState(false);
+  const [addPropForm, setAddPropForm] = useState({
+    propertyId: '',
+    allocatedAmount: '',
+    notes: '',
+  });
+  const [addPropSubmitting, setAddPropSubmitting] = useState(false);
+  const [addPropError, setAddPropError] = useState('');
+  const [releasingPropId, setReleasingPropId] = useState(null);
 
   useEffect(() => {
     loadMortgageData();
@@ -69,6 +88,20 @@ export function MortgageDetailPage() {
       } else {
         setMortgage(mData);
         setPayments(pData || []);
+
+        // Load landlord properties for possible additions
+        const lId = mData.landlordId?._id || mData.landlordId;
+        if (lId) {
+          try {
+            const allProps = await fetchPropertiesFromAPI();
+            const filtered = (allProps || []).filter(
+              (p) => (p.landlordId?._id || p.landlordId)?.toString() === lId.toString()
+            );
+            setLandlordProperties(filtered);
+          } catch (e) {
+            console.warn('Failed to load landlord properties for modal', e);
+          }
+        }
       }
     } catch (err) {
       setError(err.message || 'Failed to load mortgage details');
@@ -122,12 +155,59 @@ export function MortgageDetailPage() {
     }
   };
 
-  const handleDeleteMortgage = async () => {
+  const handleAddPropertySubmit = async (e) => {
+    e.preventDefault();
+    setAddPropError('');
+
+    if (!addPropForm.propertyId) {
+      setAddPropError('Please select a property to secure under this facility.');
+      return;
+    }
+
+    setAddPropSubmitting(true);
+    try {
+      await addPropertyToMortgageAPI(mortgageId, {
+        propertyId: addPropForm.propertyId,
+        allocatedAmount: Number(addPropForm.allocatedAmount) || 0,
+        notes: addPropForm.notes,
+      });
+      setIsAddPropModalOpen(false);
+      setAddPropForm({ propertyId: '', allocatedAmount: '', notes: '' });
+      loadMortgageData();
+    } catch (err) {
+      setAddPropError(err.message || 'Failed to secure property under facility.');
+    } finally {
+      setAddPropSubmitting(false);
+    }
+  };
+
+  const handleReleaseProperty = async (propId, propName) => {
     if (
       !window.confirm(
-        `Are you sure you want to delete mortgage record for "${mortgage.propertyId?.name || 'Property'}"?`
+        `Are you sure you want to release "${propName}" from this mortgage facility? Its historical record will be preserved as Released.`
       )
     ) {
+      return;
+    }
+
+    setReleasingPropId(propId);
+    try {
+      await removePropertyFromMortgageAPI(mortgageId, propId);
+      loadMortgageData();
+    } catch (err) {
+      alert(err.message || 'Failed to release property');
+    } finally {
+      setReleasingPropId(null);
+    }
+  };
+
+  const handleDeleteMortgage = async () => {
+    const isCollective = mortgage.mortgageType === 'Collective / Group';
+    const label = isCollective
+      ? `collective mortgage facility "${mortgage.mortgageReference || mortgage.lenderName}"`
+      : `mortgage record for "${mortgage.propertyId?.name || 'Property'}"`;
+
+    if (!window.confirm(`Are you sure you want to delete ${label}? This cannot be undone.`)) {
       return;
     }
 
@@ -175,9 +255,27 @@ export function MortgageDetailPage() {
     );
   }
 
-  const propName = mortgage.propertyId?.name || 'Unassigned Property';
-  const propAddress = mortgage.propertyId?.address || '';
+  const isCollective = mortgage.mortgageType === 'Collective / Group';
+  const securedList = mortgage.properties || [];
+  const activeSecured = securedList.filter((p) => p.status !== 'Released');
+  const releasedSecured = securedList.filter((p) => p.status === 'Released');
+
+  const totalAllocated = activeSecured.reduce((sum, p) => sum + (Number(p.allocatedAmount) || 0), 0);
+  const remainingUnallocated = Math.max(0, (mortgage.originalLoanAmount || 0) - totalAllocated);
+
+  const primaryPropName =
+    mortgage.propertyId?.name ||
+    activeSecured[0]?.propertyId?.name ||
+    'Unassigned Property';
   const landlordName = mortgage.landlordId?.fullName || 'Unassigned Landlord';
+
+  // Properties already secured (to disable or filter from add modal)
+  const activeSecuredPropIds = new Set(
+    activeSecured.map((p) => (p.propertyId?._id || p.propertyId?.id || p.propertyId)?.toString())
+  );
+  const availableToAdd = landlordProperties.filter(
+    (p) => !activeSecuredPropIds.has((p._id || p.id)?.toString())
+  );
 
   return (
     <AppLayout>
@@ -194,8 +292,26 @@ export function MortgageDetailPage() {
             </button>
 
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-black text-slate-900 tracking-tight">{propName}</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl font-black text-slate-900 tracking-tight">
+                  {isCollective
+                    ? `Collective Facility: ${mortgage.mortgageReference || mortgage.lenderName}`
+                    : primaryPropName}
+                </h1>
+
+                {/* Mortgage Type Badge */}
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 ${
+                    isCollective
+                      ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                      : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                  }`}
+                >
+                  <Layers className="w-3 h-3" />
+                  {isCollective ? 'Collective Facility' : 'Individual Property'}
+                </span>
+
+                {/* Status Badge */}
                 <span
                   className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
                     mortgage.status === 'Active'
@@ -208,7 +324,12 @@ export function MortgageDetailPage() {
                   {mortgage.status}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium">{propAddress || 'Mortgage Financial Record'}</p>
+
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                {isCollective
+                  ? `Secured against ${activeSecured.length} properties • Landlord: ${landlordName} • Lender: ${mortgage.lenderName}`
+                  : `${mortgage.propertyId?.address || 'Individual Mortgage'} • Landlord: ${landlordName}`}
+              </p>
             </div>
           </div>
 
@@ -219,7 +340,7 @@ export function MortgageDetailPage() {
               className="px-4 py-2.5 bg-[#04A26F] hover:bg-[#03885c] text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
             >
               <DollarSign className="w-4 h-4" />
-              <span>Record Bank Payment</span>
+              <span>Record Facility Payment</span>
             </button>
 
             <button
@@ -233,11 +354,11 @@ export function MortgageDetailPage() {
           </div>
         </div>
 
-        {/* MORTGAGE OVERVIEW KPI CARDS */}
+        {/* FACILITY OVERVIEW KPI CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-              Original Loan Amount
+              Facility Original Loan
             </span>
             <p className="text-2xl font-black text-slate-900">{formatCurrency(mortgage.originalLoanAmount)}</p>
             <p className="text-[11px] text-slate-400 font-medium">Lender: {mortgage.lenderName}</p>
@@ -245,12 +366,10 @@ export function MortgageDetailPage() {
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-              Current Outstanding Balance
+              Outstanding Facility Debt
             </span>
             <p className="text-2xl font-black text-amber-900">{formatCurrency(mortgage.currentOutstandingBalance)}</p>
-            <p className="text-[11px] text-slate-400 font-medium">
-              Remaining to pay off
-            </p>
+            <p className="text-[11px] text-slate-400 font-medium">Single liability across all properties</p>
           </div>
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
@@ -265,28 +384,178 @@ export function MortgageDetailPage() {
 
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-              Next Due Date
+              {isCollective ? 'Secured Properties' : 'Next Due Date'}
             </span>
             <p className="text-2xl font-black text-slate-900">
-              {mortgage.nextPaymentDate ? new Date(mortgage.nextPaymentDate).toLocaleDateString() : '-'}
+              {isCollective
+                ? `${activeSecured.length} Active`
+                : mortgage.nextPaymentDate
+                ? new Date(mortgage.nextPaymentDate).toLocaleDateString()
+                : '-'}
             </p>
             <p className="text-[11px] text-slate-400 font-medium">
-              Frequency: {mortgage.paymentFrequency || 'Monthly'}
+              {isCollective
+                ? `${releasedSecured.length} Released • Freq: ${mortgage.paymentFrequency || 'Monthly'}`
+                : `Frequency: ${mortgage.paymentFrequency || 'Monthly'}`}
             </p>
           </div>
+        </div>
+
+        {/* SECURED PROPERTIES & ALLOCATIONS PANEL */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-extrabold">
+                Secured Properties & Allocations ({activeSecured.length} Active
+                {releasedSecured.length > 0 ? `, ${releasedSecured.length} Released` : ''})
+              </h3>
+            </div>
+
+            {isCollective && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAddPropError('');
+                  setIsAddPropModalOpen(true);
+                }}
+                className="px-3 py-1 bg-[#04A26F] hover:bg-[#03885c] text-white rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Secured Property</span>
+              </button>
+            )}
+          </div>
+
+          {/* Allocation summary banner if collective */}
+          {isCollective && (
+            <div className="bg-purple-50/70 border-b border-purple-100 p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-4">
+                <div>
+                  <span className="text-purple-600 font-bold block uppercase text-[10px]">Total Facility</span>
+                  <span className="font-extrabold text-slate-900">{formatCurrency(mortgage.originalLoanAmount)}</span>
+                </div>
+                <div>
+                  <span className="text-purple-600 font-bold block uppercase text-[10px]">Allocated to Properties</span>
+                  <span className="font-extrabold text-purple-900">
+                    {formatCurrency(totalAllocated)} ({((totalAllocated / (mortgage.originalLoanAmount || 1)) * 100).toFixed(1)}%)
+                  </span>
+                </div>
+                <div>
+                  <span className="text-purple-600 font-bold block uppercase text-[10px]">General / Unallocated</span>
+                  <span className="font-extrabold text-slate-700">{formatCurrency(remainingUnallocated)}</span>
+                </div>
+              </div>
+              <p className="text-[11px] text-purple-800 italic max-w-sm">
+                * Allocations divide the facility for internal accounting. Total company liability remains strictly {formatCurrency(mortgage.currentOutstandingBalance)}.
+              </p>
+            </div>
+          )}
+
+          {securedList.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">
+              <p className="text-xs font-semibold">No property relationships recorded.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-100 text-slate-600 font-extrabold uppercase text-[10px] tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4">Property Name</th>
+                    <th className="py-3 px-4">Address</th>
+                    <th className="py-3 px-4">Allocated Amount (£)</th>
+                    <th className="py-3 px-4">Share of Facility</th>
+                    <th className="py-3 px-4">Secured Date</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Notes</th>
+                    {isCollective && <th className="py-3 px-4 text-right">Action</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                  {securedList.map((item, idx) => {
+                    const pObj = item.propertyId || {};
+                    const pid = pObj._id || pObj.id || (typeof pObj === 'string' ? pObj : `prop-${idx}`);
+                    const pName = pObj.name || (typeof pObj === 'string' ? pObj : 'Property');
+                    const pAddr = [pObj.address, pObj.city].filter(Boolean).join(', ') || '—';
+                    const alloc = Number(item.allocatedAmount) || 0;
+                    const allocPct = mortgage.originalLoanAmount > 0 ? ((alloc / mortgage.originalLoanAmount) * 100).toFixed(1) : 0;
+                    const isReleased = item.status === 'Released';
+
+                    return (
+                      <tr key={item._id || pid} className={isReleased ? 'bg-slate-50/60 opacity-60' : 'hover:bg-slate-50/80'}>
+                        <td className="py-3 px-4 font-bold text-slate-900">
+                          {pObj._id ? (
+                            <Link to={`/properties/${pObj._id}`} className="hover:text-[#04A26F] hover:underline flex items-center gap-1">
+                              <span>{pName}</span>
+                              <ArrowRight className="w-3 h-3 text-slate-400" />
+                            </Link>
+                          ) : (
+                            pName
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-slate-500">{pAddr}</td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                          {alloc > 0 ? formatCurrency(alloc) : <span className="text-slate-400 font-normal italic">General Security</span>}
+                        </td>
+                        <td className="py-3 px-4 text-slate-600">
+                          {alloc > 0 ? `${allocPct}%` : '—'}
+                        </td>
+                        <td className="py-3 px-4 text-slate-600">
+                          {item.securedAt ? new Date(item.securedAt).toLocaleDateString() : '—'}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                              isReleased
+                                ? 'bg-slate-100 text-slate-600 border border-slate-200'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            }`}
+                          >
+                            {item.status || 'Active'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 max-w-xs truncate">
+                          {item.notes || '—'}
+                        </td>
+                        {isCollective && (
+                          <td className="py-3 px-4 text-right">
+                            {!isReleased && (
+                              <button
+                                type="button"
+                                disabled={releasingPropId === (pObj._id || pObj)}
+                                onClick={() => handleReleaseProperty(pObj._id || pObj, pName)}
+                                className="px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 cursor-pointer disabled:opacity-50"
+                              >
+                                {releasingPropId === (pObj._id || pObj) ? 'Releasing...' : 'Release'}
+                              </button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* DETAILED INFORMATION PANEL */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
           <h2 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
             <Landmark className="w-4 h-4 text-[#04A26F]" />
-            <span>Mortgage Specification Details</span>
+            <span>Facility Specification & Terms</span>
           </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-xs pt-2">
             <div className="space-y-1">
-              <span className="text-slate-400 font-bold uppercase text-[10px]">Property</span>
-              <p className="font-extrabold text-slate-900">{propName}</p>
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Facility Reference</span>
+              <p className="font-mono font-bold text-slate-900">{mortgage.mortgageReference || 'N/A'}</p>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Mortgage Type</span>
+              <p className="font-extrabold text-purple-700">{mortgage.mortgageType || 'Individual Property'}</p>
             </div>
 
             <div className="space-y-1">
@@ -300,7 +569,7 @@ export function MortgageDetailPage() {
             </div>
 
             <div className="space-y-1">
-              <span className="text-slate-400 font-bold uppercase text-[10px]">Account Reference</span>
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Bank Account Ref</span>
               <p className="font-mono font-bold text-slate-800">{mortgage.mortgageAccountNumber || 'N/A'}</p>
             </div>
 
@@ -319,17 +588,12 @@ export function MortgageDetailPage() {
             </div>
 
             <div className="space-y-1">
-              <span className="text-slate-400 font-bold uppercase text-[10px]">Mortgage End Date / Maturity</span>
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Maturity Date</span>
               <p className="font-bold text-slate-800">
                 {mortgage.maturityDate || mortgage.endDate
                   ? new Date(mortgage.maturityDate || mortgage.endDate).toLocaleDateString()
                   : '-'}
               </p>
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-slate-400 font-bold uppercase text-[10px]">Status</span>
-              <p className="font-extrabold text-emerald-700">{mortgage.status}</p>
             </div>
           </div>
 
@@ -348,7 +612,7 @@ export function MortgageDetailPage() {
           <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
             <h3 className="text-sm font-extrabold flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-emerald-400" />
-              <span>Mortgage Payment History ({payments.length})</span>
+              <span>Mortgage Facility Payment Ledger ({payments.length})</span>
             </h3>
 
             <button
@@ -365,7 +629,7 @@ export function MortgageDetailPage() {
               <DollarSign className="w-8 h-8 text-slate-300 mx-auto" />
               <p className="font-bold text-xs text-slate-700">No Payments Recorded Yet</p>
               <p className="text-[11px] text-slate-400">
-                Click "+ Record Payment" above to add mortgage payments made to the bank.
+                Payments recorded here decrease the facility outstanding balance once per bank transaction.
               </p>
             </div>
           ) : (
@@ -377,7 +641,7 @@ export function MortgageDetailPage() {
                     <th className="py-3 px-4">Total Paid</th>
                     <th className="py-3 px-4">Principal</th>
                     <th className="py-3 px-4">Interest</th>
-                    <th className="py-3 px-4">Remaining Balance</th>
+                    <th className="py-3 px-4">Facility Remaining Balance</th>
                     <th className="py-3 px-4">Method</th>
                     <th className="py-3 px-4">Reference</th>
                     <th className="py-3 px-4">Notes</th>
@@ -419,7 +683,9 @@ export function MortgageDetailPage() {
               <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
                 <div className="flex items-center gap-2">
                   <DollarSign className="w-5 h-5 text-[#04A26F]" />
-                  <span className="font-extrabold text-sm">Record Mortgage Payment</span>
+                  <span className="font-extrabold text-sm">
+                    Record Facility Payment {isCollective ? '(Collective Facility)' : ''}
+                  </span>
                 </div>
                 <button
                   type="button"
@@ -437,6 +703,11 @@ export function MortgageDetailPage() {
                     <span>{paymentError}</span>
                   </div>
                 )}
+
+                <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-[11px] text-emerald-800">
+                  Recording a payment decreases this facility liability from{' '}
+                  <strong className="font-bold">{formatCurrency(mortgage.currentOutstandingBalance)}</strong>. A single transaction reduces facility debt once.
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                   <div>
@@ -556,6 +827,110 @@ export function MortgageDetailPage() {
                   >
                     {paymentSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     <span>Confirm & Record Payment</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ADD SECURED PROPERTY MODAL (COLLECTIVE) */}
+        {isAddPropModalOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden text-left animate-fade-in">
+              <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-emerald-400" />
+                  <span className="font-extrabold text-sm">Add Property to Facility</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddPropModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleAddPropertySubmit} className="p-6 space-y-4">
+                {addPropError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{addPropError}</span>
+                  </div>
+                )}
+
+                <div className="space-y-1 text-xs">
+                  <label className="block font-extrabold text-slate-700 uppercase">
+                    Select Property ({landlordName}) *
+                  </label>
+                  {availableToAdd.length === 0 ? (
+                    <p className="text-slate-500 italic p-3 bg-slate-50 rounded-xl">
+                      All properties for this landlord are already secured under this facility.
+                    </p>
+                  ) : (
+                    <select
+                      required
+                      value={addPropForm.propertyId}
+                      onChange={(e) => setAddPropForm({ ...addPropForm, propertyId: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-slate-800 bg-white cursor-pointer"
+                    >
+                      <option value="">-- Choose Property --</option>
+                      {availableToAdd.map((p) => (
+                        <option key={p._id || p.id} value={p._id || p.id}>
+                          {p.name} ({p.address || p.city || 'Property'})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <div className="space-y-1 text-xs">
+                  <label className="block font-extrabold text-slate-700 uppercase">
+                    Allocated Amount (£) (Optional)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder="e.g. 150000"
+                    value={addPropForm.allocatedAmount}
+                    onChange={(e) => setAddPropForm({ ...addPropForm, allocatedAmount: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    Optional accounting breakdown. Remaining unallocated facility: {formatCurrency(remainingUnallocated)}
+                  </p>
+                </div>
+
+                <div className="space-y-1 text-xs">
+                  <label className="block font-extrabold text-slate-700 uppercase">
+                    Notes / Charge Details (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. First legal charge registered with Land Registry"
+                    value={addPropForm.notes}
+                    onChange={(e) => setAddPropForm({ ...addPropForm, notes: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-slate-800 bg-white"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddPropModalOpen(false)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={addPropSubmitting || availableToAdd.length === 0}
+                    className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-extrabold text-white bg-[#04A26F] hover:bg-[#03885c] rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {addPropSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>Add to Facility</span>
                   </button>
                 </div>
               </form>

@@ -417,7 +417,7 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
     return {
       propertyId: p._id,
       propertyName: p.name || p.propertyName || p.title,
-      propertyType: p.type || 'Shop',
+      propertyType: p.assetType || p.propertyType || p.type || 'Shop',
       name: p.name || p.propertyName || p.title,
       address: p.address || p.name,
       totalUnits: 1,
@@ -504,6 +504,49 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
     });
   }
 
+  // Landlord Mortgage Facilities (counting each facility strictly ONCE)
+  const mortgageQueryFilter = isAll
+    ? {}
+    : (validLandlordObjectIds.length > 0 ? { landlordId: { $in: validLandlordObjectIds } } : { landlordId: new mongoose.Types.ObjectId() });
+
+  const landlordMortgages = await Mortgage.find(mortgageQueryFilter)
+    .populate('properties.propertyId', 'name address')
+    .populate('propertyId', 'name address')
+    .sort({ createdAt: -1 });
+
+  const activeLandlordMortgages = landlordMortgages.filter((m) => m.status === 'Active');
+  const individualMortgagesCount = activeLandlordMortgages.filter(
+    (m) => (m.mortgageType || 'Individual Property') === 'Individual Property'
+  ).length;
+  const collectiveMortgagesCount = activeLandlordMortgages.filter(
+    (m) => m.mortgageType === 'Collective / Group'
+  ).length;
+  const totalMortgageLiability = activeLandlordMortgages.reduce((sum, m) => sum + (m.currentOutstandingBalance || 0), 0);
+  const totalMortgageOriginal = activeLandlordMortgages.reduce((sum, m) => sum + (m.originalLoanAmount || 0), 0);
+
+  const formattedLandlordMortgages = landlordMortgages.map((m) => {
+    const secList = (m.properties && m.properties.length > 0)
+      ? m.properties.map((p) => p.propertyId?.name || 'Property')
+      : [m.propertyId?.name || 'Property'];
+
+    return {
+      mortgageId: m._id,
+      mortgageReference: m.mortgageReference || m.mortgageAccountNumber || '-',
+      mortgageType: m.mortgageType || 'Individual Property',
+      lenderName: m.lenderName,
+      securedPropertiesCount: secList.length,
+      securedProperties: secList.join(', '),
+      originalLoanAmount: m.originalLoanAmount,
+      originalLoanAmountFormatted: formatReportCurrency(m.originalLoanAmount),
+      currentOutstandingBalance: m.currentOutstandingBalance,
+      currentOutstandingBalanceFormatted: formatReportCurrency(m.currentOutstandingBalance),
+      monthlyPayment: m.monthlyPayment,
+      monthlyPaymentFormatted: formatReportCurrency(m.monthlyPayment),
+      nextPaymentDate: m.nextPaymentDate ? formatUKDate(m.nextPaymentDate) : '-',
+      status: m.status,
+    };
+  });
+
   return {
     reportType: 'Landlord Report',
     reportDate: new Date().toISOString().split('T')[0],
@@ -535,9 +578,17 @@ async function generateLandlordReportData(landlordId, fromDate, toDate) {
       netIncomeFormatted: formatReportCurrency(netIncome),
       totalOutstanding,
       totalOutstandingFormatted: formatReportCurrency(totalOutstanding),
+      totalMortgageFacilities: activeLandlordMortgages.length,
+      individualMortgagesCount,
+      collectiveMortgagesCount,
+      totalMortgageLiability,
+      totalMortgageLiabilityFormatted: formatReportCurrency(totalMortgageLiability),
+      totalMortgageOriginal,
+      totalMortgageOriginalFormatted: formatReportCurrency(totalMortgageOriginal),
     },
     propertiesBreakdown: propertyBreakdown,
     properties: propertyBreakdown,
+    mortgages: formattedLandlordMortgages,
     unitMatrixRows,
     trackingMonths: trackingMonths.map((m) => m.label),
   };
@@ -752,24 +803,66 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
     });
   }
 
+  // Fetch mortgages securing any of these properties
+  const propMortgages = await Mortgage.find({
+    $or: [{ propertyId: { $in: propIds } }, { 'properties.propertyId': { $in: propIds } }],
+    status: { $ne: 'Closed' },
+  }).populate('properties.propertyId', 'name');
+
   const individualBreakdown = properties.map((p) => {
     const activeTenancy = tenancies.find(
       (t) => safeIdEquals(t.propertyId, p._id) && t.status === 'Active'
     );
     const isOccupied = p.status === 'Occupied' || Boolean(activeTenancy);
+
+    const m = propMortgages.find(
+      (mtg) => safeIdEquals(mtg.propertyId, p._id) || (mtg.properties || []).some((item) => safeIdEquals(item.propertyId, p._id))
+    );
+
+    let mortgageInfo = null;
+    if (m) {
+      const isCollective = m.mortgageType === 'Collective / Group';
+      const allocItem = (m.properties || []).find((item) => safeIdEquals(item.propertyId, p._id));
+      const otherSecured = (m.properties || [])
+        .filter((item) => !safeIdEquals(item.propertyId, p._id))
+        .map((item) => item.propertyId?.name || 'Property')
+        .filter(Boolean);
+
+      mortgageInfo = {
+        mortgageId: m._id,
+        mortgageReference: m.mortgageReference || m.mortgageAccountNumber || '-',
+        mortgageType: m.mortgageType || 'Individual Property',
+        isCollective,
+        lenderName: m.lenderName,
+        facilityOriginalAmount: m.originalLoanAmount,
+        facilityOriginalAmountFormatted: formatReportCurrency(m.originalLoanAmount),
+        facilityOutstandingBalance: m.currentOutstandingBalance,
+        facilityOutstandingBalanceFormatted: formatReportCurrency(m.currentOutstandingBalance),
+        allocatedAmount: allocItem?.allocatedAmount || 0,
+        allocatedAmountFormatted: allocItem?.allocatedAmount ? formatReportCurrency(allocItem.allocatedAmount) : null,
+        securedWith: otherSecured,
+        monthlyPayment: m.monthlyPayment,
+        monthlyPaymentFormatted: formatReportCurrency(m.monthlyPayment),
+        status: m.status,
+      };
+    }
+
     return {
       unitId: p._id,
       propertyId: p._id,
       name: p.name || p.propertyName,
       propertyName: p.name || p.propertyName,
-      type: p.type || 'Shop',
+      type: p.assetType || p.propertyType || p.type || 'Shop',
       status: p.isArchived ? 'Archived' : (isOccupied ? 'Occupied' : p.status),
       tenantName: activeTenancy?.customerId?.fullName || activeTenancy?.customerId?.name || p.customerName || 'Vacant',
       agentName: activeTenancy?.agentId?.fullName || activeTenancy?.agentId?.name || 'Direct / None',
       monthlyRent: activeTenancy?.monthlyRent || p.monthlyRent || p.price || 0,
       companyMonthlyAmount: activeTenancy?.companyMonthlyAmount || 0,
+      mortgageInfo,
     };
   });
+
+  const singlePropMortgageInfo = individualBreakdown.length === 1 ? individualBreakdown[0].mortgageInfo : null;
 
   return {
     reportType: 'Property Report',
@@ -780,9 +873,10 @@ async function generatePropertyReportData(propertyId, fromDate, toDate) {
       id: property._id,
       name: property.name || property.propertyName || property.title,
       address: property.address || '',
-      type: property.type || 'Shop',
+      type: property.assetType || property.propertyType || property.type || 'Shop',
       landlordName: property.landlordName || property.landlordId?.fullName || 'Portfolio Manager',
       landlordLogo: property.landlordLogo || property.landlordId?.logo?.url || '',
+      mortgageInfo: singlePropMortgageInfo,
     },
     summary: {
       totalProperties: properties.length,
