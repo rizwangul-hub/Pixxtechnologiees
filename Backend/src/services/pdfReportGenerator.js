@@ -36,6 +36,19 @@ if (PDFDocument && PDFDocument.prototype && PDFDocument.prototype.font) {
 const systemLogoPath = path.join(__dirname, '../assets/logo.png');
 
 /**
+ * Currency Formatter Helper for Reports
+ */
+function formatReportCurrency(amount) {
+  const num = Number(amount) || 0;
+  const isNegative = num < 0;
+  const absFormatted = Math.abs(num).toLocaleString('en-GB', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return isNegative ? `(£${absFormatted})` : `£${absFormatted}`;
+}
+
+/**
  * Helper to format UK dates (DD/MM/YYYY)
  */
 function formatUKDate(dateInput) {
@@ -54,16 +67,29 @@ function formatUKDate(dateInput) {
  */
 function fetchImageBuffer(url) {
   return new Promise((resolve) => {
-    if (!url) return resolve(null);
-    const client = url.startsWith('https') ? https : http;
-    client
-      .get(url, (res) => {
+    if (!url || typeof url !== 'string') return resolve(null);
+    const trimmed = url.trim();
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      return resolve(null);
+    }
+    try {
+      const parsed = new URL(trimmed);
+      const client = parsed.protocol === 'https:' ? https : http;
+      const req = client.get(parsed, (res) => {
         if (res.statusCode !== 200) return resolve(null);
         const chunks = [];
         res.on('data', (chunk) => chunks.push(chunk));
         res.on('end', () => resolve(Buffer.concat(chunks)));
-      })
-      .on('error', () => resolve(null));
+        res.on('error', () => resolve(null));
+      });
+      req.on('error', () => resolve(null));
+      req.setTimeout(4000, () => {
+        req.destroy();
+        resolve(null);
+      });
+    } catch (err) {
+      resolve(null);
+    }
   });
 }
 
@@ -413,22 +439,25 @@ async function generatePropertyReportPDF(data) {
   const fromStr = formatUKDate(data.fromDate);
   const toStr = formatUKDate(data.toDate);
 
+  const prop = data.property || {};
+  const sum = data.summary || {};
+
   return renderPDFReportDoc({
     reportTitle: 'PROPERTY FINANCIAL REPORT',
     generatedAt: data.reportDate,
     periodText: `${fromStr} - ${toStr}`,
     metaFields: [
-      { label: 'Property', value: data.property.name },
-      { label: 'Type', value: data.property.type || '-' },
-      { label: 'Address', value: data.property.address || '-' },
-      { label: 'Landlord', value: data.landlord?.name || '-' },
+      { label: 'Property', value: prop.name || prop.title || 'Property' },
+      { label: 'Type', value: prop.type || '-' },
+      { label: 'Address', value: prop.address || '-' },
+      { label: 'Landlord', value: data.landlord?.name || prop.landlordName || '-' },
     ],
     summaryCards: [
-      { label: 'Total Units', value: `${data.summary.totalUnits} (${data.summary.occupiedUnits} Occ)`, color: '#2563EB' },
-      { label: 'Rent Due', value: data.summary.totalRentDueFormatted, color: '#D97706' },
-      { label: 'Rent Received', value: data.summary.totalPaymentsFormatted, color: '#04A26F' },
-      { label: 'Expenses', value: data.summary.totalExpensesFormatted, color: '#DC2626' },
-      { label: 'Net Income', value: data.summary.netIncomeFormatted, color: '#04A26F' },
+      { label: 'Total Units', value: `${sum.totalUnits || 0} (${sum.occupiedUnits || 0} Occ)`, color: '#2563EB' },
+      { label: 'Rent Due', value: sum.totalRentDueFormatted || formatReportCurrency(sum.totalRent || 0), color: '#D97706' },
+      { label: 'Rent Received', value: sum.totalPaymentsFormatted || formatReportCurrency(sum.totalPaid || 0), color: '#04A26F' },
+      { label: 'Expenses', value: sum.totalExpensesFormatted || formatReportCurrency(sum.totalExpenses || 0), color: '#DC2626' },
+      { label: 'Net Income', value: sum.netIncomeFormatted || formatReportCurrency(sum.netIncome || (sum.totalPaid || 0) - (sum.totalExpenses || 0)), color: '#04A26F' },
     ],
     columns: [
       { key: 'unitName', label: 'Unit', width: 75 },
@@ -439,13 +468,21 @@ async function generatePropertyReportPDF(data) {
       { key: 'expensesFormatted', label: 'Expenses', width: 67, align: 'right' },
       { key: 'netIncomeFormatted', label: 'Net Income', width: 69, align: 'right' },
     ],
-    rows: data.unitsBreakdown || [],
+    rows: data.unitsBreakdown || (data.units || []).map((u) => ({
+      unitName: u.name || u.unitName || '-',
+      tenantName: u.tenantName || '-',
+      status: u.status || '-',
+      rentDueFormatted: formatReportCurrency(u.price || u.monthlyRent || 0),
+      paymentsFormatted: formatReportCurrency(u.payments || 0),
+      expensesFormatted: formatReportCurrency(u.expenses || 0),
+      netIncomeFormatted: formatReportCurrency((u.price || u.monthlyRent || 0) - (u.expenses || 0)),
+    })),
     totalRow: {
       unitName: 'PROPERTY TOTALS',
-      rentDueFormatted: data.summary.totalRentDueFormatted,
-      paymentsFormatted: data.summary.totalPaymentsFormatted,
-      expensesFormatted: data.summary.totalExpensesFormatted,
-      netIncomeFormatted: data.summary.netIncomeFormatted,
+      rentDueFormatted: sum.totalRentDueFormatted || formatReportCurrency(sum.totalRent || 0),
+      paymentsFormatted: sum.totalPaymentsFormatted || formatReportCurrency(sum.totalPaid || 0),
+      expensesFormatted: sum.totalExpensesFormatted || formatReportCurrency(sum.totalExpenses || 0),
+      netIncomeFormatted: sum.netIncomeFormatted || formatReportCurrency(sum.netIncome || (sum.totalPaid || 0) - (sum.totalExpenses || 0)),
     },
   });
 }

@@ -41,9 +41,12 @@ const downloadTenantStatementPDF = async (req, res) => {
   try {
     const { tenantId } = req.params;
     const { fromDate, toDate, propertyId } = req.query;
-    const data = await generateTenantStatementData(tenantId, fromDate, toDate, propertyId);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateTenantStatementData(tenantId, fromDate, toDate, propertyId);
     const pdfBuffer = await pdfGenerators.generateTenantStatementPDF(data);
-    sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Tenant_Statement_${data.tenant.name.replace(/\s+/g, '_')}.pdf`);
+    const name = data.tenant?.name || data.tenant?.fullName || 'Tenant';
+    sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Tenant_Statement_${name.replace(/\s+/g, '_')}.pdf`);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -53,13 +56,16 @@ const downloadTenantStatementWord = async (req, res) => {
   try {
     const { tenantId } = req.params;
     const { fromDate, toDate, propertyId } = req.query;
-    const data = await generateTenantStatementData(tenantId, fromDate, toDate, propertyId);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateTenantStatementData(tenantId, fromDate, toDate, propertyId);
     const wordBuffer = await wordGenerators.generateTenantStatementWord(data);
+    const name = data.tenant?.name || data.tenant?.fullName || 'Tenant';
     sendDownloadBuffer(
       res,
       wordBuffer,
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      `Tenant_Statement_${data.tenant.name.replace(/\s+/g, '_')}.docx`
+      `Tenant_Statement_${name.replace(/\s+/g, '_')}.docx`
     );
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -70,13 +76,16 @@ const downloadTenantStatementExcel = async (req, res) => {
   try {
     const { tenantId } = req.params;
     const { fromDate, toDate, propertyId } = req.query;
-    const data = await generateTenantStatementData(tenantId, fromDate, toDate, propertyId);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateTenantStatementData(tenantId, fromDate, toDate, propertyId);
     const excelBuffer = await excelGenerators.generateTenantStatementExcel(data);
+    const name = data.tenant?.name || data.tenant?.fullName || 'Tenant';
     sendDownloadBuffer(
       res,
       excelBuffer,
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      `Tenant_Statement_${data.tenant.name.replace(/\s+/g, '_')}.xlsx`
+      `Tenant_Statement_${name.replace(/\s+/g, '_')}.xlsx`
     );
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -101,9 +110,12 @@ const downloadLandlordReportPDF = async (req, res) => {
   try {
     const { landlordId } = req.params;
     const { fromDate, toDate } = req.query;
-    const data = await generateLandlordReportData(landlordId, fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateLandlordReportData(landlordId, fromDate, toDate);
     const pdfBuffer = await pdfGenerators.generateLandlordReportPDF(data);
-    sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Landlord_Report_${data.landlord.name.replace(/\s+/g, '_')}.pdf`);
+    const name = data.landlord?.name || data.landlord?.fullName || 'Landlord';
+    sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Landlord_Report_${name.replace(/\s+/g, '_')}.pdf`);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -113,13 +125,16 @@ const downloadLandlordReportWord = async (req, res) => {
   try {
     const { landlordId } = req.params;
     const { fromDate, toDate } = req.query;
-    const data = await generateLandlordReportData(landlordId, fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateLandlordReportData(landlordId, fromDate, toDate);
     const wordBuffer = await wordGenerators.generateLandlordReportWord(data);
+    const name = data.landlord?.name || data.landlord?.fullName || 'Landlord';
     sendDownloadBuffer(
       res,
       wordBuffer,
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      `Landlord_Report_${data.landlord.name.replace(/\s+/g, '_')}.docx`
+      `Landlord_Report_${name.replace(/\s+/g, '_')}.docx`
     );
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -130,13 +145,16 @@ const downloadLandlordReportExcel = async (req, res) => {
   try {
     const { landlordId } = req.params;
     const { fromDate, toDate } = req.query;
-    const data = await generateLandlordReportData(landlordId, fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateLandlordReportData(landlordId, fromDate, toDate);
     const excelBuffer = await excelGenerators.generateLandlordExcelWorkbook(data);
+    const name = data.landlord?.name || data.landlord?.fullName || 'Landlord';
     sendDownloadBuffer(
       res,
       excelBuffer,
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      `Landlord_Report_${data.landlord.name.replace(/\s+/g, '_')}.xlsx`
+      `Landlord_Report_${name.replace(/\s+/g, '_')}.xlsx`
     );
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -161,9 +179,12 @@ const downloadAgentReportPDF = async (req, res) => {
   try {
     const { agentId } = req.params;
     const { fromDate, toDate } = req.query;
-    const data = await generateAgentReportData(agentId, fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateAgentReportData(agentId, fromDate, toDate);
     const pdfBuffer = await pdfGenerators.generateAgentReportPDF(data);
-    sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Agent_Report_${data.agent.name.replace(/\s+/g, '_')}.pdf`);
+    const name = data.agent?.name || data.agent?.fullName || 'Agent';
+    sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Agent_Report_${name.replace(/\s+/g, '_')}.pdf`);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -173,13 +194,16 @@ const downloadAgentReportWord = async (req, res) => {
   try {
     const { agentId } = req.params;
     const { fromDate, toDate } = req.query;
-    const data = await generateAgentReportData(agentId, fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateAgentReportData(agentId, fromDate, toDate);
     const wordBuffer = await wordGenerators.generateAgentReportWord(data);
+    const name = data.agent?.name || data.agent?.fullName || 'Agent';
     sendDownloadBuffer(
       res,
       wordBuffer,
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      `Agent_Report_${data.agent.name.replace(/\s+/g, '_')}.docx`
+      `Agent_Report_${name.replace(/\s+/g, '_')}.docx`
     );
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -190,13 +214,16 @@ const downloadAgentReportExcel = async (req, res) => {
   try {
     const { agentId } = req.params;
     const { fromDate, toDate } = req.query;
-    const data = await generateAgentReportData(agentId, fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateAgentReportData(agentId, fromDate, toDate);
     const excelBuffer = await excelGenerators.generateAgentExcelWorkbook(data);
+    const name = data.agent?.name || data.agent?.fullName || 'Agent';
     sendDownloadBuffer(
       res,
       excelBuffer,
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      `Agent_Report_${data.agent.name.replace(/\s+/g, '_')}.xlsx`
+      `Agent_Report_${name.replace(/\s+/g, '_')}.xlsx`
     );
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -355,7 +382,9 @@ const getPaymentReport = async (req, res) => {
 
 const downloadPaymentReportPDF = async (req, res) => {
   try {
-    const data = await generatePaymentReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generatePaymentReportData(req.query);
     const pdfBuffer = await pdfGenerators.generatePaymentReportPDF(data);
     sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Payment_Report_${Date.now()}.pdf`);
   } catch (error) {
@@ -365,7 +394,9 @@ const downloadPaymentReportPDF = async (req, res) => {
 
 const downloadPaymentReportWord = async (req, res) => {
   try {
-    const data = await generatePaymentReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generatePaymentReportData(req.query);
     const wordBuffer = await wordGenerators.generatePaymentReportWord(data);
     sendDownloadBuffer(
       res,
@@ -380,7 +411,9 @@ const downloadPaymentReportWord = async (req, res) => {
 
 const downloadPaymentReportExcel = async (req, res) => {
   try {
-    const data = await generatePaymentReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generatePaymentReportData(req.query);
     const excelBuffer = await excelGenerators.generatePaymentExcelWorkbook(data);
     sendDownloadBuffer(
       res,
@@ -407,7 +440,9 @@ const getExpenseReport = async (req, res) => {
 
 const downloadExpenseReportPDF = async (req, res) => {
   try {
-    const data = await generateExpenseReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateExpenseReportData(req.query);
     const pdfBuffer = await pdfGenerators.generateExpenseReportPDF(data);
     sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Expense_Report_${Date.now()}.pdf`);
   } catch (error) {
@@ -417,7 +452,9 @@ const downloadExpenseReportPDF = async (req, res) => {
 
 const downloadExpenseReportWord = async (req, res) => {
   try {
-    const data = await generateExpenseReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateExpenseReportData(req.query);
     const wordBuffer = await wordGenerators.generateExpenseReportWord(data);
     sendDownloadBuffer(
       res,
@@ -432,7 +469,9 @@ const downloadExpenseReportWord = async (req, res) => {
 
 const downloadExpenseReportExcel = async (req, res) => {
   try {
-    const data = await generateExpenseReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateExpenseReportData(req.query);
     const excelBuffer = await excelGenerators.generateExpenseExcelWorkbook(data);
     sendDownloadBuffer(
       res,
@@ -459,7 +498,9 @@ const getIncomeReport = async (req, res) => {
 
 const downloadIncomeReportPDF = async (req, res) => {
   try {
-    const data = await generateIncomeReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateIncomeReportData(req.query);
     const pdfBuffer = await pdfGenerators.generateIncomeReportPDF(data);
     sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Income_Report_${Date.now()}.pdf`);
   } catch (error) {
@@ -469,7 +510,9 @@ const downloadIncomeReportPDF = async (req, res) => {
 
 const downloadIncomeReportWord = async (req, res) => {
   try {
-    const data = await generateIncomeReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateIncomeReportData(req.query);
     const wordBuffer = await wordGenerators.generateIncomeReportWord(data);
     sendDownloadBuffer(
       res,
@@ -484,7 +527,9 @@ const downloadIncomeReportWord = async (req, res) => {
 
 const downloadIncomeReportExcel = async (req, res) => {
   try {
-    const data = await generateIncomeReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateIncomeReportData(req.query);
     const excelBuffer = await excelGenerators.generateIncomeExcelWorkbook(data);
     sendDownloadBuffer(
       res,
@@ -511,7 +556,9 @@ const getInvoiceReport = async (req, res) => {
 
 const downloadInvoiceReportPDF = async (req, res) => {
   try {
-    const data = await generateInvoiceReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateInvoiceReportData(req.query);
     const pdfBuffer = await pdfGenerators.generateInvoiceReportPDF(data);
     sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Invoice_Report_${Date.now()}.pdf`);
   } catch (error) {
@@ -521,7 +568,9 @@ const downloadInvoiceReportPDF = async (req, res) => {
 
 const downloadInvoiceReportWord = async (req, res) => {
   try {
-    const data = await generateInvoiceReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateInvoiceReportData(req.query);
     const wordBuffer = await wordGenerators.generateInvoiceReportWord(data);
     sendDownloadBuffer(
       res,
@@ -536,7 +585,9 @@ const downloadInvoiceReportWord = async (req, res) => {
 
 const downloadInvoiceReportExcel = async (req, res) => {
   try {
-    const data = await generateInvoiceReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateInvoiceReportData(req.query);
     const excelBuffer = await excelGenerators.generateInvoiceExcelWorkbook(data);
     sendDownloadBuffer(
       res,
@@ -565,7 +616,9 @@ const getFinancialSummary = async (req, res) => {
 const downloadFinancialSummaryPDF = async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
-    const data = await generateFinancialSummaryData(fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateFinancialSummaryData(fromDate, toDate);
     const pdfBuffer = await pdfGenerators.generateFinancialSummaryPDF(data);
     sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Financial_Summary_${Date.now()}.pdf`);
   } catch (error) {
@@ -576,7 +629,9 @@ const downloadFinancialSummaryPDF = async (req, res) => {
 const downloadFinancialSummaryWord = async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
-    const data = await generateFinancialSummaryData(fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateFinancialSummaryData(fromDate, toDate);
     const wordBuffer = await wordGenerators.generateFinancialSummaryWord(data);
     sendDownloadBuffer(
       res,
@@ -592,7 +647,9 @@ const downloadFinancialSummaryWord = async (req, res) => {
 const downloadFinancialSummaryExcel = async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
-    const data = await generateFinancialSummaryData(fromDate, toDate);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateFinancialSummaryData(fromDate, toDate);
     const excelBuffer = await excelGenerators.generateFinancialSummaryExcel(data);
     sendDownloadBuffer(
       res,
@@ -619,7 +676,9 @@ const getMortgageReport = async (req, res) => {
 
 const downloadMortgageReportPDF = async (req, res) => {
   try {
-    const data = await generateMortgageReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateMortgageReportData(req.query);
     const pdfBuffer = await pdfGenerators.generateMortgageReportPDF(data);
     sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Mortgage_Report_${Date.now()}.pdf`);
   } catch (error) {
@@ -629,7 +688,9 @@ const downloadMortgageReportPDF = async (req, res) => {
 
 const downloadMortgageReportWord = async (req, res) => {
   try {
-    const data = await generateMortgageReportData(req.query);
+    const data = (req.body && req.body.reportData)
+      ? req.body.reportData
+      : await generateMortgageReportData(req.query);
     const wordBuffer = await wordGenerators.generateMortgageReportWord(data);
     sendDownloadBuffer(
       res,
