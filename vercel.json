@@ -13,6 +13,7 @@
       "config": { "includeFiles": "Backend/src/**" }
     }
   ],
+
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
