@@ -20,6 +20,7 @@ import { formatCurrency } from '../utils/currencyFormatter';
 import {
   fetchUnifiedDashboardAPI,
   fetchDashboardSummaryAPI,
+  fetchPropertiesFromAPI,
   fetchFinancialSummaryAPI,
   fetchPaymentsAPI,
   fetchExpiringDocumentsAPI,
@@ -157,6 +158,41 @@ export function DashboardPage() {
         if (dash.upcomingPayments) setUpcomingPayments(dash.upcomingPayments);
         if (dash.expiringDocuments) setExpiringDocuments(dash.expiringDocuments);
         if (dash.expiredDocuments) setExpiredDocuments(dash.expiredDocuments);
+
+        if (Array.isArray(dash.availableUnits) && dash.availableUnits.length > 0) {
+          const mapped = dash.availableUnits.map((u) => ({
+            _id: u._id || u.id,
+            id: u.id || u._id,
+            propertyName: u.name || u.propertyName || 'Property',
+            name: u.name || u.propertyName || 'Property',
+            type: u.type || u.propertyType || u.assetType || '',
+            price: u.monthlyRent || u.price || 0,
+            monthlyRent: u.monthlyRent || u.price || 0,
+            priceType: u.priceType || 'monthly_rent',
+            status: u.status || 'Available',
+          }));
+          setAvailableUnits(mapped);
+        } else {
+          fetchPropertiesFromAPI({ status: 'Available' }).then((props) => {
+            if (Array.isArray(props) && props.length > 0) {
+              const mapped = props
+                .filter((p) => p.status === 'Available' || p.assetStatus === 'Available')
+                .slice(0, 10)
+                .map((p) => ({
+                  _id: p._id || p.id,
+                  id: p.id || p._id,
+                  propertyName: p.name || p.propertyName || 'Property',
+                  name: p.name || p.propertyName || 'Property',
+                  type: p.type || p.propertyType || p.assetType || '',
+                  price: p.monthlyRent || p.price || 0,
+                  monthlyRent: p.monthlyRent || p.price || 0,
+                  priceType: p.priceType || 'monthly_rent',
+                  status: p.status || 'Available',
+                }));
+              setAvailableUnits(mapped);
+            }
+          });
+        }
         setLoading(false);
         return;
       }
@@ -192,6 +228,27 @@ export function DashboardPage() {
           setOverduePayments(unpaid.filter((p) => p.status === 'Overdue').slice(0, 10));
           setRecentPayments(payments.filter((p) => (p.paidAmount || 0) > 0).slice(0, 5));
         }
+
+        fetchPropertiesFromAPI({ status: 'Available' }).then((props) => {
+          if (Array.isArray(props) && props.length > 0) {
+            const mapped = props
+              .filter((p) => p.status === 'Available' || p.assetStatus === 'Available')
+              .slice(0, 10)
+              .map((p) => ({
+                _id: p._id || p.id,
+                id: p.id || p._id,
+                propertyName: p.name || p.propertyName || 'Property',
+                name: p.name || p.propertyName || 'Property',
+                type: p.type || p.propertyType || p.assetType || '',
+                price: p.monthlyRent || p.price || 0,
+                monthlyRent: p.monthlyRent || p.price || 0,
+                priceType: p.priceType || 'monthly_rent',
+                status: p.status || 'Available',
+              }));
+            setAvailableUnits(mapped);
+          }
+        });
+
         setLoading(false);
         return;
       }

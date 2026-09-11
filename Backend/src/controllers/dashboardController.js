@@ -246,6 +246,19 @@ const getUnifiedDashboard = async (req, res) => {
       .sort({ date: -1 })
       .limit(5);
 
+    const availablePropertiesList = await Property.find({
+      ...propertyFilter,
+      isArchived: { $ne: true },
+      $or: [
+        { status: 'Available' },
+        { assetStatus: 'Available' },
+        { status: { $nin: ['Occupied', 'Reserved', 'Maintenance'] }, customerName: null },
+      ],
+    })
+      .populate('landlordId', 'fullName name')
+      .sort({ createdAt: -1 })
+      .limit(10);
+
     res.status(200).json({
       success: true,
       message: 'Dashboard data retrieved successfully',
@@ -294,6 +307,7 @@ const getUnifiedDashboard = async (req, res) => {
         recentExpenses,
         expiringDocuments: expiringDocumentsList,
         expiredDocuments: expiredDocumentsList,
+        availableUnits: availablePropertiesList,
       },
     });
   } catch (error) {

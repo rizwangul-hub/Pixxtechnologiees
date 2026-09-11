@@ -146,17 +146,37 @@ export function getAvailableUnitsList(limit = 5) {
   const units = getSavedUnits();
   const properties = getSavedProperties();
 
-  const available = units
-    .filter((u) => u.status === 'Available')
-    .map((u) => {
-      const propObj = properties.find((p) => p.id === u.propertyId);
-      return {
-        ...u,
-        propertyName: propObj ? propObj.name : 'Property',
-      };
-    });
+  if (Array.isArray(units) && units.length > 0) {
+    const available = units
+      .filter((u) => u.status === 'Available')
+      .map((u) => {
+        const propObj = properties.find((p) => p.id === u.propertyId || p._id === u.propertyId);
+        return {
+          ...u,
+          propertyName: propObj ? propObj.name : 'Property',
+        };
+      });
+    if (available.length > 0) {
+      return limit ? available.slice(0, limit) : available;
+    }
+  }
 
-  return limit ? available.slice(0, limit) : available;
+  // Fallback: each individual property is a rentable unit in the single-unit model
+  const availableProps = (properties || [])
+    .filter((p) => p.status === 'Available' || p.assetStatus === 'Available')
+    .map((p) => ({
+      _id: p._id || p.id,
+      id: p.id || p._id,
+      propertyName: p.name || p.propertyName || 'Property',
+      name: p.name || p.propertyName || 'Property',
+      type: p.type || p.propertyType || p.assetType || 'Shop',
+      price: p.monthlyRent || p.price || 0,
+      monthlyRent: p.monthlyRent || p.price || 0,
+      priceType: p.priceType || 'monthly_rent',
+      status: 'Available',
+    }));
+
+  return limit ? availableProps.slice(0, limit) : availableProps;
 }
 
 // --- REPORT DATASETS ---
