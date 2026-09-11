@@ -23,8 +23,6 @@ import AssignUnitModal from '../components/customers/AssignUnitModal';
 import {
   getSavedCustomers,
   deleteCustomer,
-  getAgreementsByCustomer,
-  getCustomerMetrics,
   exportCustomersToFile,
   customerTypes,
 } from '../data/customersData';
@@ -36,12 +34,18 @@ import {
   archiveCustomerAPI,
   restoreCustomerAPI,
   fetchPropertiesFromAPI,
+  fetchTenanciesAPI,
+  fetchPaymentsAPI,
 } from '../services/apiData';
 
 export default function CustomersPage() {
   const navigate = useNavigate();
-  const [customers, setCustomers] = useState(() => getSavedCustomers());
-  const [properties, setProperties] = useState(() => getSavedProperties());
+  const [customers, setCustomers] = useState([]);
+  const [properties, setProperties] = useState([]);
+  // Map: customerId (string) → active tenancy object from API
+  const [tenancyMap, setTenancyMap] = useState({});
+  // Map: customerId (string) → { totalPaid, totalOverdue }
+  const [paymentMetrics, setPaymentMetrics] = useState({});
 
   const [search, setSearch] = useState('');
   const [selectedType, setSelectedType] = useState('All');
@@ -59,20 +63,44 @@ export default function CustomersPage() {
 
   const loadData = async () => {
     try {
-      const [apiList, propsList] = await Promise.all([
+      const [apiList, propsList, tenancyList, payList] = await Promise.all([
         fetchCustomersFromAPI(activeTab === 'archived' ? { archived: 'true' } : {}),
         fetchPropertiesFromAPI(),
+        fetchTenanciesAPI({ status: 'Active' }),
+        fetchPaymentsAPI(),
       ]);
-      if (apiList && Array.isArray(apiList)) {
-        setCustomers(apiList);
-      } else {
-        setCustomers(getSavedCustomers());
+
+      setCustomers(Array.isArray(apiList) ? apiList : getSavedCustomers());
+      setProperties(Array.isArray(propsList) ? propsList : getSavedProperties());
+
+      // Build tenancy lookup: customerId → tenancy
+      const tMap = {};
+      if (Array.isArray(tenancyList)) {
+        tenancyList.forEach((t) => {
+          const cid = (t.customerId?._id || t.customerId)?.toString();
+          if (cid) {
+            if (!tMap[cid] || t.status === 'Active') {
+              tMap[cid] = t;
+            }
+          }
+        });
       }
-      if (propsList && Array.isArray(propsList)) {
-        setProperties(propsList);
-      } else {
-        setProperties(getSavedProperties());
+      setTenancyMap(tMap);
+
+      // Build payment metrics: customerId → { totalPaid, totalOverdue }
+      const pMap = {};
+      if (Array.isArray(payList)) {
+        payList.forEach((p) => {
+          const cid = (p.customerId?._id || p.customerId)?.toString();
+          if (!cid) return;
+          if (!pMap[cid]) pMap[cid] = { totalPaid: 0, totalOverdue: 0 };
+          pMap[cid].totalPaid += p.paidAmount || 0;
+          if (p.status === 'Overdue' || p.status === 'Partially Paid') {
+            pMap[cid].totalOverdue += p.remainingAmount || 0;
+          }
+        });
       }
+      setPaymentMetrics(pMap);
     } catch (e) {
       console.warn('[Tenants API Sync Notice]', e.message);
       setCustomers(getSavedCustomers());
@@ -121,7 +149,7 @@ export default function CustomersPage() {
       if (activeTab === 'active' && isArch) return false;
       if (activeTab === 'archived' && !isArch) return false;
 
-      const matchesType = selectedType === 'All' || c.type === selectedType;
+      const matchesType = selectedType === 'All' || c.type === selectedType || c.customerType === selectedType;
       const q = search.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -136,120 +164,64 @@ export default function CustomersPage() {
     });
   }, [customers, activeTab, selectedType, search]);
 
-  // Extract unique properties for dropdown filter
-  const propertyOptions = useMemo(() => {
-    const map = new Map();
-    properties.forEach((p) => {
-      const pid = (p.id || p._id)?.toString();
-      const name = p.name || p.title || 'Property';
-      if (pid) map.set(pid, name);
-    });
-    customers.forEach((c) => {
-      const agreements = getAgreementsByCustomer(c.id || c._id);
-      agreements.forEach((agr) => {
-        const pid = (agr.propertyId?._id || agr.propertyId || agr.propertyName)?.toString();
-        const name = agr.propertyName;
-        if (pid && name && !map.has(pid)) {
-          map.set(pid, name);
-        }
-      });
-    });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [properties, customers]);
-
-  // Group filtered customers property-wise
+  // Group filtered customers by assigned property (from API tenancyMap)
   const groupedData = useMemo(() => {
     const propMap = new Map();
     const unassigned = [];
 
     filteredCustomers.forEach((cust) => {
-      const agreements = getAgreementsByCustomer(cust.id || cust._id);
-      const activeAgreements = agreements.filter((a) => a.status === 'Active');
+      const cid = (cust._id || cust.id)?.toString();
+      const tenancy = tenancyMap[cid];
 
-      if (activeAgreements.length > 0) {
-        activeAgreements.forEach((agr) => {
-          const pId = (agr.propertyId?._id || agr.propertyId || agr.propertyName || 'Unassigned').toString();
-          const pName = agr.propertyName || 'Property';
+      if (tenancy) {
+        const prop = tenancy.propertyId;
+        const pId = (prop?._id || prop)?.toString() || 'unknown';
+        const pName = prop?.propertyName || prop?.name || tenancy.propertyName || 'Property';
 
-          if (selectedProperty !== 'All' && selectedProperty !== pId && selectedProperty !== pName) {
-            return;
-          }
+        if (selectedProperty !== 'All' && selectedProperty !== pId && selectedProperty !== pName) return;
 
-          if (!propMap.has(pId)) {
-            propMap.set(pId, {
-              id: pId,
-              name: pName,
-              tenants: [],
-            });
-          }
-          const group = propMap.get(pId);
-          if (!group.tenants.some((t) => (t.id || t._id) === (cust.id || cust._id))) {
-            group.tenants.push(cust);
-          }
-        });
+        if (!propMap.has(pId)) {
+          propMap.set(pId, { id: pId, name: pName, tenants: [] });
+        }
+        const group = propMap.get(pId);
+        if (!group.tenants.some((t) => (t._id || t.id)?.toString() === cid)) {
+          group.tenants.push(cust);
+        }
       } else {
-        const pName = cust.propertyName || cust.property;
-        const pId = (cust.propertyId || pName)?.toString();
-
-        if (pName && pName !== 'Unassigned') {
-          if (selectedProperty !== 'All' && selectedProperty !== pId && selectedProperty !== pName) {
-            return;
-          }
-          if (!propMap.has(pId)) {
-            propMap.set(pId, {
-              id: pId,
-              name: pName,
-              tenants: [],
-            });
-          }
-          const group = propMap.get(pId);
-          if (!group.tenants.some((t) => (t.id || t._id) === (cust.id || cust._id))) {
-            group.tenants.push(cust);
-          }
-        } else {
-          if (selectedProperty === 'All' || selectedProperty === 'Unassigned') {
-            if (!unassigned.some((t) => (t.id || t._id) === (cust.id || cust._id))) {
-              unassigned.push(cust);
-            }
+        if (selectedProperty === 'All' || selectedProperty === 'Unassigned') {
+          if (!unassigned.some((t) => (t._id || t.id)?.toString() === cid)) {
+            unassigned.push(cust);
           }
         }
       }
     });
 
-    return {
-      groups: Array.from(propMap.values()),
-      unassigned,
-    };
-  }, [filteredCustomers, selectedProperty]);
+    return { groups: Array.from(propMap.values()), unassigned };
+  }, [filteredCustomers, tenancyMap, selectedProperty]);
 
-  // High-level metrics
+  // High-level metrics from API data
   const totalCustomers = customers.length;
-  let totalActiveAgreements = 0;
-  let totalCollected = 0;
-  let totalOverdue = 0;
-
-  customers.forEach((c) => {
-    const m = getCustomerMetrics(c.id || c._id);
-    totalActiveAgreements += m.activeAgreementsCount;
-    totalCollected += m.totalPaid;
-    totalOverdue += m.totalOverdue;
-  });
+  const totalActiveAgreements = Object.keys(tenancyMap).length;
+  const totalCollected = Object.values(paymentMetrics).reduce((s, m) => s + m.totalPaid, 0);
+  const totalOverdue = Object.values(paymentMetrics).reduce((s, m) => s + m.totalOverdue, 0);
 
   const renderTenantRow = (cust) => {
-    const agreements = getAgreementsByCustomer(cust.id || cust._id);
-    const metrics = getCustomerMetrics(cust.id || cust._id);
-    const activeAgreements = agreements.filter((a) => a.status === 'Active');
+    const cid = (cust._id || cust.id)?.toString();
+    const tenancy = tenancyMap[cid];
+    const metrics = paymentMetrics[cid] || { totalPaid: 0, totalOverdue: 0 };
+    const prop = tenancy?.propertyId;
+    const propName = prop?.propertyName || prop?.name || tenancy?.propertyName || null;
 
     return (
-      <tr key={cust.id || cust._id} className="hover:bg-gray-50 transition-colors">
+      <tr key={cid} className="hover:bg-gray-50 transition-colors">
         <td className="py-3.5 px-4 font-semibold text-gray-900">
           <Link
-            to={`/tenants/${cust.id || cust._id}`}
+            to={`/tenants/${cid}`}
             className="text-[#04A26F] hover:underline font-bold"
           >
-            {cust.name || cust.fullName}
+            {cust.fullName || cust.name}
           </Link>
-          <div className="text-xs text-gray-500 font-normal">{cust.type || 'Individual'}</div>
+          <div className="text-xs text-gray-500 font-normal">{cust.type || cust.customerType || 'Individual'}</div>
           {cust.archiveReason && (
             <div className="text-[11px] text-amber-700 italic mt-0.5">
               Reason: {cust.archiveReason}
@@ -267,7 +239,16 @@ export default function CustomersPage() {
         </td>
 
         <td className="py-3.5 px-4">
-          {activeAgreements.length === 0 ? (
+          {tenancy && propName ? (
+            <div className="space-y-1">
+              <div className="text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-medium inline-block">
+                {propName}
+              </div>
+              <div className="text-[10px] text-gray-500">
+                {formatCurrency(tenancy.monthlyRent)}/mo · {tenancy.status}
+              </div>
+            </div>
+          ) : (
             activeTab === 'active' ? (
               <button
                 onClick={() => {
@@ -276,23 +257,11 @@ export default function CustomersPage() {
                 }}
                 className="text-xs font-semibold text-[#04A26F] bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md transition-colors"
               >
-                + Assign Unit
+                + Assign Property
               </button>
             ) : (
               <span className="text-xs text-gray-400 font-medium">None</span>
             )
-          ) : (
-            <div className="space-y-1">
-              {activeAgreements.map((agr) => (
-                <div
-                  key={agr.id}
-                  className="text-xs bg-gray-100 text-gray-800 px-2 py-0.5 rounded font-medium inline-block mr-1"
-                >
-                  {agr.propertyName} ({agr.unitName}) -{' '}
-                  <span className="text-emerald-700">{agr.agreementType}</span>
-                </div>
-              ))}
-            </div>
           )}
         </td>
 
@@ -312,21 +281,19 @@ export default function CustomersPage() {
         <td className="py-3.5 px-4">
           <span
             className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-              cust.status === 'Active'
-                ? 'bg-emerald-100 text-emerald-800'
-                : cust.status === 'Archived' || cust.isArchived
+              cust.isArchived
                 ? 'bg-amber-100 text-amber-800'
-                : 'bg-gray-100 text-gray-600'
+                : 'bg-emerald-100 text-emerald-800'
             }`}
           >
-            {cust.isArchived ? 'Archived' : cust.status || 'Active'}
+            {cust.isArchived ? 'Archived' : 'Active'}
           </span>
         </td>
 
         <td className="py-3.5 px-4 text-right">
           <div className="flex items-center justify-end space-x-2">
             <Link
-              to={`/tenants/${cust.id || cust._id}`}
+              to={`/tenants/${cid}`}
               title="View Tenant Details"
               className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
             >
@@ -336,7 +303,7 @@ export default function CustomersPage() {
             {activeTab === 'active' ? (
               <>
                 <Link
-                  to={`/tenants/${cust.id || cust._id}/edit`}
+                  to={`/tenants/${cid}/edit`}
                   title="Edit Tenant"
                   className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
                 >
