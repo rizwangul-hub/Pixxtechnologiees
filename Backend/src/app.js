@@ -41,27 +41,27 @@ app.use(
   })
 );
 
-// CORS Configuration (Strict origin checking in production)
+// CORS Configuration
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5173',
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
-  'https://pixxtechnologiees.vercel.app',
+  // Production frontend URL — set FRONTEND_URL in Vercel env vars
+  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
 ];
 
 app.use(
   cors({
     origin: function (origin, callback) {
+      // Allow requests with no origin (mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
-      if (
-        allowedOrigins.indexOf(origin) !== -1 ||
-        origin.endsWith('.vercel.app') ||
-        process.env.NODE_ENV !== 'production'
-      ) {
-        return callback(null, true);
-      }
-      return callback(new Error('CORS Policy: Access denied from unauthorized origin'), false);
+      // Allow any *.vercel.app subdomain (covers preview deployments)
+      if (origin.endsWith('.vercel.app')) return callback(null, true);
+      // Allow localhost in development
+      if (process.env.NODE_ENV !== 'production') return callback(null, true);
+      // Check explicit allowlist
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error(`CORS: origin ${origin} not allowed`), false);
     },
     credentials: true,
   })
