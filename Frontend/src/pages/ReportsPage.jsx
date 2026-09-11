@@ -1234,7 +1234,9 @@ export function ReportsPage() {
                       <table className="w-full text-left text-xs border-collapse">
                         <thead>
                           <tr className="bg-slate-900 text-white font-bold">
-                            <th className="p-2.5">Property</th>
+                            <th className="p-2.5">Facility Ref</th>
+                            <th className="p-2.5">Type</th>
+                            <th className="p-2.5">Secured Asset(s)</th>
                             <th className="p-2.5">Landlord</th>
                             <th className="p-2.5">Lender</th>
                             <th className="p-2.5">Original Loan</th>
@@ -1247,24 +1249,42 @@ export function ReportsPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                          {reportData.rows.map((row, idx) => (
-                            <tr key={row.mortgageId || idx} className="hover:bg-slate-50 font-semibold">
-                              <td className="p-2.5 font-extrabold text-slate-900">{row.propertyName}</td>
-                              <td className="p-2.5 text-slate-600">{row.landlordName}</td>
-                              <td className="p-2.5 text-slate-800">{row.lenderName}</td>
-                              <td className="p-2.5 font-mono">{row.originalLoanAmountFormatted}</td>
-                              <td className="p-2.5 font-mono text-emerald-700">{row.totalPaidFormatted}</td>
-                              <td className="p-2.5 font-mono font-black text-amber-900">{row.currentOutstandingBalanceFormatted}</td>
-                              <td className="p-2.5 font-mono">{row.monthlyPaymentFormatted}</td>
-                              <td className="p-2.5">{row.interestRate ? `${row.interestRate}%` : '0%'}</td>
-                              <td className="p-2.5 text-slate-600">{row.nextPaymentDate}</td>
-                              <td className="p-2.5">
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${row.status === 'Active' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
-                                  {row.status}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
+                          {reportData.rows.map((row, idx) => {
+                            const isCol = (row.mortgageType === 'Collective / Group') || (row.securedPropertiesCount > 1);
+                            return (
+                              <tr key={row.mortgageId || idx} className="hover:bg-slate-50 font-semibold">
+                                <td className="p-2.5 font-mono font-bold text-slate-800">{row.mortgageReference || '-'}</td>
+                                <td className="p-2.5">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isCol ? 'bg-purple-100 text-purple-800' : 'bg-indigo-100 text-indigo-800'}`}>
+                                    {isCol ? 'Collective' : 'Individual'}
+                                  </span>
+                                </td>
+                                <td className="p-2.5 font-extrabold text-slate-900">
+                                  <div>
+                                    <span>{row.propertyName}</span>
+                                    {row.securedProperties && row.securedProperties.length > 0 && isCol && (
+                                      <p className="text-[10px] text-slate-500 font-normal truncate max-w-xs">
+                                        {Array.isArray(row.securedProperties) ? row.securedProperties.join(', ') : row.securedProperties}
+                                      </p>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="p-2.5 text-slate-600">{row.landlordName}</td>
+                                <td className="p-2.5 text-slate-800">{row.lenderName}</td>
+                                <td className="p-2.5 font-mono">{row.originalLoanAmountFormatted}</td>
+                                <td className="p-2.5 font-mono text-emerald-700">{row.totalPaidFormatted}</td>
+                                <td className="p-2.5 font-mono font-black text-amber-900">{row.currentOutstandingBalanceFormatted}</td>
+                                <td className="p-2.5 font-mono">{row.monthlyPaymentFormatted}</td>
+                                <td className="p-2.5">{row.interestRate ? `${row.interestRate}%` : '0%'}</td>
+                                <td className="p-2.5 text-slate-600">{row.nextPaymentDate}</td>
+                                <td className="p-2.5">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${row.status === 'Active' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
+                                    {row.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
