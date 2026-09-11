@@ -29,23 +29,50 @@ function parseYearMonth(dateStr) {
   return null;
 }
 
+let lastRunTime = 0;
+const THROTTLE_MS = 5 * 60 * 1000; // Run at most once every 5 minutes
+
 /**
  * Automatically generates missing monthly payment records for active tenancies
  */
-async function generateMonthlyPayments() {
+async function generateMonthlyPayments(force = false) {
+  const nowMs = Date.now();
+  if (!force && (nowMs - lastRunTime < THROTTLE_MS)) {
+    return { success: true, cached: true };
+  }
+  lastRunTime = nowMs;
+
   try {
     const activeTenancies = await Tenancy.find({ status: 'Active' });
+    if (!activeTenancies.length) {
+      return { success: true, generatedCount: 0 };
+    }
+
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1; // 1-12
     const todayStr = now.toISOString().split('T')[0];
 
+    const tenancyIds = activeTenancies.map((t) => t._id);
+
+    // Fetch existing payments for all active tenancies in one query
+    const existingPayments = await Payment.find({
+      tenancyId: { $in: tenancyIds },
+      paymentType: { $ne: 'Opening Balance' },
+    });
+
+    const paymentMap = new Map();
+    for (const p of existingPayments) {
+      const key = `${p.tenancyId.toString()}_${p.billingYear}_${p.billingMonth}`;
+      paymentMap.set(key, p);
+    }
+
+    let invoiceCount = await Invoice.countDocuments();
     let generatedCount = 0;
 
     for (const tenancy of activeTenancies) {
       if (!tenancy.monthlyRent || tenancy.monthlyRent <= 0) continue;
 
-      // Use billingStartDate if set (e.g. '2026-01'), otherwise use startDate
       const effectiveBillingStart = tenancy.billingStartDate || tenancy.startDate;
       const startYM = parseYearMonth(effectiveBillingStart);
       if (!startYM) continue;
@@ -66,23 +93,18 @@ async function generateMonthlyPayments() {
         }
       }
 
-      // Loop year by year and month by month from start date to end range
       for (let y = startYear; y <= endYear; y++) {
         const mStart = y === startYear ? startMonth : 1;
         const mEnd = y === endYear ? endMonth : 12;
 
         for (let m = mStart; m <= mEnd; m++) {
+          const key = `${tenancy._id.toString()}_${y}_${m}`;
+          const existingPayment = paymentMap.get(key);
+
           const dueDay = Math.min(Math.max(tenancy.paymentDueDay || 1, 1), 28);
           const dueDayStr = String(dueDay).padStart(2, '0');
           const monthStr = String(m).padStart(2, '0');
           const dueDateStr = `${y}-${monthStr}-${dueDayStr}`;
-
-          const existingPayment = await Payment.findOne({
-            tenancyId: tenancy._id,
-            billingMonth: m,
-            billingYear: y,
-            paymentType: { $ne: 'Opening Balance' },
-          });
 
           if (!existingPayment) {
             const initialStatus = dueDateStr < todayStr ? 'Overdue' : 'Pending';
@@ -104,9 +126,10 @@ async function generateMonthlyPayments() {
                 notes: `Automated rent for ${getMonthName(m)} ${y}`,
               });
 
-              const count = await Invoice.countDocuments();
-              const invoiceNumber = `INV-${y}-${String(count + 1).padStart(4, '0')}`;
-              
+              paymentMap.set(key, newPayment);
+              invoiceCount++;
+              const invoiceNumber = `INV-${y}-${String(invoiceCount).padStart(4, '0')}`;
+
               await Invoice.create({
                 invoiceNumber,
                 paymentId: newPayment._id,

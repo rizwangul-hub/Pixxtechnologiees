@@ -59,7 +59,7 @@ const getPayments = async (req, res) => {
     let payments = await RentPayment.find(filter)
       .populate('customerId', 'name')
       .populate('propertyId', 'name')
-      .populate('unitId', 'name')
+      
       .sort({ dueDate: 1 });
     payments = payments.map(withStatus);
     if (status === 'Upcoming') {

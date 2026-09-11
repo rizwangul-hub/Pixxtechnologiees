@@ -15,7 +15,7 @@ exports.getInvoices = async (req, res) => {
     const invoices = await Invoice.find(filter)
       .populate('customerId', 'fullName phone email tenantName contactNumber')
       .populate('propertyId', 'propertyName propertyType address')
-      .populate('unitId', 'unitName unitNumber monthlyRent')
+      
       .populate('paymentId')
       .sort({ createdAt: -1 });
 
@@ -37,7 +37,7 @@ exports.getInvoiceById = async (req, res) => {
     const invoice = await Invoice.findById(req.params.id)
       .populate('customerId')
       .populate('propertyId')
-      .populate('unitId')
+      
       .populate('paymentId');
 
     if (!invoice) {

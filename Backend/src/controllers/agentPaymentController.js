@@ -48,7 +48,7 @@ const getAgentPayments = async (req, res) => {
     const payments = await AgentPayment.find(filter)
       .populate('agentId', 'fullName phone email region')
       .populate('propertyId', 'propertyName name')
-      .populate('unitId', 'unitName name')
+      
       .populate('tenantId', 'fullName name phone email')
       .populate('tenancyId', 'monthlyRent companyMonthlyAmount')
       .sort({ billingYear: -1, billingMonth: -1, dueDate: -1 })
@@ -96,7 +96,7 @@ const getAgentPaymentById = async (req, res) => {
     const payment = await AgentPayment.findById(req.params.id)
       .populate('agentId', 'fullName phone email region')
       .populate('propertyId', 'propertyName name')
-      .populate('unitId', 'unitName name price')
+      
       .populate('tenantId', 'fullName name phone email')
       .populate('tenancyId', 'monthlyRent companyMonthlyAmount startDate');
 

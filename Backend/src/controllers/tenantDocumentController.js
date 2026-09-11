@@ -16,7 +16,7 @@ async function attachTenancyDetails(doc) {
 
   const activeTenancy = await Tenancy.findOne({ customerId: doc.tenantId, status: 'Active' })
     .populate('propertyId')
-    .populate('unitId')
+    
     .populate('agentId');
 
   obj.propertyName = activeTenancy?.propertyId?.title || activeTenancy?.propertyId?.name || 'Unassigned Property';

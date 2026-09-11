@@ -32,7 +32,7 @@ exports.getPayments = async (req, res) => {
 
     const filter = {};
     if (property && mongoose.Types.ObjectId.isValid(property)) filter.propertyId = property;
-    if (unit && mongoose.Types.ObjectId.isValid(unit)) filter.unitId = unit;
+    
     if (customer && mongoose.Types.ObjectId.isValid(customer)) filter.customerId = customer;
     if (tenancyId && mongoose.Types.ObjectId.isValid(tenancyId)) filter.tenancyId = tenancyId;
     if (status) filter.status = status;
@@ -43,7 +43,7 @@ exports.getPayments = async (req, res) => {
     const payments = await Payment.find(filter)
       .populate('customerId', 'fullName phone email cnicOrId tenantName contactNumber name')
       .populate('propertyId', 'propertyName propertyType address name')
-      .populate('unitId', 'unitName unitNumber monthlyRent name')
+      
       .populate('tenancyId')
       .sort({ dueDate: -1, createdAt: -1 });
 
@@ -79,7 +79,7 @@ exports.getOverduePayments = async (req, res) => {
     })
       .populate('customerId', 'fullName phone email tenantName contactNumber name')
       .populate('propertyId', 'propertyName propertyType address name')
-      .populate('unitId', 'unitName unitNumber monthlyRent name')
+      
       .sort({ dueDate: 1 });
 
     const formattedData = overduePayments.map((p) => {
@@ -122,7 +122,7 @@ exports.getUpcomingPayments = async (req, res) => {
     })
       .populate('customerId', 'fullName phone email tenantName contactNumber name')
       .populate('propertyId', 'propertyName propertyType address name')
-      .populate('unitId', 'unitName unitNumber monthlyRent name')
+      
       .sort({ dueDate: 1 });
 
     res.status(200).json({
@@ -201,7 +201,7 @@ exports.getPaymentById = async (req, res) => {
     const payment = await Payment.findById(req.params.id)
       .populate('customerId')
       .populate('propertyId')
-      .populate('unitId')
+      
       .populate('tenancyId');
 
     if (!payment) {
@@ -267,7 +267,7 @@ exports.recordPayment = async (req, res) => {
     const updatedPayment = await Payment.findById(payment._id)
       .populate('customerId')
       .populate('propertyId')
-      .populate('unitId');
+      
 
     res.status(200).json({
       success: true,

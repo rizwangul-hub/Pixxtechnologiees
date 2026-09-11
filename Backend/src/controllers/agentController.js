@@ -173,7 +173,7 @@ const getAgentById = async (req, res) => {
       status: 'Active',
     })
       .populate('propertyId', 'propertyName name address type')
-      .populate('unitId', 'unitName name price type status')
+      
       .populate('customerId', 'fullName name phone email');
 
     const assignedUnitsCount = assignedTenancies.length;
@@ -190,7 +190,7 @@ const getAgentById = async (req, res) => {
     // 3. Recent Agent Payments
     const recentPayments = await AgentPayment.find({ agentId: agent._id })
       .populate('propertyId', 'propertyName name')
-      .populate('unitId', 'unitName name')
+      
       .populate('tenantId', 'fullName name')
       .sort({ billingYear: -1, billingMonth: -1, createdAt: -1 })
       .limit(10);
@@ -198,7 +198,7 @@ const getAgentById = async (req, res) => {
     // 4. Recent Agent Expenses
     const recentExpenses = await AgentExpense.find({ agentId: agent._id })
       .populate('propertyId', 'propertyName name')
-      .populate('unitId', 'unitName name')
+      
       .populate('tenantId', 'fullName name')
       .sort({ date: -1, createdAt: -1 })
       .limit(10);
