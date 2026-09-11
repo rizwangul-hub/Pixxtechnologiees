@@ -492,11 +492,16 @@ export default function CustomersPage() {
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#04A26F] bg-white font-medium"
               >
                 <option value="All">All Properties</option>
-                {propertyOptions.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                {properties.map((p) => {
+                  const propertyId = (p._id || p.id)?.toString();
+                  const propertyName = p.propertyName || p.name;
+
+                  return (
+                    <option key={propertyId} value={propertyId}>
+                      {propertyName}
+                    </option>
+                  );
+                })}
                 <option value="Unassigned">Unassigned Tenants</option>
               </select>
             </div>
