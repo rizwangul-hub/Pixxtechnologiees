@@ -24,13 +24,13 @@ import RecordPaymentModal from '../components/payments/RecordPaymentModal';
 import { TenantDocumentSection } from '../components/tenants/TenantDocumentSection';
 import {
   getSavedCustomers,
-  getAgreementsByCustomer,
-  getSavedPaymentSchedules,
-  getSavedRecordedPayments,
-  getCustomerMetrics,
-  terminateAgreement,
 } from '../data/customersData';
-import { fetchCustomerByIdAPI, fetchPaymentsAPI } from '../services/apiData';
+import {
+  fetchCustomerByIdAPI,
+  fetchPaymentsAPI,
+  fetchTenanciesAPI,
+  endTenancyAPI,
+} from '../services/apiData';
 import { formatCurrency } from '../utils/currencyFormatter';
 
 export default function CustomerDetailPage() {
@@ -38,80 +38,106 @@ export default function CustomerDetailPage() {
   const navigate = useNavigate();
 
   const [customer, setCustomer] = useState(null);
-  const [agreements, setAgreements] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Tenancies from backend (replaces localStorage agreements)
+  const [tenancies, setTenancies] = useState([]);
+  // Payment schedules from backend (replaces localStorage schedules)
   const [schedules, setSchedules] = useState([]);
-  const [payments, setPayments] = useState([]);
+  // All payments from backend
+  const [apiPayments, setApiPayments] = useState([]);
+
+  const [openingBalance, setOpeningBalance] = useState(0);
+
+  // Computed metrics from API data
   const [metrics, setMetrics] = useState({
-    activeAgreementsCount: 0,
-    totalExpected: 0,
     totalPaid: 0,
     totalPending: 0,
     totalOverdue: 0,
   });
-  // Data fetched from backend API (tenancy, payments with opening balance)
-  const [apiPayments, setApiPayments] = useState([]);
-  const [openingBalance, setOpeningBalance] = useState(0);
 
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedScheduleForPayment, setSelectedScheduleForPayment] = useState(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  const loadCustomerData = () => {
-    const customers = getSavedCustomers();
-    const found = customers.find((c) => c.id === customerId);
-    setCustomer(found || null);
-
-    if (found) {
-      const agrs = getAgreementsByCustomer(customerId);
-      setAgreements(agrs);
-
-      const allScheds = getSavedPaymentSchedules().filter((s) => s.customerId === customerId);
-      setSchedules(allScheds);
-
-      const allPays = getSavedRecordedPayments().filter((p) => p.customerId === customerId);
-      setPayments(allPays);
-
-      setMetrics(getCustomerMetrics(customerId));
-    }
-
-    // Also fetch live data from backend API to get opening balance
-    const fetchLiveData = async () => {
+  const loadCustomerData = async () => {
+    setLoading(true);
+    try {
+      // 1. Load customer profile
+      let cust = null;
       try {
-        const [apiCust, apiPays] = await Promise.allSettled([
-          fetchCustomerByIdAPI(customerId),
-          fetchPaymentsAPI({ customer: customerId }),
-        ]);
-
-        // Extract API payments
-        const livePays = apiPays.status === 'fulfilled' ? (apiPays.value?.data || apiPays.value || []) : [];
-        setApiPayments(livePays);
-
-        // Sum opening balance from all Opening Balance payment records
-        const obTotal = livePays
-          .filter((p) => p.paymentType === 'Opening Balance')
-          .reduce((sum, p) => sum + (p.remainingAmount || 0), 0);
-        setOpeningBalance(obTotal);
+        cust = await fetchCustomerByIdAPI(customerId);
       } catch (e) {
-        console.warn('[CustomerDetailPage] API fetch warning:', e.message);
+        // fallback to localStorage
+        const localCustomers = getSavedCustomers();
+        cust = localCustomers.find((c) => c.id === customerId || c._id === customerId) || null;
       }
-    };
-    fetchLiveData();
+      setCustomer(cust);
+
+      // 2. Load tenancies for this customer from backend
+      const tenancyList = await fetchTenanciesAPI({ customerId });
+      setTenancies(Array.isArray(tenancyList) ? tenancyList : []);
+
+      // 3. Load all payment schedules for this customer from backend
+      const payList = await fetchPaymentsAPI({ customer: customerId });
+      const allPays = Array.isArray(payList) ? payList : [];
+      setApiPayments(allPays);
+
+      // Separate schedules (non-opening balance) and opening balances
+      const regularSchedules = allPays.filter((p) => p.paymentType !== 'Opening Balance');
+      setSchedules(regularSchedules);
+
+      // 4. Compute metrics from backend data
+      const obTotal = allPays
+        .filter((p) => p.paymentType === 'Opening Balance')
+        .reduce((sum, p) => sum + (p.remainingAmount || 0), 0);
+      setOpeningBalance(obTotal);
+
+      const totalPaid = regularSchedules.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
+      const totalPending = regularSchedules
+        .filter((p) => p.status === 'Pending' || p.status === 'Upcoming')
+        .reduce((sum, p) => sum + (p.remainingAmount || p.amount || 0), 0);
+      const totalOverdue = regularSchedules
+        .filter((p) => p.status === 'Overdue' || p.status === 'Partially Paid')
+        .reduce((sum, p) => sum + (p.remainingAmount || 0), 0);
+
+      setMetrics({ totalPaid, totalPending, totalOverdue });
+    } catch (e) {
+      console.warn('[CustomerDetailPage] Load error:', e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     loadCustomerData();
   }, [customerId]);
 
-  const handleTerminateAgreement = (agreementId, unitName) => {
+  const handleTerminateTenancy = async (tenancyId, propertyName) => {
     if (
       window.confirm(
-        `Are you sure you want to end this agreement for unit "${unitName}"? The unit will be marked as Available.`
+        `Are you sure you want to end the tenancy for "${propertyName}"? The property will be marked as Available.`
       )
     ) {
-      terminateAgreement(agreementId);
-      loadCustomerData();
+      try {
+        await endTenancyAPI(tenancyId);
+        loadCustomerData();
+      } catch (e) {
+        alert('Failed to end tenancy: ' + e.message);
+      }
     }
   };
+
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="p-8 text-center text-gray-500">
+          <p className="text-lg">Loading tenant profile...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   if (!customer) {
     return (
@@ -126,6 +152,7 @@ export default function CustomerDetailPage() {
     );
   }
 
+  const customerName = customer.fullName || customer.name || 'Unknown Tenant';
   const targetTenantId = (customer._id || customer.id || customerId)?.toString();
 
   return (
@@ -142,9 +169,9 @@ export default function CustomerDetailPage() {
             </Link>
             <div>
               <div className="flex items-center space-x-3">
-                <h1 className="text-2xl font-bold text-gray-900">{customer.name}</h1>
+                <h1 className="text-2xl font-bold text-gray-900">{customerName}</h1>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                  {customer.type}
+                  {customer.type || customer.customerType || 'Tenant'}
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
@@ -159,10 +186,10 @@ export default function CustomerDetailPage() {
               className="px-4 py-2 bg-emerald-50 text-[#04A26F] border border-emerald-200 text-sm font-semibold rounded-lg hover:bg-emerald-100 transition-colors flex items-center space-x-2"
             >
               <Home className="w-4 h-4" />
-              <span>Assign Unit</span>
+              <span>Assign Property</span>
             </button>
             <Link
-              to={`/tenants/${customer.id}/edit`}
+              to={`/tenants/${customer._id || customer.id}/edit`}
               className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors"
             >
               Edit Profile
@@ -171,7 +198,7 @@ export default function CustomerDetailPage() {
         </div>
 
         {/* Date Range Report & Statement Download Bar */}
-        <EntityReportDownloadBar entityType="tenant" entityId={targetTenantId} entityName={customer.name} />
+        <EntityReportDownloadBar entityType="tenant" entityId={targetTenantId} entityName={customerName} />
 
         {/* Customer Details & Metrics Header */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -261,15 +288,15 @@ export default function CustomerDetailPage() {
           </div>
         </div>
 
-        {/* Assigned Units & Agreements */}
+        {/* Assigned Properties & Tenancies */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-gray-900">Agreements & Unit Assignments</h2>
+            <h2 className="text-lg font-bold text-gray-900">Property Assignments & Tenancies</h2>
             <button
               onClick={() => setIsAssignModalOpen(true)}
               className="text-xs font-semibold text-[#04A26F] hover:underline flex items-center space-x-1"
             >
-              <Plus className="w-3.5 h-3.5" /> <span>Assign Another Unit</span>
+              <Plus className="w-3.5 h-3.5" /> <span>Assign Another Property</span>
             </button>
           </div>
 
@@ -278,69 +305,60 @@ export default function CustomerDetailPage() {
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase">
                   <th className="py-3 px-4">Property</th>
-                  <th className="py-3 px-4">Unit</th>
-                  <th className="py-3 px-4">Agreement Type</th>
-                  <th className="py-3 px-4">Agreed Price</th>
-                  <th className="py-3 px-4">Start / End Date</th>
+                  <th className="py-3 px-4">Address</th>
+                  <th className="py-3 px-4">Monthly Rent</th>
+                  <th className="py-3 px-4">Start Date</th>
+                  <th className="py-3 px-4">End Date</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {agreements.length === 0 ? (
+                {tenancies.length === 0 ? (
                   <tr>
                     <td colSpan="7" className="py-6 text-center text-gray-500 text-sm">
-                      No units currently assigned to this tenant.
+                      No properties currently assigned to this tenant.
                     </td>
                   </tr>
                 ) : (
-                  agreements.map((agr) => (
-                    <tr key={agr.id} className="hover:bg-gray-50">
-                      <td className="py-3 px-4 font-semibold text-gray-900">{agr.propertyName}</td>
-                      <td className="py-3 px-4 font-medium text-gray-800">{agr.unitName}</td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                            agr.agreementType === 'Rent'
-                              ? 'bg-blue-50 text-blue-700'
-                              : 'bg-purple-50 text-purple-700'
-                          }`}
-                        >
-                          {agr.agreementType}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-bold text-gray-900">
-                        {formatCurrency(agr.monthlyOrSalePrice)}
-                        <span className="text-xs font-normal text-gray-500">
-                          {agr.agreementType === 'Rent' ? '/mo' : ''}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-xs text-gray-600">
-                        {agr.startDate} {agr.endDate ? `to ${agr.endDate}` : ''}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`px-2 py-0.5 rounded text-xs font-bold ${
-                            agr.status === 'Active'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}
-                        >
-                          {agr.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        {agr.status === 'Active' && (
-                          <button
-                            onClick={() => handleTerminateAgreement(agr.id, agr.unitName)}
-                            className="text-xs font-medium text-rose-600 hover:bg-rose-50 px-2.5 py-1 rounded transition-colors"
+                  tenancies.map((t) => {
+                    const prop = t.propertyId;
+                    const propName = prop?.propertyName || prop?.name || t.propertyName || '—';
+                    const propAddress = prop?.address || prop?.city || '—';
+                    return (
+                      <tr key={t._id} className="hover:bg-gray-50">
+                        <td className="py-3 px-4 font-semibold text-gray-900">{propName}</td>
+                        <td className="py-3 px-4 text-gray-600 text-xs">{propAddress}</td>
+                        <td className="py-3 px-4 font-bold text-gray-900">
+                          {formatCurrency(t.monthlyRent)}
+                          <span className="text-xs font-normal text-gray-500">/mo</span>
+                        </td>
+                        <td className="py-3 px-4 text-xs text-gray-600">{t.startDate?.slice(0, 10) || '—'}</td>
+                        <td className="py-3 px-4 text-xs text-gray-600">{t.endDate?.slice(0, 10) || 'Ongoing'}</td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-bold ${
+                              t.status === 'Active'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}
                           >
-                            End Agreement
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                            {t.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {t.status === 'Active' && (
+                            <button
+                              onClick={() => handleTerminateTenancy(t._id, propName)}
+                              className="text-xs font-medium text-rose-600 hover:bg-rose-50 px-2.5 py-1 rounded transition-colors"
+                            >
+                              End Tenancy
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -476,36 +494,44 @@ export default function CustomerDetailPage() {
             <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase">
-                  <th className="py-3 px-4">Payment ID</th>
-                  <th className="py-3 px-4">Date</th>
+                  <th className="py-3 px-4">Period</th>
+                  <th className="py-3 px-4">Due Date</th>
+                  <th className="py-3 px-4">Amount Due</th>
                   <th className="py-3 px-4">Amount Paid</th>
-                  <th className="py-3 px-4">Method</th>
-                  <th className="py-3 px-4">Reference / Txn</th>
-                  <th className="py-3 px-4">Notes</th>
+                  <th className="py-3 px-4">Remaining</th>
+                  <th className="py-3 px-4">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {payments.length === 0 ? (
+                {apiPayments.filter((p) => p.paymentType !== 'Opening Balance' && (p.paidAmount || 0) > 0).length === 0 ? (
                   <tr>
                     <td colSpan="6" className="py-6 text-center text-gray-500 text-sm">
                       No payment receipts recorded yet.
                     </td>
                   </tr>
                 ) : (
-                  payments.map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-50">
-                      <td className="py-3 px-4 font-mono text-xs text-gray-600">{p.id}</td>
-                      <td className="py-3 px-4 text-xs font-mono">{p.paymentDate}</td>
-                      <td className="py-3 px-4 font-bold text-emerald-700">
-                        {formatCurrency(p.amountPaid)}
-                      </td>
-                      <td className="py-3 px-4 text-xs text-gray-800">{p.paymentMethod}</td>
-                      <td className="py-3 px-4 text-xs font-mono text-gray-600">
-                        {p.referenceNo || '—'}
-                      </td>
-                      <td className="py-3 px-4 text-xs text-gray-500">{p.notes || '—'}</td>
-                    </tr>
-                  ))
+                  apiPayments
+                    .filter((p) => p.paymentType !== 'Opening Balance' && (p.paidAmount || 0) > 0)
+                    .map((p) => (
+                      <tr key={p._id} className="hover:bg-gray-50">
+                        <td className="py-3 px-4 font-semibold text-gray-900">{p.periodName || `Month ${p.billingMonth}/${p.billingYear}`}</td>
+                        <td className="py-3 px-4 text-xs font-mono">{p.dueDate?.slice(0, 10) || '—'}</td>
+                        <td className="py-3 px-4 text-gray-700">{formatCurrency(p.amount)}</td>
+                        <td className="py-3 px-4 font-bold text-emerald-700">{formatCurrency(p.paidAmount)}</td>
+                        <td className="py-3 px-4 font-bold text-amber-600">{formatCurrency(p.remainingAmount)}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                            p.status === 'Paid' || p.status === 'Received'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : p.status === 'Partially Paid'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-rose-100 text-rose-700'
+                          }`}>
+                            {p.status === 'Paid' ? 'Received' : p.status === 'Partially Paid' ? 'Partially Received' : p.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
                 )}
               </tbody>
             </table>
