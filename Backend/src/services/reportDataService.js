@@ -1015,14 +1015,17 @@ async function generateFinancialSummaryData(fromDate, toDate) {
 }
 
 async function generateMortgageReportData(filters = {}) {
-  const { propertyId, landlordId, lenderName, status, fromDate, toDate } = filters;
+  const { propertyId, landlordId, lenderName, status, mortgageType, fromDate, toDate } = filters;
 
   let query = {};
   if (propertyId && propertyId !== 'All' && propertyId !== 'all') {
     const pDoc = await findEntitySafely(Property, propertyId);
     const validP = filterValidObjectIds([pDoc?._id, pDoc?.id, propertyId]);
-    if (validP.length > 0) query.propertyId = { $in: validP };
-    else query.propertyId = new mongoose.Types.ObjectId();
+    if (validP.length > 0) {
+      query.$or = [{ propertyId: { $in: validP } }, { 'properties.propertyId': { $in: validP } }];
+    } else {
+      query.propertyId = new mongoose.Types.ObjectId();
+    }
   }
   if (landlordId && landlordId !== 'All' && landlordId !== 'all') {
     const lDoc = await findEntitySafely(Landlord, landlordId);
@@ -1031,6 +1034,7 @@ async function generateMortgageReportData(filters = {}) {
     else query.landlordId = new mongoose.Types.ObjectId();
   }
   if (status && status !== 'All') query.status = status;
+  if (mortgageType && mortgageType !== 'All') query.mortgageType = mortgageType;
   if (lenderName) query.lenderName = new RegExp(lenderName.trim(), 'i');
 
   if (fromDate || toDate) {
@@ -1041,6 +1045,7 @@ async function generateMortgageReportData(filters = {}) {
 
   const mortgages = await Mortgage.find(query)
     .populate('propertyId', 'name address type city')
+    .populate('properties.propertyId', 'name address type city')
     .populate('landlordId', 'fullName email phone')
     .sort({ createdAt: -1 });
 
@@ -1053,19 +1058,46 @@ async function generateMortgageReportData(filters = {}) {
     const payments = await MortgagePayment.find({ mortgageId: m._id });
     const totalPaid = payments.reduce((sum, p) => sum + (p.totalPayment || 0), 0);
 
+    // Each mortgage facility is counted strictly once
     totalOriginalLoan += m.originalLoanAmount || 0;
     totalOutstanding += m.currentOutstandingBalance || 0;
     if (m.status === 'Active') {
       totalMonthlyPayments += m.monthlyPayment || 0;
     }
 
+    const securedPropsList = (m.properties && m.properties.length > 0)
+      ? m.properties.map((p) => ({
+          propertyId: p.propertyId?._id || p.propertyId,
+          name: p.propertyId?.name || 'Property',
+          address: p.propertyId?.address || '',
+          allocatedAmount: p.allocatedAmount || 0,
+          allocatedAmountFormatted: p.allocatedAmount ? formatReportCurrency(p.allocatedAmount) : '-',
+          status: p.status || 'Active',
+        }))
+      : [
+          {
+            propertyId: m.propertyId?._id || m.propertyId,
+            name: m.propertyId?.name || 'Unassigned Property',
+            address: m.propertyId?.address || '',
+            allocatedAmount: m.originalLoanAmount || 0,
+            allocatedAmountFormatted: formatReportCurrency(m.originalLoanAmount),
+            status: 'Active',
+          },
+        ];
+
+    const propNameDisplay = securedPropsList.map((p) => p.name).join(', ');
+
     rows.push({
       mortgageId: m._id,
-      propertyName: m.propertyId?.name || 'Unassigned Property',
-      propertyAddress: m.propertyId?.address || '',
+      mortgageReference: m.mortgageReference || m.mortgageAccountNumber || '-',
+      mortgageType: m.mortgageType || 'Individual Property',
+      propertyName: propNameDisplay,
+      propertyAddress: securedPropsList[0]?.address || '',
+      securedPropertiesCount: securedPropsList.length,
+      securedProperties: securedPropsList,
       landlordName: m.landlordId?.fullName || 'Unassigned Landlord',
       lenderName: m.lenderName,
-      mortgageAccountNumber: m.mortgageAccountNumber || '-',
+      mortgageAccountNumber: m.mortgageAccountNumber || m.mortgageReference || '-',
       originalLoanAmount: m.originalLoanAmount,
       originalLoanAmountFormatted: formatReportCurrency(m.originalLoanAmount),
       totalPaid,

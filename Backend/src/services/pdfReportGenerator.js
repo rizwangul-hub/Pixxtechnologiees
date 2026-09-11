@@ -117,15 +117,15 @@ async function renderPDFReportDoc(options) {
       doc.on('data', (chunk) => buffers.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-      const fetchedBuffer = logoUrl ? await fetchImageBuffer(logoUrl) : null;
-      const logoBuffer = fetchedBuffer || (fs.existsSync(systemLogoPath) ? fs.readFileSync(systemLogoPath) : null);
+      const landlordLogoBuffer = logoUrl ? await fetchImageBuffer(logoUrl) : null;
+      const systemLogoBuffer = fs.existsSync(systemLogoPath) ? fs.readFileSync(systemLogoPath) : null;
 
       // 1. BRANDING HEADER BAR
       doc.rect(36, 36, 523, 40).fill('#04A26F');
 
-      if (logoBuffer) {
+      if (systemLogoBuffer) {
         try {
-          doc.image(logoBuffer, 44, 41, { fit: [100, 30] });
+          doc.image(systemLogoBuffer, 44, 41, { fit: [100, 30] });
         } catch (e) {
           doc.fontSize(14).fillColor('#FFFFFF').font('Helvetica-Bold').text('PIXXTECHNOLOGIES', 44, 46);
         }
@@ -133,8 +133,13 @@ async function renderPDFReportDoc(options) {
         doc.fontSize(14).fillColor('#FFFFFF').font('Helvetica-Bold').text('PIXXTECHNOLOGIES', 44, 46);
       }
 
-      doc.fontSize(9).fillColor('#E6F4EA').font('Helvetica').text('PROPERTY MANAGEMENT SYSTEM', 44, 62);
-      doc.fontSize(14).fillColor('#FFFFFF').font('Helvetica-Bold').text(reportTitle.toUpperCase(), 220, 50, { width: 325, align: 'right' });
+      if (landlordLogoBuffer) {
+        try {
+          doc.image(landlordLogoBuffer, 154, 41, { fit: [80, 30] });
+        } catch (e) {}
+      }
+
+      doc.fontSize(14).fillColor('#FFFFFF').font('Helvetica-Bold').text(reportTitle.toUpperCase(), 250, 50, { width: 309, align: 'right' });
 
       let y = 88;
 
@@ -446,6 +451,7 @@ async function generatePropertyReportPDF(data) {
     reportTitle: 'PROPERTY FINANCIAL REPORT',
     generatedAt: data.reportDate,
     periodText: `${fromStr} - ${toStr}`,
+    logoUrl: data.landlord?.logoUrl || data.landlord?.logo?.url || prop.landlordLogo || null,
     metaFields: [
       { label: 'Property', value: prop.name || prop.title || 'Property' },
       { label: 'Type', value: prop.type || '-' },

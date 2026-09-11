@@ -489,28 +489,44 @@ exports.exportMortgages = async (req, res) => {
     const { propertyId, landlordId, status, format } = req.query;
 
     const filter = {};
-    if (propertyId) filter.propertyId = propertyId;
-    if (landlordId) filter.landlordId = landlordId;
+    if (propertyId && propertyId !== 'All' && propertyId !== 'all') {
+      if (mongoose.Types.ObjectId.isValid(propertyId)) {
+        const pObjId = new mongoose.Types.ObjectId(propertyId);
+        filter.$or = [{ propertyId: pObjId }, { 'properties.propertyId': pObjId }];
+      }
+    }
+    if (landlordId && landlordId !== 'All' && landlordId !== 'all') {
+      if (mongoose.Types.ObjectId.isValid(landlordId)) filter.landlordId = landlordId;
+    }
     if (status && status !== 'All') filter.status = status;
 
     const mortgages = await Mortgage.find(filter)
       .populate('propertyId', 'name address')
+      .populate('properties.propertyId', 'name address')
       .populate('landlordId', 'fullName email')
       .sort({ createdAt: -1 });
 
-    const rows = mortgages.map((m) => ({
-      Property: m.propertyId?.name || 'N/A',
-      Landlord: m.landlordId?.fullName || 'N/A',
-      Lender: m.lenderName || '',
-      'Account Reference': m.mortgageAccountNumber || '',
-      'Original Amount (£)': m.originalLoanAmount || 0,
-      'Outstanding Balance (£)': m.currentOutstandingBalance || 0,
-      'Monthly Payment (£)': m.monthlyPayment || 0,
-      'Interest Rate (%)': m.interestRate || 0,
-      'Start Date': m.startDate ? new Date(m.startDate).toISOString().split('T')[0] : '',
-      'Next Payment Date': m.nextPaymentDate ? new Date(m.nextPaymentDate).toISOString().split('T')[0] : '',
-      Status: m.status || 'Active',
-    }));
+    const rows = mortgages.map((m) => {
+      const securedProps = (m.properties && m.properties.length > 0)
+        ? m.properties.map((p) => p.propertyId?.name || 'Property').filter(Boolean)
+        : [m.propertyId?.name || 'Property'];
+
+      return {
+        'Mortgage Reference': m.mortgageReference || m.mortgageAccountNumber || '-',
+        'Mortgage Type': m.mortgageType || 'Individual Property',
+        Landlord: m.landlordId?.fullName || 'N/A',
+        Lender: m.lenderName || '',
+        'Secured Properties Count': securedProps.length,
+        'Secured Properties': securedProps.join(', '),
+        'Original Facility Amount (£)': m.originalLoanAmount || 0,
+        'Outstanding Balance (£)': m.currentOutstandingBalance || 0,
+        'Monthly Payment (£)': m.monthlyPayment || 0,
+        'Interest Rate (%)': m.interestRate || 0,
+        'Start Date': m.startDate ? new Date(m.startDate).toISOString().split('T')[0] : '',
+        'Next Payment Date': m.nextPaymentDate ? new Date(m.nextPaymentDate).toISOString().split('T')[0] : '',
+        Status: m.status || 'Active',
+      };
+    });
 
     const isExcel = format === 'excel' || req.path.includes('/excel');
 

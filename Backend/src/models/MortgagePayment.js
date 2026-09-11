@@ -7,10 +7,11 @@ const mortgagePaymentSchema = new mongoose.Schema(
       ref: 'Mortgage',
       required: [true, 'Mortgage ID is required'],
     },
+    // Optional property reference (for Individual mortgages or specific allocated payments)
     propertyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Property',
-      required: [true, 'Property ID is required'],
+      default: null,
     },
     landlordId: {
       type: mongoose.Schema.Types.ObjectId,
