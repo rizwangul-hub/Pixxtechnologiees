@@ -224,7 +224,7 @@ export default function PaymentSchedulesPage() {
                 ) : (
                   filteredSchedules.map((s) => (
                     <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-3.5 px-4 font-semibold text-gray-900">{s.periodName}</td>
+                      <td className="py-3.5 px-4 font-semibold text-gray-900">{s.periodName || '—'}</td>
                       <td className="py-3.5 px-4 font-medium text-gray-800">
                         <Link
                           to={`/tenants/${s.customerId}`}
@@ -235,7 +235,7 @@ export default function PaymentSchedulesPage() {
                       </td>
                       <td className="py-3.5 px-4 text-gray-700">
                         <div>{s.propertyName}</div>
-                        <div className="text-xs text-gray-500">{s.unitName}</div>
+                        <div className="text-xs text-gray-500">{s.unitName || '—'}</div>
                       </td>
                       <td className="py-3.5 px-4 text-xs font-mono text-gray-700">{s.dueDate}</td>
                       <td className="py-3.5 px-4 font-semibold text-gray-900">
