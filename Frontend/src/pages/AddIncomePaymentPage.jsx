@@ -32,9 +32,9 @@ export function AddIncomePaymentPage() {
     };
     reader.readAsDataURL(file);
   };
+  const handlePayerChange = (e) => {
     const val = e.target.value;
     setFormData((prev) => ({ ...prev, payer: val }));
-
     if (val === 'John Smith') {
       setOutstandingBalance('1,450.00');
     } else if (val === 'Sarah Williams') {

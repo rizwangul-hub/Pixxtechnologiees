@@ -32,6 +32,10 @@ export function AddExpensePaymentPage() {
     };
     reader.readAsDataURL(file);
   };
+  const handleSupplierChange = (e) => {
+    const val = e.target.value;
+    setFormData((prev) => ({ ...prev, supplier: val }));
+    if (val === 'John Doe Ltd') {
       setOutstandingBalance('990.00');
     } else if (val === 'Z&Z Services Ltd') {
       setOutstandingBalance('1,700.00');
