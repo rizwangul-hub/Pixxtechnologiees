@@ -15,16 +15,23 @@ export function AddExpensePaymentPage() {
     paymentType: 'Bank Transfer',
     account: 'My Bank Account',
     property: '82 COMO STREET', // Default reference property
+    invoice: null, // base64 image data for invoice
   });
 
   const [outstandingBalance, setOutstandingBalance] = useState('0.00');
 
-  const handleSupplierChange = (e) => {
-    const val = e.target.value;
-    setFormData((prev) => ({ ...prev, supplier: val }));
-
-    // Set sample dynamic balance based on supplier selection
-    if (val === 'Claudio Calanna') {
+  const handleInvoiceChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) {
+      setFormData((prev) => ({ ...prev, invoice: null }));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormData((prev) => ({ ...prev, invoice: reader.result }));
+    };
+    reader.readAsDataURL(file);
+  };
       setOutstandingBalance('990.00');
     } else if (val === 'Z&Z Services Ltd') {
       setOutstandingBalance('1,700.00');
@@ -55,6 +62,7 @@ export function AddExpensePaymentPage() {
       allocatedAmount: numAmount,
       unallocatedAmount: 0.0,
       paymentType: formData.paymentType,
+      invoice: formData.invoice,
     };
 
     saveExpensePayment(newPayment);
@@ -151,6 +159,17 @@ export function AddExpensePaymentPage() {
                   value={formData.reference}
                   onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
                   className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a36f]/20 focus:border-[#00a36f]"
+                />
+                            </div>
+
+              {/* INVOICE UPLOAD */}
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-xs font-extrabold text-slate-700">Invoice (Image)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleInvoiceChange}
+                  className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a36f]/20 focus:border-[#00a36f] bg-amber-50/30"
                 />
               </div>
 
