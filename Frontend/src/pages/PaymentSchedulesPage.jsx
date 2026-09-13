@@ -223,23 +223,25 @@ export default function PaymentSchedulesPage() {
                   </tr>
                 ) : (
                   filteredSchedules.map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-3.5 px-4 font-semibold text-gray-900">{s.periodName || '—'}</td>
+                    <tr key={s._id || s.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="py-3.5 px-4 font-semibold text-gray-900">
+                        {s.periodName || (s.billingMonth ? `Month ${s.billingMonth}/${s.billingYear}` : 'Rent Obligation')}
+                      </td>
                       <td className="py-3.5 px-4 font-medium text-gray-800">
                         <Link
-                          to={`/tenants/${s.customerId}`}
+                          to={`/tenants/${s.customerId?._id || s.customerId}`}
                           className="text-[#04A26F] hover:underline"
                         >
-                          {s.customerName}
+                          {s.customerName || s.customerId?.fullName || s.customerId?.name || 'Tenant'}
                         </Link>
                       </td>
                       <td className="py-3.5 px-4 text-gray-700">
-                        <div>{s.propertyName}</div>
-                        <div className="text-xs text-gray-500">{s.unitName || '—'}</div>
+                        <div>{s.propertyName || s.propertyId?.propertyName || s.propertyId?.name || '—'}</div>
+                        {s.unitName ? <div className="text-xs text-gray-500">{s.unitName}</div> : null}
                       </td>
-                      <td className="py-3.5 px-4 text-xs font-mono text-gray-700">{s.dueDate}</td>
+                      <td className="py-3.5 px-4 text-xs font-mono text-gray-700">{s.dueDate?.slice(0, 10) || s.dueDate}</td>
                       <td className="py-3.5 px-4 font-semibold text-gray-900">
-                        {formatCurrency(s.expectedAmount)}
+                        {formatCurrency(s.expectedAmount || s.amount)}
                       </td>
                       <td className="py-3.5 px-4 font-semibold text-emerald-700">
                         {formatCurrency(s.paidAmount)}

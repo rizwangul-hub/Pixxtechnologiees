@@ -375,8 +375,6 @@ export default function CustomerDetailPage() {
             <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase">
-                  <th className="py-3 px-4">Period / Obligation</th>
-                  <th className="py-3 px-4">Unit</th>
                   <th className="py-3 px-4">Due Date</th>
                   <th className="py-3 px-4">Expected</th>
                   <th className="py-3 px-4">Paid</th>
@@ -388,18 +386,16 @@ export default function CustomerDetailPage() {
               <tbody className="divide-y divide-gray-200">
                 {schedules.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="py-6 text-center text-gray-500 text-sm">
+                    <td colSpan="6" className="py-6 text-center text-gray-500 text-sm">
                       No payment schedules generated.
                     </td>
                   </tr>
                 ) : (
                   schedules.map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-50">
-                      <td className="py-3 px-4 font-semibold text-gray-900">{s.periodName}</td>
-                      <td className="py-3 px-4 text-xs text-gray-600">{s.unitName}</td>
-                      <td className="py-3 px-4 text-xs font-mono">{s.dueDate}</td>
+                    <tr key={s._id || s.id} className="hover:bg-gray-50">
+                      <td className="py-3 px-4 text-xs font-mono">{s.dueDate?.slice(0, 10) || s.dueDate || '—'}</td>
                       <td className="py-3 px-4 font-semibold text-gray-900">
-                        {formatCurrency(s.expectedAmount)}
+                        {formatCurrency(s.expectedAmount || s.amount)}
                       </td>
                       <td className="py-3 px-4 font-semibold text-emerald-700">
                         {formatCurrency(s.paidAmount)}
