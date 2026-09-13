@@ -305,12 +305,22 @@ export default function LandlordDetailPage() {
               </div>
             </div>
 
-            <Link
-              to={`/mortgages?landlordId=${landlordId}`}
-              className="text-xs font-bold text-[#04A26F] hover:underline flex items-center gap-1"
-            >
-              Mortgage Manager <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                to={`/reports?type=mortgage-report&landlordId=${landlordId}`}
+                className="px-3 py-1.5 bg-emerald-50 text-[#04A26F] hover:bg-emerald-100 border border-emerald-200 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-2xs"
+                title="Generate landlord mortgage statement report"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Mortgage Report</span>
+              </Link>
+              <Link
+                to={`/mortgages?landlordId=${landlordId}`}
+                className="px-3 py-1.5 bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200 text-xs font-bold rounded-lg transition-all flex items-center gap-1 shadow-2xs"
+              >
+                <span>Manager</span> <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </div>
 
           {landlordMortgages.length === 0 ? (

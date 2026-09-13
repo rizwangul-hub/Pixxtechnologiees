@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
 import {
   FileText,
@@ -43,6 +44,7 @@ import {
   fetchExpenseReportAPI,
   fetchFinancialSummaryReportAPI,
   fetchMortgageReportAPI,
+  fetchMortgagesAPI,
 } from '../services/apiData';
 
 const REPORT_TYPES = [
@@ -127,8 +129,10 @@ const REPORT_TYPES = [
 ];
 
 export function ReportsPage() {
+  const [searchParams] = useSearchParams();
+
   // Selection state
-  const [selectedReportType, setSelectedReportType] = useState(null);
+  const [selectedReportType, setSelectedReportType] = useState(() => searchParams.get('type') || null);
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -141,10 +145,10 @@ export function ReportsPage() {
   const [units, setUnits] = useState([]);
 
   // Generator Form Parameters
-  const [selectedTenantId, setSelectedTenantId] = useState('');
-  const [selectedLandlordId, setSelectedLandlordId] = useState('');
-  const [selectedAgentId, setSelectedAgentId] = useState('');
-  const [selectedPropertyId, setSelectedPropertyId] = useState('');
+  const [selectedTenantId, setSelectedTenantId] = useState(() => searchParams.get('tenantId') || '');
+  const [selectedLandlordId, setSelectedLandlordId] = useState(() => searchParams.get('landlordId') || 'All');
+  const [selectedAgentId, setSelectedAgentId] = useState(() => searchParams.get('agentId') || '');
+  const [selectedPropertyId, setSelectedPropertyId] = useState(() => searchParams.get('propertyId') || 'All');
   const [selectedUnitId, setSelectedUnitId] = useState('');
 
   const defaultFrom = new Date(new Date().setFullYear(new Date().getFullYear() - 1))
@@ -154,6 +158,16 @@ export function ReportsPage() {
 
   const [dateFrom, setDateFrom] = useState(defaultFrom);
   const [dateTo, setDateTo] = useState(defaultTo);
+
+  // Sync with searchParams if navigated from other pages (e.g. Landlord Detail)
+  useEffect(() => {
+    const qType = searchParams.get('type');
+    const qLandlord = searchParams.get('landlordId');
+    const qProperty = searchParams.get('propertyId');
+    if (qType) setSelectedReportType(qType);
+    if (qLandlord) setSelectedLandlordId(qLandlord);
+    if (qProperty) setSelectedPropertyId(qProperty);
+  }, [searchParams]);
 
   // Load initial dropdown data
   useEffect(() => {
@@ -234,6 +248,19 @@ export function ReportsPage() {
       return uPropId === targetPropId;
     });
   }, [units, selectedPropertyId]);
+
+  // Dynamically filter properties for selected landlord in Mortgage Report
+  const mortgageAvailableProperties = useMemo(() => {
+    if (!selectedLandlordId || selectedLandlordId === 'All') {
+      return properties;
+    }
+    const targetLId = selectedLandlordId.toString();
+    const filtered = properties.filter((p) => {
+      const pLId = (p.landlordId?._id || p.landlordId?.id || p.landlordId || p.landlord)?.toString();
+      return pLId === targetLId;
+    });
+    return filtered.length > 0 ? filtered : properties;
+  }, [properties, selectedLandlordId]);
 
   // Auto select first unit when availableUnits changes
   useEffect(() => {
@@ -431,6 +458,113 @@ export function ReportsPage() {
     };
   };
 
+  const buildLocalMortgageReport = async (landlordId, propertyId, fromDateStr, toDateStr) => {
+    let list = [];
+    try {
+      list = await fetchMortgagesAPI({
+        landlordId: landlordId && landlordId !== 'All' ? landlordId : '',
+        propertyId: propertyId && propertyId !== 'All' ? propertyId : '',
+      });
+    } catch (e) {
+      console.warn('[Local Mortgage Report Fallback]', e.message);
+    }
+    if (!Array.isArray(list)) list = [];
+
+    // If landlord selected, filter
+    if (landlordId && landlordId !== 'All') {
+      const targetLId = landlordId.toString();
+      list = list.filter((m) => {
+        const mLId = (m.landlordId?._id || m.landlordId?.id || m.landlordId || m.landlord)?.toString();
+        return mLId === targetLId;
+      });
+    }
+
+    if (propertyId && propertyId !== 'All') {
+      const targetPId = propertyId.toString();
+      list = list.filter((m) => {
+        const mPId = (m.propertyId?._id || m.propertyId?.id || m.propertyId)?.toString();
+        const hasSub = (m.properties || []).some(
+          (p) => (p.propertyId?._id || p.propertyId?.id || p.propertyId)?.toString() === targetPId
+        );
+        return mPId === targetPId || hasSub;
+      });
+    }
+
+    const targetLandlord = (landlords || []).find(
+      (l) => (l._id || l.id)?.toString() === landlordId?.toString()
+    );
+    const landlordName = targetLandlord
+      ? targetLandlord.fullName
+      : landlordId && landlordId !== 'All'
+      ? 'Selected Landlord'
+      : 'All Landlords Portfolio';
+
+    let totalOriginalLoan = 0;
+    let totalOutstanding = 0;
+    let totalMonthlyPayments = 0;
+
+    const rows = list.map((m) => {
+      const loan = Number(m.originalLoanAmount) || 0;
+      const outstanding = Number(m.currentOutstandingBalance) || 0;
+      const monthly = Number(m.monthlyPayment) || 0;
+      totalOriginalLoan += loan;
+      totalOutstanding += outstanding;
+      if (m.status === 'Active') totalMonthlyPayments += monthly;
+
+      const securedProps = (m.properties || [])
+        .filter((p) => p.status !== 'Released')
+        .map((p) => p.propertyId?.name || p.propertyId?.propertyName || 'Property');
+      const propDisplay = m.propertyId?.name || m.propertyId?.propertyName || securedProps.join(', ') || 'Unassigned Property';
+
+      return {
+        mortgageId: m._id || m.id,
+        mortgageReference: m.mortgageReference || m.mortgageAccountNumber || '-',
+        mortgageType: m.mortgageType || 'Individual Property',
+        propertyName: propDisplay,
+        securedPropertiesCount: securedProps.length || 1,
+        securedProperties: securedProps,
+        landlordName: m.landlordId?.fullName || landlordName,
+        lenderName: m.lenderName || 'Bank / Lender',
+        mortgageAccountNumber: m.mortgageAccountNumber || m.mortgageReference || '-',
+        originalLoanAmount: loan,
+        originalLoanAmountFormatted: formatCurrency(loan),
+        totalPaid: Math.max(0, loan - outstanding),
+        totalPaidFormatted: formatCurrency(Math.max(0, loan - outstanding)),
+        currentOutstandingBalance: outstanding,
+        currentOutstandingBalanceFormatted: formatCurrency(outstanding),
+        monthlyPayment: monthly,
+        monthlyPaymentFormatted: formatCurrency(monthly),
+        interestRate: m.interestRate || 0,
+        startDate: m.startDate ? String(m.startDate).slice(0, 10) : '-',
+        nextPaymentDate: m.nextPaymentDate ? String(m.nextPaymentDate).slice(0, 10) : '-',
+        status: m.status || 'Active',
+      };
+    });
+
+    return {
+      reportType: `Mortgage & Financing Report — ${landlordName}`,
+      reportDate: new Date().toISOString().split('T')[0],
+      landlord: targetLandlord
+        ? {
+            id: targetLandlord._id || targetLandlord.id,
+            name: targetLandlord.fullName,
+            region: targetLandlord.region || 'United Kingdom',
+            email: targetLandlord.email,
+            phone: targetLandlord.phone,
+          }
+        : null,
+      rows,
+      summary: {
+        totalOriginalLoan,
+        totalOriginalLoanFormatted: formatCurrency(totalOriginalLoan),
+        totalOutstanding,
+        totalOutstandingFormatted: formatCurrency(totalOutstanding),
+        totalMonthlyPayments,
+        totalMonthlyPaymentsFormatted: formatCurrency(totalMonthlyPayments),
+      },
+    };
+  };
+
   const handleGenerateReport = async (e) => {
     if (e) e.preventDefault();
     setError('');
@@ -522,12 +656,19 @@ export function ReportsPage() {
           break;
 
         case 'mortgage-report':
-          data = await fetchMortgageReportAPI({
-            fromDate: dateFrom,
-            toDate: dateTo,
-            propertyId: selectedPropertyId !== 'All' ? selectedPropertyId : '',
-            landlordId: selectedLandlordId !== 'All' ? selectedLandlordId : '',
-          });
+          try {
+            data = await fetchMortgageReportAPI({
+              fromDate: dateFrom,
+              toDate: dateTo,
+              propertyId: selectedPropertyId !== 'All' ? selectedPropertyId : '',
+              landlordId: selectedLandlordId !== 'All' ? selectedLandlordId : '',
+            });
+          } catch (mErr) {
+            console.warn('[API Warning] Mortgage report fallback:', mErr.message);
+          }
+          if (!data || !data.rows) {
+            data = await buildLocalMortgageReport(selectedLandlordId, selectedPropertyId, dateFrom, dateTo);
+          }
           break;
 
         default:
@@ -597,11 +738,15 @@ export function ReportsPage() {
           url: `/reports/financial-summary/${format}?${query}`,
           filename: `Financial_Summary.${formatExt}`,
         };
-      case 'mortgage-report':
+      case 'mortgage-report': {
+        const targetLName = (selectedLandlordId && selectedLandlordId !== 'All'
+          ? landlords.find((l) => (l._id || l.id)?.toString() === selectedLandlordId?.toString())?.fullName || 'Landlord'
+          : 'Portfolio').replace(/[^a-zA-Z0-9]/g, '_');
         return {
-          url: `/reports/mortgages/${format}?${query}&propertyId=${selectedPropertyId !== 'All' ? selectedPropertyId : ''}`,
-          filename: `Mortgage_Report.${formatExt}`,
+          url: `/reports/mortgages/${format}?${query}&propertyId=${selectedPropertyId !== 'All' ? selectedPropertyId : ''}&landlordId=${selectedLandlordId !== 'All' ? selectedLandlordId : ''}`,
+          filename: `Mortgage_Report_${targetLName}.${formatExt}`,
         };
+      }
       default:
         return null;
     }
@@ -776,6 +921,96 @@ export function ReportsPage() {
                 </div>
               )}
 
+              {/* DEDICATED LANDLORD MORTGAGE REPORT GENERATOR SECTION */}
+              {selectedReportType === 'mortgage-report' && (
+                <div className="space-y-4 bg-gradient-to-br from-teal-50/70 via-emerald-50/40 to-slate-50 p-4 sm:p-5 rounded-2xl border border-teal-200/80">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2.5 bg-[#04A26F] text-white rounded-xl shadow-xs shrink-0 mt-0.5">
+                      <Landmark className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900">
+                        Landlord Mortgage & Financing Statement
+                      </h3>
+                      <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                        Generate comprehensive mortgage liabilities for a specific landlord or the entire portfolio. Shows original facilities, current outstanding debt, monthly outflows, and secured properties.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                    {/* Landlord Selection */}
+                    <div>
+                      <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <UserCheck className="w-3.5 h-3.5 text-[#04A26F]" />
+                          <span>Select Landlord</span>
+                        </span>
+                        <span className="text-[10px] font-semibold text-slate-500">Individual or All</span>
+                      </label>
+                      <select
+                        value={selectedLandlordId}
+                        onChange={(e) => {
+                          setSelectedLandlordId(e.target.value);
+                          setSelectedPropertyId('All');
+                        }}
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-[#04A26F] focus:border-transparent outline-none shadow-2xs cursor-pointer"
+                      >
+                        <option value="All">🏢 All Landlords (Full Portfolio Mortgages)</option>
+                        {landlords.map((l) => (
+                          <option key={l._id || l.id} value={l._id || l.id}>
+                            👤 {l.fullName} {l.region ? `(${l.region})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Property Selection */}
+                    <div>
+                      <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Building2 className="w-3.5 h-3.5 text-[#04A26F]" />
+                          <span>Select Property</span>
+                        </span>
+                        <span className="text-[10px] font-semibold text-slate-500">Asset scope</span>
+                      </label>
+                      <select
+                        value={selectedPropertyId}
+                        onChange={(e) => setSelectedPropertyId(e.target.value)}
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-[#04A26F] focus:border-transparent outline-none shadow-2xs cursor-pointer"
+                      >
+                        <option value="All">
+                          {selectedLandlordId && selectedLandlordId !== 'All'
+                            ? `All Properties of ${landlords.find((l) => (l._id || l.id)?.toString() === selectedLandlordId?.toString())?.fullName || 'Landlord'}`
+                            : 'All Properties Across Portfolio'}
+                        </option>
+                        {mortgageAvailableProperties.map((p) => (
+                          <option key={p._id || p.id} value={p._id || p.id}>
+                            🏠 {p.title || p.name || p.propertyName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Feature highlights pills */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-teal-200/60">
+                    <span className="text-[10px] font-bold text-teal-800 bg-teal-100/70 px-2 py-0.5 rounded-md">
+                      ✓ Facility Loans
+                    </span>
+                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-md">
+                      ✓ Total Remaining Outstanding
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-md">
+                      ✓ Monthly Outflow (£/mo)
+                    </span>
+                    <span className="text-[10px] font-bold text-purple-800 bg-purple-100/70 px-2 py-0.5 rounded-md">
+                      ✓ Group & Individual Mortgages
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Agent Selection */}
               {selectedReportType === 'agent-report' && (
                 <div>
@@ -843,31 +1078,74 @@ export function ReportsPage() {
                 </div>
               )}
 
-              {/* Date Range */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                    From Date
-                  </label>
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#04A26F] outline-none"
-                    required
-                  />
+              {/* Quick Period Presets */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                    Date Range & Active Period
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateFrom('2020-01-01');
+                        setDateTo(new Date().toISOString().split('T')[0]);
+                      }}
+                      className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition"
+                    >
+                      All Time
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateFrom(`${new Date().getFullYear()}-01-01`);
+                        setDateTo(new Date().toISOString().split('T')[0]);
+                      }}
+                      className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition"
+                    >
+                      This Year ({new Date().getFullYear()})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        d.setFullYear(d.getFullYear() - 1);
+                        setDateFrom(d.toISOString().split('T')[0]);
+                        setDateTo(new Date().toISOString().split('T')[0]);
+                      }}
+                      className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition"
+                    >
+                      Last 12 Mo
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                    To Date
-                  </label>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#04A26F] outline-none"
-                    required
-                  />
+
+                {/* Date Range Inputs */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-500 mb-1">
+                      From Date
+                    </label>
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#04A26F] outline-none bg-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-500 mb-1">
+                      To Date
+                    </label>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#04A26F] outline-none bg-white"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1114,8 +1392,91 @@ export function ReportsPage() {
                     </div>
                   )}
 
-                  {/* Summary Cards */}
-                  {reportData.summary && (
+                  {/* Dedicated Landlord Mortgage Statement Header & KPI Cards */}
+                  {selectedReportType === 'mortgage-report' && (
+                    <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-teal-950 p-6 rounded-2xl text-white shadow-lg space-y-4 text-left">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-700/80 pb-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="p-3 bg-teal-500/20 border border-teal-500/30 rounded-xl text-teal-400 shrink-0">
+                            <Landmark className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-teal-300 block">
+                              Mortgage & Financing Portfolio Report
+                            </span>
+                            <h2 className="text-xl font-black text-white mt-0.5">
+                              {reportData.landlord?.name ||
+                                (selectedLandlordId && selectedLandlordId !== 'All'
+                                  ? landlords.find((l) => (l._id || l.id)?.toString() === selectedLandlordId?.toString())?.fullName || 'Landlord'
+                                  : 'All Landlords Portfolio Mortgages')}
+                            </h2>
+                            <p className="text-xs text-slate-300 mt-0.5">
+                              Active Bank Liabilities, Facilities & Debt Position
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right flex flex-col sm:items-end">
+                          <span className="px-3 py-1 bg-teal-500/20 border border-teal-400/30 text-teal-300 text-xs font-black rounded-full inline-block">
+                            {reportData.rows?.length || 0} Registered {reportData.rows?.length === 1 ? 'Facility' : 'Facilities'}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-mono mt-1">
+                            Generated: {reportData.reportDate || new Date().toISOString().split('T')[0]}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 4 Premium Mortgage KPI Cards */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+                        <div className="bg-slate-800/80 border border-slate-700 p-3.5 rounded-xl">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                            Total Facility Loans
+                          </span>
+                          <span className="text-lg font-black text-blue-400 mt-1 block">
+                            {reportData.summary?.totalOriginalLoanFormatted ||
+                              formatCurrency(reportData.summary?.totalOriginalLoan || 0)}
+                          </span>
+                          <span className="text-[10px] text-slate-500 block mt-0.5">Original borrowed capital</span>
+                        </div>
+
+                        <div className="bg-amber-950/40 border border-amber-500/40 p-3.5 rounded-xl">
+                          <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">
+                            Remaining Outstanding Debt
+                          </span>
+                          <span className="text-lg font-black text-amber-400 mt-1 block">
+                            {reportData.summary?.totalOutstandingFormatted ||
+                              formatCurrency(reportData.summary?.totalOutstanding || 0)}
+                          </span>
+                          <span className="text-[10px] text-amber-300/70 block mt-0.5">Current unpaid bank debt</span>
+                        </div>
+
+                        <div className="bg-slate-800/80 border border-slate-700 p-3.5 rounded-xl">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                            Total Settled to Date
+                          </span>
+                          <span className="text-lg font-black text-emerald-400 mt-1 block">
+                            {reportData.summary?.totalPaidFormatted ||
+                              formatCurrency(reportData.rows?.reduce((s, r) => s + (r.totalPaid || 0), 0) || 0)}
+                          </span>
+                          <span className="text-[10px] text-slate-500 block mt-0.5">Principal + interest cleared</span>
+                        </div>
+
+                        <div className="bg-slate-800/80 border border-slate-700 p-3.5 rounded-xl">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                            Total Monthly Outflow
+                          </span>
+                          <span className="text-lg font-black text-purple-300 mt-1 block">
+                            {reportData.summary?.totalMonthlyPaymentsFormatted ||
+                              formatCurrency(reportData.summary?.totalMonthlyPayments || 0)}
+                            <span className="text-xs font-normal text-slate-400">/mo</span>
+                          </span>
+                          <span className="text-[10px] text-slate-500 block mt-0.5">Combined monthly payments</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Summary Cards for other reports */}
+                  {selectedReportType !== 'mortgage-report' && reportData.summary && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       {Object.entries(reportData.summary).map(([key, value]) => {
                         if (typeof value === 'object') return null;
@@ -1230,7 +1591,7 @@ export function ReportsPage() {
                   )}
 
                   {reportData.rows && (
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-xs">
                       <table className="w-full text-left text-xs border-collapse">
                         <thead>
                           <tr className="bg-slate-900 text-white font-bold">
@@ -1273,7 +1634,7 @@ export function ReportsPage() {
                                 <td className="p-2.5 text-slate-800">{row.lenderName}</td>
                                 <td className="p-2.5 font-mono">{row.originalLoanAmountFormatted}</td>
                                 <td className="p-2.5 font-mono text-emerald-700">{row.totalPaidFormatted}</td>
-                                <td className="p-2.5 font-mono font-black text-amber-900">{row.currentOutstandingBalanceFormatted}</td>
+                                <td className="p-2.5 font-mono font-black text-amber-900 bg-amber-50/60">{row.currentOutstandingBalanceFormatted}</td>
                                 <td className="p-2.5 font-mono">{row.monthlyPaymentFormatted}</td>
                                 <td className="p-2.5">{row.interestRate ? `${row.interestRate}%` : '0%'}</td>
                                 <td className="p-2.5 text-slate-600">{row.nextPaymentDate}</td>
@@ -1285,6 +1646,24 @@ export function ReportsPage() {
                               </tr>
                             );
                           })}
+
+                          {/* Portfolio Totals Row */}
+                          <tr className="bg-slate-100 border-t-2 border-slate-300 font-extrabold text-slate-900 text-xs">
+                            <td className="p-2.5" colSpan="5">PORTFOLIO TOTALS</td>
+                            <td className="p-2.5 font-mono text-slate-900">
+                              {reportData.summary?.totalOriginalLoanFormatted || formatCurrency(reportData.summary?.totalOriginalLoan || 0)}
+                            </td>
+                            <td className="p-2.5 font-mono text-emerald-700">
+                              {reportData.summary?.totalPaidFormatted || formatCurrency(reportData.rows?.reduce((s, r) => s + (r.totalPaid || 0), 0) || 0)}
+                            </td>
+                            <td className="p-2.5 font-mono font-black text-amber-900 bg-amber-100/60">
+                              {reportData.summary?.totalOutstandingFormatted || formatCurrency(reportData.summary?.totalOutstanding || 0)}
+                            </td>
+                            <td className="p-2.5 font-mono text-slate-900">
+                              {reportData.summary?.totalMonthlyPaymentsFormatted || formatCurrency(reportData.summary?.totalMonthlyPayments || 0)}
+                            </td>
+                            <td className="p-2.5" colSpan="3"></td>
+                          </tr>
                         </tbody>
                       </table>
                     </div>
