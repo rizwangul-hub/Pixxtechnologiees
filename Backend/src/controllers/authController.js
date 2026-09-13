@@ -17,8 +17,12 @@ const loginManager = async (req, res) => {
       });
     }
 
-    // Find manager by email (case-insensitive)
-    const manager = await Manager.findOne({ email: email.toLowerCase().trim() });
+    // Accept the configured manager address and the previous seeded address.
+    const normalizedEmail = email.toLowerCase().trim();
+    const managerEmails = normalizedEmail === 'manager@pixxtechnolgies.com'
+      ? [normalizedEmail, 'manager@pixxtechnologies.com', 'ftaccountants@hotmal.com']
+      : [normalizedEmail];
+    const manager = await Manager.findOne({ email: { $in: managerEmails } });
 
     if (manager && (await manager.matchPassword(password))) {
       const token = generateToken(manager._id);
@@ -99,7 +103,7 @@ const seedInitialManager = async () => {
     if (count === 0) {
       const defaultManager = await Manager.create({
         name: 'Fahad Rasheed',
-        email: 'ftaccountants@hotmal.com',
+        email: 'manager@pixxtechnolgies.com',
         password: 'admin123',
         phone: '+92 03180442055',
       });
