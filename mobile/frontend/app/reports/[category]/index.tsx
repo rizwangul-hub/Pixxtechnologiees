@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FilterBar from '../../components/FilterBar';
 import ExportButtonGroup from '../../components/ExportButtonGroup';
 import * as reportService from '../../../src/services/reportService';
@@ -31,6 +32,7 @@ const categoryTitles: Record<Category, string> = {
 };
 
 export default function ReportCategoryScreen() {
+  const insets = useSafeAreaInsets();
   const { category } = useLocalSearchParams<{ category: Category }>();
   const catKey = (category as Category) || 'property';
 
@@ -437,7 +439,7 @@ export default function ReportCategoryScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, { paddingTop: Math.max(insets.top, 16) + 10 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
@@ -448,8 +450,9 @@ export default function ReportCategoryScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 16) + 40 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0284c7']} />}
+        showsVerticalScrollIndicator={false}
       >
         <FilterBar onApply={setFilters} />
 
@@ -515,7 +518,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 50,
     paddingBottom: 14,
     backgroundColor: '#fff',
     borderBottomWidth: 1,

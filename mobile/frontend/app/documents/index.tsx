@@ -11,10 +11,12 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getExpiringSoonDocuments, getExpiredDocuments, TenantDocument } from '@/src/services/documentService';
 import { formatDateUK } from '@/src/utils/formatters';
 
 export default function DocumentsScreen() {
+  const insets = useSafeAreaInsets();
   const [documents, setDocuments] = useState<TenantDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -60,19 +62,20 @@ export default function DocumentsScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 10 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tenant Documents & Compliance</Text>
+        <Text style={styles.headerTitle}>Documents & Compliance</Text>
         <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh}>
           <MaterialIcons name="refresh" size={22} color="#0284c7" />
         </TouchableOpacity>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) + 40 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0284c7']} />}
+        showsVerticalScrollIndicator={false}
       >
         {/* KPI Banner */}
         <View style={styles.kpiRow}>
@@ -155,7 +158,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 50,
     paddingBottom: 14,
     backgroundColor: '#fff',
     borderBottomWidth: 1,

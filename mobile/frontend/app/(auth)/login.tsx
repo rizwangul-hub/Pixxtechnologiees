@@ -16,7 +16,10 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { AuthContext } from '@/src/context/AuthContext';
 import { login as apiLogin } from '@/src/api/authService';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const { signIn } = useContext(AuthContext);
 
   const [email, setEmail] = useState('');
@@ -76,18 +79,26 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(insets.top, 20) + 16,
+            paddingBottom: Math.max(insets.bottom, 16) + 20,
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.brandingSection}>
-          <Image
-            source={require('@/assets/images/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.title}>Manager Login</Text>
-          <Text style={styles.subtitle}>Sign in to PixxTechnologies Property Management</Text>
-        </View>
+        <View style={styles.contentWrapper}>
+          <View style={styles.brandingSection}>
+            <Image
+              source={require('@/assets/images/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.title}>Manager Login</Text>
+            <Text style={styles.subtitle}>Sign in to PixxTechnologies Property Management</Text>
+          </View>
 
         <View style={styles.formCard}>
           {errorMessage ? (
@@ -165,6 +176,7 @@ export default function LoginScreen() {
         <View style={styles.footer}>
           <Text style={styles.footerText}>PixxTechnologies Property Management System</Text>
         </View>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -175,11 +187,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  contentWrapper: {
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
+  },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingHorizontal: 20,
   },
   brandingSection: {
     alignItems: 'center',

@@ -8,11 +8,13 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Dimensions,
   Modal,
+  Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   getPropertyById,
   getPropertyMortgages,
@@ -21,10 +23,11 @@ import {
   PropertyItem,
 } from '@/src/services/propertyService';
 
-const { width: screenWidth } = Dimensions.get('window');
-
 export default function PropertyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { width: screenWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const headerPaddingTop = Math.max(insets.top, Platform.OS === 'ios' ? 20 : 12) + 8;
 
   const [property, setProperty] = useState<PropertyItem | null>(null);
   const [mortgages, setMortgages] = useState<any[]>([]);
@@ -122,7 +125,7 @@ export default function PropertyDetailScreen() {
   return (
     <View style={styles.screen}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
@@ -138,18 +141,33 @@ export default function PropertyDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 30 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Photo Gallery Carousel / Thumbnails */}
         {images.length > 0 ? (
           <View style={styles.gallerySection}>
-            <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.carouselScroll}>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              style={[styles.carouselScroll, { width: screenWidth }]}
+            >
               {images.map((img, idx) => (
                 <TouchableOpacity
                   key={idx}
                   activeOpacity={0.9}
                   onPress={() => setSelectedPhotoIndex(idx)}
                 >
-                  <Image source={{ uri: img.url }} style={styles.carouselImage} resizeMode="cover" />
+                  <Image
+                    source={{ uri: img.url }}
+                    style={[styles.carouselImage, { width: screenWidth }]}
+                    resizeMode="cover"
+                  />
                   <View style={styles.imageCounter}>
                     <Text style={styles.imageCounterText}>
                       {idx + 1} / {images.length}
@@ -362,14 +380,15 @@ export default function PropertyDetailScreen() {
         <Modal visible={true} transparent={true} onRequestClose={() => setSelectedPhotoIndex(null)}>
           <View style={styles.fullscreenModal}>
             <TouchableOpacity
-              style={styles.closeModalBtn}
+              style={[styles.closeModalBtn, { top: Math.max(insets.top, 20) + 10 }]}
               onPress={() => setSelectedPhotoIndex(null)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <MaterialIcons name="close" size={28} color="#ffffff" />
             </TouchableOpacity>
             <Image
               source={{ uri: images[selectedPhotoIndex]?.url }}
-              style={styles.fullscreenImage}
+              style={[styles.fullscreenImage, { width: screenWidth }]}
               resizeMode="contain"
             />
             <Text style={styles.fullscreenCounter}>
@@ -388,7 +407,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     backgroundColor: '#ffffff',
@@ -430,11 +448,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   carouselScroll: {
-    width: screenWidth,
     height: 240,
   },
   carouselImage: {
-    width: screenWidth,
     height: 240,
   },
   imageCounter: {
@@ -700,7 +716,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   fullscreenImage: {
-    width: screenWidth,
+    width: '100%',
     height: '75%',
   },
   fullscreenCounter: {

@@ -18,8 +18,11 @@ import { getTenants, TenantItem } from '@/src/services/tenantService';
 import { getProperties, PropertyItem } from '@/src/services/propertyService';
 import { getAgentsList, AgentItem } from '@/src/services/agentService';
 import { createTenancy } from '@/src/services/tenancyService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function CreateTenancyScreen() {
+  const insets = useSafeAreaInsets();
+  const headerPaddingTop = Math.max(insets.top, Platform.OS === 'ios' ? 20 : 12) + 8;
   const params = useLocalSearchParams<{ tenantId?: string; propertyId?: string }>();
 
   const [loadingInitial, setLoadingInitial] = useState(true);
@@ -177,7 +180,7 @@ export default function CreateTenancyScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
           <MaterialIcons name="close" size={24} color="#0f172a" />
         </TouchableOpacity>
@@ -195,7 +198,14 @@ export default function CreateTenancyScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         {/* Tenant Selector */}
         <View style={styles.card}>
           <Text style={styles.sectionHeader}>Tenant (Required) *</Text>
@@ -354,9 +364,10 @@ export default function CreateTenancyScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.submitButton, submitting && { opacity: 0.7 }]}
+          style={[styles.submitButton, { minHeight: 48 }, submitting && { opacity: 0.7 }]}
           onPress={handleSubmit}
           disabled={submitting}
+          activeOpacity={0.85}
         >
           {submitting ? (
             <ActivityIndicator color="#ffffff" size="small" />
@@ -374,7 +385,7 @@ export default function CreateTenancyScreen() {
         onRequestClose={() => setTenantModalVisible(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Tenant</Text>
               <TouchableOpacity onPress={() => setTenantModalVisible(false)}>
@@ -421,7 +432,7 @@ export default function CreateTenancyScreen() {
         onRequestClose={() => setPropertyModalVisible(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Available Property</Text>
               <TouchableOpacity onPress={() => setPropertyModalVisible(false)}>
@@ -470,7 +481,7 @@ export default function CreateTenancyScreen() {
         onRequestClose={() => setAgentModalVisible(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Agent</Text>
               <TouchableOpacity onPress={() => setAgentModalVisible(false)}>
@@ -514,7 +525,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     backgroundColor: '#ffffff',

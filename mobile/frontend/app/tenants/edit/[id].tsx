@@ -17,10 +17,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { getTenantById, updateTenant } from '@/src/services/tenantService';
 import { uploadImageToBackend } from '@/src/services/uploadService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const TENANT_TYPES = ['Individual', 'Company / Business', 'Organization'];
 
 export default function EditTenantScreen() {
+  const insets = useSafeAreaInsets();
+  const headerPaddingTop = Math.max(insets.top, Platform.OS === 'ios' ? 20 : 12) + 8;
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [loading, setLoading] = useState(true);
@@ -140,7 +143,7 @@ export default function EditTenantScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
           <MaterialIcons name="close" size={24} color="#0f172a" />
         </TouchableOpacity>
@@ -158,7 +161,14 @@ export default function EditTenantScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         {/* Avatar */}
         <View style={[styles.card, { alignItems: 'center' }]}>
           <TouchableOpacity style={styles.avatarPicker} onPress={handlePickImage} disabled={uploadingImage}>
@@ -233,9 +243,10 @@ export default function EditTenantScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.submitButton, submitting && { opacity: 0.7 }]}
+          style={[styles.submitButton, { minHeight: 48 }, submitting && { opacity: 0.7 }]}
           onPress={handleUpdate}
           disabled={submitting}
+          activeOpacity={0.85}
         >
           {submitting ? (
             <ActivityIndicator color="#ffffff" size="small" />
@@ -254,7 +265,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     backgroundColor: '#ffffff',

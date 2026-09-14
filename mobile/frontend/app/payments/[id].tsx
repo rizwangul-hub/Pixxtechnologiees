@@ -2,11 +2,13 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getPaymentById, PaymentDetailResponse } from '@/src/services/paymentService';
 import { StatusBadge } from '@/src/components/StatusBadge';
 import { formatCurrencyGBP, formatDateUK } from '@/src/utils/formatters';
 
 export default function PaymentDetailScreen() {
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [payment, setPayment] = useState<PaymentDetailResponse['data'] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,24 +59,24 @@ export default function PaymentDetailScreen() {
   }
 
   const {
-  customerId: tenantIdRaw,
-  propertyId: propertyIdRaw,
-  tenancyId: tenancyIdRaw,
-  amount,
-  paidAmount,
-  remainingAmount,
-  dueDate,
-  paidDate,
-  billingMonth,
-  billingYear,
-  status,
-  paymentMethod,
-  reference,
-  notes,
-  customer,
-  property,
-  tenancy,
-} = payment ?? {};
+    customerId: tenantIdRaw,
+    propertyId: propertyIdRaw,
+    tenancyId: tenancyIdRaw,
+    amount,
+    paidAmount,
+    remainingAmount,
+    dueDate,
+    paidDate,
+    billingMonth,
+    billingYear,
+    status,
+    paymentMethod,
+    reference,
+    notes,
+    customer,
+    property,
+    tenancy,
+  } = payment ?? {};
 
   const getDisplayValue = (value: any, fallback = 'N/A') => {
     if (value && typeof value === 'object') {
@@ -85,27 +87,27 @@ export default function PaymentDetailScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 10 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>Payment Details</Text>
         <View style={{ width: 40 }} />
       </View>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 16) + 40 }]}>
         <View style={styles.card}>
-            <View style={styles.rowSpaceBetween}>
-              <Text style={styles.boldLabel}>Tenant</Text>
-              <Text style={styles.value}>{getDisplayValue(customer || tenantIdRaw)}</Text>
-            </View>
-            <View style={styles.rowSpaceBetween}>
-              <Text style={styles.boldLabel}>Property</Text>
-              <Text style={styles.value}>{getDisplayValue(property || propertyIdRaw)}</Text>
-            </View>
-            <View style={styles.rowSpaceBetween}>
-              <Text style={styles.boldLabel}>Tenancy</Text>
-              <Text style={styles.value}>{getDisplayValue(tenancy || tenancyIdRaw)}</Text>
-            </View>
+          <View style={styles.rowSpaceBetween}>
+            <Text style={styles.boldLabel}>Tenant</Text>
+            <Text style={styles.value}>{getDisplayValue(customer || tenantIdRaw)}</Text>
+          </View>
+          <View style={styles.rowSpaceBetween}>
+            <Text style={styles.boldLabel}>Property</Text>
+            <Text style={styles.value}>{getDisplayValue(property || propertyIdRaw)}</Text>
+          </View>
+          <View style={styles.rowSpaceBetween}>
+            <Text style={styles.boldLabel}>Tenancy</Text>
+            <Text style={styles.value}>{getDisplayValue(tenancy || tenancyIdRaw)}</Text>
+          </View>
           <View style={styles.rowSpaceBetween}>
             <Text style={styles.boldLabel}>Billing Period</Text>
             <Text style={styles.value}>{billingMonth}/{billingYear}</Text>
@@ -156,8 +158,12 @@ export default function PaymentDetailScreen() {
           ) : null}
         </View>
         {remainingAmount > 0 && (
-          <TouchableOpacity style={styles.recordBtn} onPress={() => router.push(`/payments/record/${payment._id}` as any)}>
-            <MaterialIcons name="add-circle-outline" size={20} color="#0284c7" />
+          <TouchableOpacity
+            style={styles.recordBtn}
+            onPress={() => router.push(`/payments/record/${payment._id}` as any)}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="add-circle-outline" size={22} color="#ffffff" />
             <Text style={styles.recordBtnText}>Record Payment</Text>
           </TouchableOpacity>
         )}
@@ -168,10 +174,18 @@ export default function PaymentDetailScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingTop: 52, paddingHorizontal: 16, paddingBottom: 14, backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
-  headerBackBtn: { padding: 6 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  headerBackBtn: { padding: 8 },
   headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
-  scrollContent: { padding: 16, paddingBottom: 40 },
+  scrollContent: { padding: 16 },
   card: { backgroundColor: '#ffffff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 16 },
   rowSpaceBetween: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 4 },
   boldLabel: { fontSize: 14, color: '#64748b', fontWeight: '600' },
@@ -179,12 +193,21 @@ const styles = StyleSheet.create({
   notesWrap: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
   notesLabel: { fontSize: 12, fontWeight: '600', color: '#64748b', marginBottom: 4 },
   notesText: { fontSize: 13, color: '#334155' },
-  recordBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 10, backgroundColor: '#e0f2fe', marginTop: 8 },
-  recordBtnText: { marginLeft: 6, color: '#0284c7', fontWeight: '600' },
+  recordBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    borderRadius: 10,
+    backgroundColor: '#0284c7',
+    marginTop: 8,
+    gap: 8,
+  },
+  recordBtnText: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 12, color: '#64748b' },
   errorTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginTop: 12 },
   errorSubtitle: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 6, marginBottom: 16 },
-  backBtn: { backgroundColor: '#0284c7', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8 },
+  backBtn: { backgroundColor: '#0284c7', minHeight: 44, paddingHorizontal: 20, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   backBtnText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
 });

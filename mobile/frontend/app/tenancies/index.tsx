@@ -8,12 +8,16 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTenancies, TenancyItem } from '@/src/services/tenancyService';
 
 export default function TenanciesScreen() {
+  const insets = useSafeAreaInsets();
+  const headerPaddingTop = Math.max(insets.top, Platform.OS === 'ios' ? 20 : 12) + 8;
   const [tenancies, setTenancies] = useState<TenancyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -119,7 +123,7 @@ export default function TenanciesScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
@@ -169,7 +173,11 @@ export default function TenanciesScreen() {
           data={filteredTenancies}
           keyExtractor={(item) => item._id}
           renderItem={renderCard}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom, 16) + 50 },
+          ]}
+          showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0284c7']} />}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
@@ -190,7 +198,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   topHeader: {
-    paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     backgroundColor: '#ffffff',

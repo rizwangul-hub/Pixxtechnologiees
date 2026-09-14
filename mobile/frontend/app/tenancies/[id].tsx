@@ -7,12 +7,16 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTenancies, endTenancy, TenancyItem } from '@/src/services/tenancyService';
 
 export default function TenancyDetailScreen() {
+  const insets = useSafeAreaInsets();
+  const headerPaddingTop = Math.max(insets.top, Platform.OS === 'ios' ? 20 : 12) + 8;
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [tenancy, setTenancy] = useState<TenancyItem | null>(null);
@@ -92,7 +96,7 @@ export default function TenancyDetailScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
@@ -102,7 +106,13 @@ export default function TenancyDetailScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Status Card */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
@@ -228,7 +238,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     backgroundColor: '#ffffff',

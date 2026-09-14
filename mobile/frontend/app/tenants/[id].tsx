@@ -8,9 +8,11 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   getTenantById,
   archiveTenant,
@@ -21,6 +23,8 @@ import {
 import { getTenancies, TenancyItem } from '@/src/services/tenancyService';
 
 export default function TenantDetailScreen() {
+  const insets = useSafeAreaInsets();
+  const headerPaddingTop = Math.max(insets.top, Platform.OS === 'ios' ? 20 : 12) + 8;
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
@@ -122,7 +126,7 @@ export default function TenantDetailScreen() {
   return (
     <View style={styles.screen}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
@@ -138,7 +142,13 @@ export default function TenantDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Profile Card */}
         <View style={styles.card}>
           <View style={styles.profileRow}>
@@ -289,47 +299,70 @@ export default function TenantDetailScreen() {
         {/* Payment Summary */}
         {recentPayments.length > 0 && (
           <View style={styles.card}>
-            <Text style={styles.sectionHeader}>Recent Rent Payments</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={styles.sectionHeader}>Recent Rent Payments</Text>
+              <TouchableOpacity
+                onPress={() => router.push(`/payments?tenantId=${tenant._id}`)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.linkText}>View All</Text>
+              </TouchableOpacity>
+            </View>
             {recentPayments.map((p, idx) => (
-              <View key={idx} style={[styles.paymentRow, idx !== recentPayments.length - 1 && styles.paymentBorder]}>
-                <View>
+              <TouchableOpacity
+                key={idx}
+                style={[styles.paymentRow, idx !== recentPayments.length - 1 && styles.paymentBorder]}
+                onPress={() => router.push(`/payments/${p._id}` as any)}
+                activeOpacity={0.7}
+              >
+                <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={styles.paymentMonth}>
                     Due: {p.dueDate ? new Date(p.dueDate).toLocaleDateString('en-GB') : '-'}
                   </Text>
-                  <Text style={styles.paymentStatusText}>{p.status}</Text>
+                  <Text style={[styles.paymentStatusText, p.status === 'Paid' ? { color: '#059669' } : { color: '#ea580c' }]}>
+                    {p.status}
+                  </Text>
                 </View>
-                <Text style={styles.paymentAmount}>
-                  £{Number(p.amount || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-                </Text>
-              </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.paymentAmount}>
+                    £{Number(p.amount || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#0284c7', fontWeight: '600', marginTop: 2 }}>View Details ›</Text>
+                </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
 
-        {/* Archive / Restore Button */}
-        <TouchableOpacity style={styles.sectionButton} onPress={() => router.push(`/payments?tenantId=${tenant._id}`)}>
-  <MaterialIcons name="payments" size={20} color="#0284c7" />
-  <Text style={styles.sectionButtonText}>Payments</Text>
-</TouchableOpacity>
+        {/* Collect Rent / View Payments Action */}
+        <TouchableOpacity
+          style={styles.collectRentBtn}
+          onPress={() => router.push(`/payments?tenantId=${tenant._id}`)}
+          activeOpacity={0.85}
+        >
+          <MaterialIcons name="paid" size={20} color="#ffffff" />
+          <Text style={styles.collectRentBtnText}>Collect Rent / View Payments</Text>
+        </TouchableOpacity>
 
-<TouchableOpacity
-  style={[styles.archiveBtn, (tenant.isArchived || tenant.status === 'Archived') && styles.restoreBtn]}
-  onPress={handleArchiveToggle}
->
-  <MaterialIcons
-    name={tenant.isArchived || tenant.status === 'Archived' ? 'unarchive' : 'archive'}
-    size={20}
-    color={tenant.isArchived || tenant.status === 'Archived' ? '#0284c7' : '#ef4444'}
-  />
-  <Text
-    style={[
-      styles.archiveBtnText,
-      (tenant.isArchived || tenant.status === 'Archived') && styles.restoreBtnText,
-    ]}
-  >
-    {tenant.isArchived || tenant.status === 'Archived' ? 'Restore Tenant' : 'Archive Tenant'}
-  </Text>
-</TouchableOpacity>
+        {/* Archive / Restore Button */}
+        <TouchableOpacity
+          style={[styles.archiveBtn, (tenant.isArchived || tenant.status === 'Archived') && styles.restoreBtn]}
+          onPress={handleArchiveToggle}
+        >
+          <MaterialIcons
+            name={tenant.isArchived || tenant.status === 'Archived' ? 'unarchive' : 'archive'}
+            size={20}
+            color={tenant.isArchived || tenant.status === 'Archived' ? '#0284c7' : '#ef4444'}
+          />
+          <Text
+            style={[
+              styles.archiveBtnText,
+              (tenant.isArchived || tenant.status === 'Archived') && styles.restoreBtnText,
+            ]}
+          >
+            {tenant.isArchived || tenant.status === 'Archived' ? 'Restore Tenant' : 'Archive Tenant'}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -341,7 +374,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     backgroundColor: '#ffffff',
@@ -574,6 +606,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
+  },
+  collectRentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 16,
+    marginTop: 14,
+    minHeight: 48,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: '#0284c7',
+    gap: 8,
+    shadowColor: '#0284c7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  collectRentBtnText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
   },
   archiveBtn: {
     flexDirection: 'row',

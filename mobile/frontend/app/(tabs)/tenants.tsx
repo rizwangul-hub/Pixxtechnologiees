@@ -11,9 +11,11 @@ import {
   Image,
   Modal,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTenants, TenantItem } from '@/src/services/tenantService';
 import { getTenancies, TenancyItem } from '@/src/services/tenancyService';
 import DatabaseLoading from '../components/DatabaseLoading';
@@ -21,6 +23,8 @@ import DatabaseLoading from '../components/DatabaseLoading';
 const STATUS_FILTERS = ['All', 'Active', 'Inactive', 'Archived'];
 
 export default function TenantsScreen() {
+  const insets = useSafeAreaInsets();
+  const headerPaddingTop = Math.max(insets.top, Platform.OS === 'ios' ? 20 : 12) + 8;
   const [tenants, setTenants] = useState<TenantItem[]>([]);
   const [tenancies, setTenancies] = useState<TenancyItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,10 +198,10 @@ export default function TenantsScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.topHeader}>
-        <View>
+      <View style={[styles.topHeader, { paddingTop: headerPaddingTop }]}>
+        <View style={{ flex: 1, marginRight: 8 }}>
           <Text style={styles.screenTitle}>Tenants</Text>
-          <Text style={styles.screenSubtitle}>
+          <Text style={styles.screenSubtitle} numberOfLines={1}>
             {loading ? 'Loading tenants...' : `${tenants.length} ${tenants.length === 1 ? 'tenant' : 'tenants'} registered`}
           </Text>
         </View>
@@ -260,7 +264,10 @@ export default function TenantsScreen() {
           data={tenants}
           keyExtractor={(item) => item._id}
           renderItem={renderTenantCard}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom, 16) + 80 },
+          ]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0284c7']} />}
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -297,22 +304,22 @@ export default function TenantsScreen() {
 
       {/* Floating Add Tenant Button */}
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { bottom: Math.max(insets.bottom, 16) + 16 }]}
         onPress={() => router.push('/tenants/create' as any)}
         activeOpacity={0.85}
       >
-        <MaterialIcons name="person-add" size={26} color="#ffffff" />
+        <MaterialIcons name="add" size={28} color="#ffffff" />
       </TouchableOpacity>
 
       {/* Filter Modal */}
       <Modal
-        visible={filterModalVisible}
-        transparent={true}
         animationType="slide"
+        transparent={true}
+        visible={filterModalVisible}
         onRequestClose={() => setFilterModalVisible(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Filter Tenants</Text>
               <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
@@ -370,9 +377,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   topHeader: {
-    paddingTop: 52,
     paddingBottom: 14,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',

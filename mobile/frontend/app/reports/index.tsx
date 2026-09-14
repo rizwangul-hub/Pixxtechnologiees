@@ -3,6 +3,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Define categories that have backend support
 const reportCategories = [
@@ -15,40 +16,61 @@ const reportCategories = [
 ];
 
 export default function ReportsHome() {
+  const insets = useSafeAreaInsets();
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.header}>Reports</Text>
-      <Text style={styles.subHeader}>Generate and review operational, financial, and compliance reports</Text>
-      {reportCategories.map((cat, idx) => (
-        <TouchableOpacity
-          key={idx}
-          style={styles.card}
-          onPress={() => router.push(cat.route as any)}
-        >
-          <View style={styles.iconCircle}>
-            <MaterialIcons name={cat.icon as any} size={24} color="#0284c7" />
-          </View>
-          <View style={styles.textContainer}>
-            <Text style={styles.title}>{cat.title}</Text>
-            <Text style={styles.desc}>{cat.desc}</Text>
-          </View>
-          <MaterialIcons name="chevron-right" size={20} color="#cbd5e1" />
+    <View style={styles.screen}>
+      <View style={[styles.topHeader, { paddingTop: Math.max(insets.top, 16) + 10 }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
-      ))}
-    </ScrollView>
+        <Text style={styles.screenTitle}>Reports</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView
+        contentContainerStyle={[styles.container, { paddingBottom: Math.max(insets.bottom, 16) + 40 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.subHeader}>Generate and review operational, financial, and compliance reports</Text>
+        {reportCategories.map((cat, idx) => (
+          <TouchableOpacity
+            key={idx}
+            style={styles.card}
+            onPress={() => router.push(cat.route as any)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.iconCircle}>
+              <MaterialIcons name={cat.icon as any} size={24} color="#0284c7" />
+            </View>
+            <View style={styles.textContainer}>
+              <Text style={styles.title}>{cat.title}</Text>
+              <Text style={styles.desc}>{cat.desc}</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#cbd5e1" />
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: '#f8fafc' },
+  topHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  backBtn: { padding: 8 },
+  screenTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a', flex: 1, textAlign: 'center' },
   container: {
     padding: 16,
-    backgroundColor: '#f8fafc',
-  },
-  header: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 4,
-    color: '#0f172a',
   },
   subHeader: {
     fontSize: 14,

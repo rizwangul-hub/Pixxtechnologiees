@@ -20,11 +20,14 @@ import { createProperty } from '@/src/services/propertyService';
 import { getLandlordsList } from '@/src/services/landlordService';
 import { uploadImageToBackend } from '@/src/services/uploadService';
 import { LandlordBrief } from '@/src/services/propertyService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const PROPERTY_TYPES = ['Shop', 'Office', 'House', 'Flat', 'Apartment', 'Building', 'Room', 'Other'];
 const STATUS_OPTIONS = ['Available', 'Occupied', 'Reserved', 'Maintenance'];
 
 export default function CreatePropertyScreen() {
+  const insets = useSafeAreaInsets();
+  const headerPaddingTop = Math.max(insets.top, Platform.OS === 'ios' ? 20 : 12) + 8;
   const [name, setName] = useState('');
   const [selectedType, setSelectedType] = useState('Shop');
   const [selectedStatus, setSelectedStatus] = useState('Available');
@@ -186,7 +189,7 @@ export default function CreatePropertyScreen() {
       style={styles.screen}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
           <MaterialIcons name="close" size={24} color="#0f172a" />
         </TouchableOpacity>
@@ -204,7 +207,14 @@ export default function CreatePropertyScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         {/* Landlord Selection Card */}
         <View style={styles.card}>
           <Text style={styles.sectionHeader}>Landlord (Required) *</Text>
@@ -455,9 +465,10 @@ export default function CreatePropertyScreen() {
 
         {/* Bottom Submit Button */}
         <TouchableOpacity
-          style={[styles.submitButton, submitting && { opacity: 0.7 }]}
+          style={[styles.submitButton, { minHeight: 48 }, submitting && { opacity: 0.7 }]}
           onPress={handleSubmit}
           disabled={submitting}
+          activeOpacity={0.85}
         >
           {submitting ? (
             <ActivityIndicator color="#ffffff" size="small" />
@@ -475,7 +486,7 @@ export default function CreatePropertyScreen() {
         onRequestClose={() => setLandlordModalVisible(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.landlordModalCard}>
+          <View style={[styles.landlordModalCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Landlord</Text>
               <TouchableOpacity onPress={() => setLandlordModalVisible(false)}>
@@ -538,7 +549,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    paddingTop: 52,
     paddingBottom: 14,
     paddingHorizontal: 16,
     backgroundColor: '#ffffff',

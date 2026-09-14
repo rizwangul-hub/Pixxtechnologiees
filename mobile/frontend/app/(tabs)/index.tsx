@@ -8,14 +8,17 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Alert,
+  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '@/src/context/AuthContext';
 import { getDashboardData, DashboardResponse } from '@/src/services/dashboardService';
 import DatabaseLoading from '../components/DatabaseLoading';
 
 export default function DashboardScreen() {
+  const insets = useSafeAreaInsets();
   const { manager, signOut } = useContext(AuthContext);
 
   const [dashboardData, setDashboardData] = useState<DashboardResponse['data'] | null>(null);
@@ -74,12 +77,14 @@ export default function DashboardScreen() {
   const paymentInfo = dashboardData?.paymentInfo;
   const documentInfo = dashboardData?.documentInfo;
 
+  const headerPaddingTop = Math.max(insets.top, Platform.OS === 'ios' ? 20 : 12) + 8;
+
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <View>
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+        <View style={{ flex: 1, marginRight: 8 }}>
           <Text style={styles.brandTitle}>PixxTechnologies</Text>
-          <Text style={styles.welcomeText}>
+          <Text style={styles.welcomeText} numberOfLines={1}>
             Welcome, {manager?.name || 'Manager'}
           </Text>
         </View>
@@ -93,7 +98,11 @@ export default function DashboardScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 24 },
+        ]}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0284c7']} />
         }
@@ -110,12 +119,21 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <>
+          <View style={styles.contentContainer}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
             <View style={styles.quickActionsContainer}>
               <TouchableOpacity
+                style={[styles.actionPill, styles.actionPillHighlight]}
+                onPress={() => router.push('/(tabs)/tenants')}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="paid" size={18} color="#ffffff" />
+                <Text style={styles.actionPillHighlightText}>Collect Rent</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={styles.actionPill}
                 onPress={() => router.push('/properties/create')}
+                activeOpacity={0.8}
               >
                 <MaterialIcons name="add-business" size={18} color="#0284c7" />
                 <Text style={styles.actionPillText}>+ Property</Text>
@@ -123,6 +141,7 @@ export default function DashboardScreen() {
               <TouchableOpacity
                 style={styles.actionPill}
                 onPress={() => router.push('/tenants/create' as any)}
+                activeOpacity={0.8}
               >
                 <MaterialIcons name="person-add" size={18} color="#0284c7" />
                 <Text style={styles.actionPillText}>+ Tenant</Text>
@@ -130,6 +149,7 @@ export default function DashboardScreen() {
               <TouchableOpacity
                 style={styles.actionPill}
                 onPress={() => router.push('/tenancies/create' as any)}
+                activeOpacity={0.8}
               >
                 <MaterialIcons name="assignment" size={18} color="#0284c7" />
                 <Text style={styles.actionPillText}>+ Tenancy</Text>
@@ -137,9 +157,10 @@ export default function DashboardScreen() {
               <TouchableOpacity
                 style={styles.actionPill}
                 onPress={() => router.push('/(tabs)/payments')}
+                activeOpacity={0.8}
               >
                 <MaterialIcons name="payment" size={18} color="#0284c7" />
-                <Text style={styles.actionPillText}>+ Payment</Text>
+                <Text style={styles.actionPillText}>Payments</Text>
               </TouchableOpacity>
             </View>
 
@@ -237,7 +258,7 @@ export default function DashboardScreen() {
                 <Text style={styles.cardSub}>Property + Agent</Text>
               </View>
             </View>
-          </>
+          </View>
         )}
       </ScrollView>
     </View>
@@ -251,9 +272,8 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#ffffff',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
     flexDirection: 'row',
@@ -278,7 +298,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 32,
+  },
+  contentContainer: {
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
   },
   centeredState: {
     paddingVertical: 64,
@@ -335,10 +359,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     paddingHorizontal: 12,
     paddingVertical: 8,
+    minHeight: 38,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     gap: 6,
+  },
+  actionPillHighlight: {
+    backgroundColor: '#0284c7',
+    borderColor: '#0284c7',
+  },
+  actionPillHighlightText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
   },
   actionPillText: {
     fontSize: 13,
@@ -352,7 +386,8 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    minWidth: '46%',
+    flexBasis: '47%',
+    minWidth: 140,
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 14,
@@ -366,14 +401,14 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#64748b',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
   cardValue: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#0f172a',
     marginVertical: 4,

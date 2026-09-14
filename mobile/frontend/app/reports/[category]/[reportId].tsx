@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ExportButtonGroup from '../../components/ExportButtonGroup';
 import * as reportService from '../../../src/services/reportService';
 import { formatCurrencyGBP, formatDateUK } from '../../../src/utils/formatters';
@@ -11,6 +12,7 @@ type Category = 'property' | 'tenant' | 'payments' | 'expenses' | 'mortgage' | '
 
 export default function ReportDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { category, reportId } = useLocalSearchParams<{ category: Category; reportId: string }>();
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -68,15 +70,18 @@ export default function ReportDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, { paddingTop: Math.max(insets.top, 16) + 10 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Report Record Detail</Text>
-        <View style={{ width: 32 }} />
+        <Text style={styles.headerTitle}>Report Details</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 16) + 40 }]}
+        showsVerticalScrollIndicator={false}
+      >
         {loading ? (
           <View style={styles.centerContainer}>
             <ActivityIndicator size="large" color="#0284c7" />
@@ -135,7 +140,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 50,
     paddingBottom: 14,
     backgroundColor: '#fff',
     borderBottomWidth: 1,

@@ -3,6 +3,7 @@ import { View, Image, StyleSheet, ActivityIndicator } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 import { AuthProvider, AuthContext } from '@/src/context/AuthContext';
 
@@ -52,9 +53,11 @@ function RootNavigation() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <RootNavigation />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <RootNavigation />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 

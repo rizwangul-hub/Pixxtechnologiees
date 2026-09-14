@@ -1,10 +1,12 @@
 import React, { useContext } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '@/src/context/AuthContext';
 import { router } from 'expo-router';
 
 export default function MoreTab() {
+  const insets = useSafeAreaInsets();
   const { manager, signOut } = useContext(AuthContext);
 
   const modules = [
@@ -31,7 +33,17 @@ export default function MoreTab() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[
+        styles.content,
+        {
+          paddingTop: Math.max(insets.top, 16) + 12,
+          paddingBottom: Math.max(insets.bottom, 16) + 80,
+        },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.profileCard}>
         <View style={styles.avatarCircle}>
           <Text style={styles.avatarText}>
@@ -92,9 +104,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   content: {
-    padding: 16,
-    paddingTop: 50,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
   },
   profileCard: {
     flexDirection: 'row',

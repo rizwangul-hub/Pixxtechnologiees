@@ -10,9 +10,11 @@ import {
   RefreshControl,
   Modal,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getProperties, PropertyItem } from '@/src/services/propertyService';
 import { getLandlordsList } from '@/src/services/landlordService';
 import { LandlordBrief } from '@/src/services/propertyService';
@@ -22,6 +24,7 @@ const PROPERTY_TYPES = ['All', 'Shop', 'Office', 'House', 'Flat', 'Apartment', '
 const STATUSES = ['All', 'Available', 'Occupied', 'Reserved', 'Maintenance', 'Archived'];
 
 export default function PropertiesScreen() {
+  const insets = useSafeAreaInsets();
   const [properties, setProperties] = useState<PropertyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -181,10 +184,15 @@ export default function PropertiesScreen() {
   return (
     <View style={styles.container}>
       {/* Top Header */}
-      <View style={styles.topHeader}>
-        <View>
+      <View
+        style={[
+          styles.topHeader,
+          { paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 20 : 12) + 8 },
+        ]}
+      >
+        <View style={{ flex: 1, marginRight: 8 }}>
           <Text style={styles.screenTitle}>Properties</Text>
-          <Text style={styles.screenSubtitle}>
+          <Text style={styles.screenSubtitle} numberOfLines={1}>
             {loading ? 'Loading properties...' : `${properties.length} ${properties.length === 1 ? 'property' : 'properties'} listed`}
           </Text>
         </View>
@@ -252,7 +260,10 @@ export default function PropertiesScreen() {
           data={properties}
           keyExtractor={(item) => item._id}
           renderItem={renderPropertyCard}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom, 16) + 80 },
+          ]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0284c7']} />}
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -283,7 +294,7 @@ export default function PropertiesScreen() {
 
       {/* Floating Action Button */}
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { bottom: Math.max(insets.bottom, 16) + 16 }]}
         onPress={() => router.push('/properties/create')}
         activeOpacity={0.85}
       >
@@ -298,7 +309,7 @@ export default function PropertiesScreen() {
         onRequestClose={() => setFilterModalVisible(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Filter Properties</Text>
               <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
@@ -391,9 +402,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   topHeader: {
-    paddingTop: 52,
     paddingBottom: 14,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
