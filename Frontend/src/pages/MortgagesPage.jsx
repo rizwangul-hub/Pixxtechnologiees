@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   Landmark,
   Plus,
@@ -19,6 +19,7 @@ import {
   CheckSquare,
   Square,
   Info,
+  FileText,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout/AppLayout';
 import {
@@ -150,6 +151,64 @@ export function MortgagesPage() {
       landlordName.includes(q)
     );
   });
+
+  // View mode: 'grouped' by landlord (matching PropertiesPage) or 'flat' table
+  const [viewMode, setViewMode] = useState('grouped');
+
+  const groupedByLandlord = useMemo(() => {
+    const groupsMap = {};
+
+    filteredMortgages.forEach((m) => {
+      const landlordObj = (m.landlordId && typeof m.landlordId === 'object') ? m.landlordId : null;
+      const landlordId = landlordObj
+        ? (landlordObj._id || landlordObj.id || 'unassigned').toString()
+        : (m.landlordId ? m.landlordId.toString() : 'unassigned');
+
+      let matchedLandlord = landlordObj;
+      if (!matchedLandlord && landlords.length > 0) {
+        matchedLandlord = landlords.find((l) => (l._id || l.id)?.toString() === landlordId);
+      }
+
+      const landlordName =
+        matchedLandlord?.fullName ||
+        matchedLandlord?.name ||
+        (landlordId !== 'unassigned' ? 'Landlord' : 'General Portfolio (Unassigned)');
+      const landlordLogoUrl =
+        matchedLandlord?.logo?.url || matchedLandlord?.logoUrl || '';
+
+      if (!groupsMap[landlordId]) {
+        groupsMap[landlordId] = {
+          landlordId,
+          landlordName,
+          landlordLogoUrl,
+          landlordObj: matchedLandlord || {},
+          mortgages: [],
+          totalOriginalLoan: 0,
+          totalOutstanding: 0,
+          totalMonthlyPayment: 0,
+          activeCount: 0,
+          individualCount: 0,
+          collectiveCount: 0,
+        };
+      }
+
+      const group = groupsMap[landlordId];
+      group.mortgages.push(m);
+      group.totalOriginalLoan += Number(m.originalLoanAmount) || 0;
+      group.totalOutstanding += Number(m.currentOutstandingBalance) || 0;
+      if (m.status === 'Active') {
+        group.totalMonthlyPayment += Number(m.monthlyPayment) || 0;
+        group.activeCount += 1;
+      }
+      if (m.mortgageType === 'Collective / Group') {
+        group.collectiveCount += 1;
+      } else {
+        group.individualCount += 1;
+      }
+    });
+
+    return Object.values(groupsMap);
+  }, [filteredMortgages, landlords]);
 
   // Get available properties for the currently selected landlord in the form
   const landlordProperties = properties.filter((p) => {
@@ -456,6 +515,163 @@ export function MortgagesPage() {
     })}`;
   };
 
+  // Helper to render an individual mortgage facility row
+  const renderMortgageRow = (m, showLandlordColumn = true) => {
+    const mId = m._id || m.id;
+    const landlordName = m.landlordId?.fullName || m.landlordId?.name || 'Unassigned';
+    const isCollective = m.mortgageType === 'Collective / Group';
+    const refDisplay = m.mortgageReference || m.mortgageAccountNumber || '-';
+
+    // Collect secured property names
+    const securedList =
+      m.properties && m.properties.length > 0
+        ? m.properties.map((p) => p.propertyId?.name).filter(Boolean)
+        : [m.propertyId?.name].filter(Boolean);
+
+    return (
+      <tr
+        key={mId}
+        onClick={() => navigate(`/mortgages/${mId}`)}
+        className="hover:bg-slate-50/80 transition cursor-pointer"
+      >
+        {/* Reference & Lender */}
+        <td className="py-3.5 px-4">
+          <span className="font-extrabold text-slate-900 block text-xs">
+            {refDisplay}
+          </span>
+          <span className="text-[11px] text-slate-500 font-medium">
+            {m.lenderName}
+          </span>
+        </td>
+
+        {/* Mortgage Type */}
+        <td className="py-3.5 px-4">
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+              isCollective
+                ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            }`}
+          >
+            {isCollective ? 'Collective' : 'Individual'}
+          </span>
+        </td>
+
+        {/* Landlord (shown when in flat table mode) */}
+        {showLandlordColumn && (
+          <td className="py-3.5 px-4 text-slate-600">
+            <div className="flex items-center gap-1.5">
+              <UserCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>{landlordName}</span>
+            </div>
+          </td>
+        )}
+
+        {/* Secured Properties */}
+        <td className="py-3.5 px-4">
+          {isCollective ? (
+            <div className="flex items-center gap-1.5" title={securedList.join(', ')}>
+              <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-100 font-extrabold text-[11px] shrink-0">
+                {securedList.length} Properties
+              </span>
+              <span className="text-[11px] text-slate-500 truncate max-w-[160px]">
+                {securedList.slice(0, 2).join(', ')}{securedList.length > 2 ? '...' : ''}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span className="font-bold text-slate-900 truncate max-w-[180px]">
+                {securedList[0] || m.propertyId?.name || 'Unassigned'}
+              </span>
+            </div>
+          )}
+        </td>
+
+        {/* Original Facility Amount */}
+        <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
+          {formatCurrency(m.originalLoanAmount)}
+        </td>
+
+        {/* Outstanding Balance */}
+        <td className="py-3.5 px-4 font-mono font-black text-amber-900 bg-amber-50/40">
+          {formatCurrency(m.currentOutstandingBalance)}
+        </td>
+
+        {/* Monthly Payment */}
+        <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
+          {formatCurrency(m.monthlyPayment)}
+        </td>
+
+        {/* Interest Rate */}
+        <td className="py-3.5 px-4 text-slate-600">
+          {m.interestRate ? `${m.interestRate}%` : '0%'}
+        </td>
+
+        {/* Next Payment */}
+        <td className="py-3.5 px-4 text-slate-600">
+          {m.nextPaymentDate
+            ? new Date(m.nextPaymentDate).toLocaleDateString()
+            : '-'}
+        </td>
+
+        {/* Status */}
+        <td className="py-3.5 px-4">
+          <span
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
+              m.status === 'Active'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : m.status === 'Paid Off'
+                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                : 'bg-slate-100 text-slate-600 border border-slate-200'
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                m.status === 'Active'
+                  ? 'bg-emerald-500'
+                  : m.status === 'Paid Off'
+                  ? 'bg-blue-500'
+                  : 'bg-slate-400'
+              }`}
+            />
+            <span>{m.status}</span>
+          </span>
+        </td>
+
+        {/* Actions */}
+        <td className="py-3.5 px-4 text-right">
+          <div className="flex items-center justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={(e) => handleOpenPaymentModal(m, e)}
+              title="Record Facility Payment"
+              className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#04A26F] rounded-lg font-extrabold text-[11px] transition-colors border border-emerald-200 cursor-pointer"
+            >
+              + Pay
+            </button>
+            <button
+              type="button"
+              onClick={(e) => handleOpenEditModal(m, e)}
+              title="Edit Facility"
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => handleDeleteMortgage(m, e)}
+              title="Delete Facility"
+              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
   // Helper for allocation sum in modal
   const totalAllocatedSum = Object.values(formData.allocations).reduce(
     (acc, v) => acc + (Number(v) || 0),
@@ -475,18 +691,30 @@ export function MortgagesPage() {
               <span>Mortgage Facility Management</span>
             </h1>
             <p className="text-xs text-slate-500 font-medium mt-1">
-              Manage bank mortgage loans, individual and collective group facilities, repayments, and secured property allocations.
+              Manage bank mortgage loans, individual and collective group facilities, repayments, and secured property allocations grouped by Landlord.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleOpenAddModal}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#04A26F] hover:bg-[#03885c] text-white text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
-          >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Add Mortgage Facility</span>
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => navigate('/reports?type=mortgage-report')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
+              title="View and generate comprehensive mortgage portfolio reports"
+            >
+              <FileText className="w-4 h-4 text-[#04A26F]" />
+              <span>Mortgage Reports</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenAddModal}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#04A26F] hover:bg-[#03885c] text-white text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Add Mortgage Facility</span>
+            </button>
+          </div>
         </div>
 
         {/* SUMMARY KPI CARDS */}
@@ -540,10 +768,10 @@ export function MortgagesPage() {
           </div>
         </div>
 
-        {/* CONTROLS BAR: SEARCH & FILTERS */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
+        {/* CONTROLS BAR: SEARCH & FILTERS & VIEW MODE */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-3">
           {/* Search Box */}
-          <div className="relative w-full md:w-72">
+          <div className="relative w-full lg:w-72">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -555,7 +783,7 @@ export function MortgagesPage() {
           </div>
 
           {/* Filters */}
-          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
             {/* Mortgage Type Filter */}
             <select
               value={selectedMortgageType}
@@ -623,28 +851,170 @@ export function MortgagesPage() {
               </button>
             )}
           </div>
+
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold shrink-0 self-end lg:self-auto">
+            <button
+              type="button"
+              onClick={() => setViewMode('grouped')}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === 'grouped'
+                  ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80 font-extrabold'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Grouped by Landlord
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('flat')}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === 'flat'
+                  ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80 font-extrabold'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              All Mortgages List
+            </button>
+          </div>
         </div>
 
-        {/* MORTGAGE FACILITIES LIST TABLE */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          {loading ? (
-            <div className="p-12 text-center text-slate-400 space-y-2">
-              <Loader2 className="w-8 h-8 animate-spin text-[#04A26F] mx-auto" />
-              <p className="text-xs font-bold">Loading Mortgage Facilities...</p>
+        {/* MORTGAGE FACILITIES DISPLAY SECTION */}
+        {loading ? (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-12 text-center text-slate-400 space-y-2">
+            <Loader2 className="w-8 h-8 animate-spin text-[#04A26F] mx-auto" />
+            <p className="text-xs font-bold">Loading Mortgage Facilities...</p>
+          </div>
+        ) : filteredMortgages.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-12 text-center text-slate-500 space-y-3">
+            <Landmark className="w-10 h-10 text-slate-300 mx-auto" />
+            <div>
+              <p className="font-extrabold text-slate-800 text-sm">No Mortgage Facilities Found</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {searchQuery || selectedProperty || selectedLandlord || selectedStatus !== 'All' || selectedMortgageType !== 'All'
+                  ? 'No mortgage facilities matched your search or filters.'
+                  : 'Click "Add Mortgage Facility" above to record an individual or group mortgage loan.'}
+              </p>
             </div>
-          ) : filteredMortgages.length === 0 ? (
-            <div className="p-12 text-center text-slate-500 space-y-3">
-              <Landmark className="w-10 h-10 text-slate-300 mx-auto" />
-              <div>
-                <p className="font-extrabold text-slate-800 text-sm">No Mortgage Facilities Found</p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {searchQuery || selectedProperty || selectedLandlord || selectedStatus !== 'All' || selectedMortgageType !== 'All'
-                    ? 'No mortgage facilities matched your search or filters.'
-                    : 'Click "Add Mortgage Facility" above to record an individual or group mortgage loan.'}
-                </p>
+          </div>
+        ) : viewMode === 'grouped' ? (
+          /* GROUPED BY LANDLORD VIEW */
+          <div className="space-y-6">
+            {groupedByLandlord.map((group) => (
+              <div key={group.landlordId} className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                {/* LANDLORD HEADER BANNER */}
+                <div className="bg-slate-900 text-white px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    {group.landlordLogoUrl ? (
+                      <img
+                        src={group.landlordLogoUrl}
+                        alt={group.landlordName}
+                        className="w-10 h-10 rounded-xl object-contain bg-white p-1 border border-slate-700 shrink-0 shadow-xs"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl bg-[#04A26F] text-white flex items-center justify-center font-bold shrink-0 shadow-xs">
+                        <UserCheck className="w-5 h-5" />
+                      </div>
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-extrabold text-base text-white">
+                          {group.landlordName}
+                        </span>
+                        {group.landlordId !== 'unassigned' && (
+                          <Link
+                            to={`/landlords/${group.landlordId}`}
+                            className="text-xs font-bold text-emerald-400 hover:text-emerald-300 hover:underline"
+                          >
+                            View Profile &rarr;
+                          </Link>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 font-medium mt-0.5">
+                        Landlord Mortgage Financing Portfolio
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* LANDLORD METRICS & DIRECT REPORT BUTTON */}
+                  <div className="flex items-center gap-2 flex-wrap md:justify-end">
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                      {group.mortgages.length} {group.mortgages.length === 1 ? 'Facility' : 'Facilities'}
+                      {group.individualCount > 0 && ` (${group.individualCount} Ind`}
+                      {group.collectiveCount > 0 && ` • ${group.collectiveCount} Col)`}
+                    </span>
+
+                    <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-950/60 text-amber-300 border border-amber-800/80">
+                      Debt: {formatCurrency(group.totalOutstanding)}
+                    </span>
+
+                    <span className="px-3 py-1 rounded-full text-xs font-black bg-slate-800 text-emerald-400 border border-slate-700">
+                      {formatCurrency(group.totalMonthlyPayment)}/mo
+                    </span>
+
+                    {/* Dedicated Landlord Mortgage Report Button */}
+                    {group.landlordId !== 'unassigned' && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/reports?type=mortgage-report&landlordId=${group.landlordId}`)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#04A26F] hover:bg-[#03885c] text-white text-xs font-black transition shadow-xs cursor-pointer"
+                        title={`Generate dedicated mortgage report for ${group.landlordName}`}
+                      >
+                        <FileText className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>Landlord Mortgage Report</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* TABLE FOR THIS LANDLORD */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-extrabold uppercase tracking-wider text-[11px]">
+                      <tr>
+                        <th className="py-3 px-4">Facility Ref & Bank</th>
+                        <th className="py-3 px-4">Type</th>
+                        <th className="py-3 px-4">Secured Properties</th>
+                        <th className="py-3 px-4">Facility Amount</th>
+                        <th className="py-3 px-4">Outstanding</th>
+                        <th className="py-3 px-4">Monthly Payment</th>
+                        <th className="py-3 px-4">Rate</th>
+                        <th className="py-3 px-4">Next Payment</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                      {group.mortgages.map((m) => renderMortgageRow(m, false))}
+                    </tbody>
+                    {/* LANDLORD GROUP TOTALS FOOTER */}
+                    <tfoot className="bg-slate-50/90 border-t-2 border-slate-200 font-extrabold text-slate-900 text-xs">
+                      <tr>
+                        <td className="py-3 px-4" colSpan="3">
+                          <span className="text-slate-700 font-bold uppercase tracking-wider text-[11px]">
+                            {group.landlordName} Totals
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                          {formatCurrency(group.totalOriginalLoan)}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-black text-amber-900 bg-amber-50/50">
+                          {formatCurrency(group.totalOutstanding)}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                          {formatCurrency(group.totalMonthlyPayment)}
+                        </td>
+                        <td className="py-3 px-4" colSpan="4"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
-            </div>
-          ) : (
+            ))}
+          </div>
+        ) : (
+          /* FLAT TABLE VIEW */
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-900 text-white font-extrabold uppercase tracking-wider text-[11px]">
@@ -663,163 +1033,12 @@ export function MortgagesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                  {filteredMortgages.map((m) => {
-                    const mId = m._id || m.id;
-                    const landlordName = m.landlordId?.fullName || 'Unassigned';
-                    const isCollective = m.mortgageType === 'Collective / Group';
-                    const refDisplay = m.mortgageReference || m.mortgageAccountNumber || '-';
-
-                    // Collect secured property names
-                    const securedList = (m.properties && m.properties.length > 0)
-                      ? m.properties.map((p) => p.propertyId?.name).filter(Boolean)
-                      : [m.propertyId?.name].filter(Boolean);
-
-                    return (
-                      <tr
-                        key={mId}
-                        onClick={() => navigate(`/mortgages/${mId}`)}
-                        className="hover:bg-slate-50/80 transition cursor-pointer"
-                      >
-                        {/* Reference & Lender */}
-                        <td className="py-3.5 px-4">
-                          <span className="font-extrabold text-slate-900 block text-xs">
-                            {refDisplay}
-                          </span>
-                          <span className="text-[11px] text-slate-500 font-medium">
-                            {m.lenderName}
-                          </span>
-                        </td>
-
-                        {/* Mortgage Type */}
-                        <td className="py-3.5 px-4">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                              isCollective
-                                ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            }`}
-                          >
-                            {isCollective ? 'Collective' : 'Individual'}
-                          </span>
-                        </td>
-
-                        {/* Landlord */}
-                        <td className="py-3.5 px-4 text-slate-600">
-                          <div className="flex items-center gap-1.5">
-                            <UserCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span>{landlordName}</span>
-                          </div>
-                        </td>
-
-                        {/* Secured Properties */}
-                        <td className="py-3.5 px-4">
-                          {isCollective ? (
-                            <div className="flex items-center gap-1.5" title={securedList.join(', ')}>
-                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 font-extrabold text-[11px]">
-                                {securedList.length} Properties
-                              </span>
-                              <span className="text-[11px] text-slate-500 truncate max-w-[140px]">
-                                {securedList.slice(0, 2).join(', ')}{securedList.length > 2 ? '...' : ''}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5">
-                              <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                              <span className="font-bold text-slate-900 truncate max-w-[160px]">
-                                {securedList[0] || m.propertyId?.name || 'Unassigned'}
-                              </span>
-                            </div>
-                          )}
-                        </td>
-
-                        {/* Original Facility Amount */}
-                        <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
-                          {formatCurrency(m.originalLoanAmount)}
-                        </td>
-
-                        {/* Outstanding Balance */}
-                        <td className="py-3.5 px-4 font-mono font-black text-amber-900">
-                          {formatCurrency(m.currentOutstandingBalance)}
-                        </td>
-
-                        {/* Monthly Payment */}
-                        <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
-                          {formatCurrency(m.monthlyPayment)}
-                        </td>
-
-                        {/* Interest Rate */}
-                        <td className="py-3.5 px-4 text-slate-600">
-                          {m.interestRate ? `${m.interestRate}%` : '0%'}
-                        </td>
-
-                        {/* Next Payment */}
-                        <td className="py-3.5 px-4 text-slate-600">
-                          {m.nextPaymentDate
-                            ? new Date(m.nextPaymentDate).toLocaleDateString()
-                            : '-'}
-                        </td>
-
-                        {/* Status */}
-                        <td className="py-3.5 px-4">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
-                              m.status === 'Active'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : m.status === 'Paid Off'
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : 'bg-slate-100 text-slate-600 border border-slate-200'
-                            }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                m.status === 'Active'
-                                  ? 'bg-emerald-500'
-                                  : m.status === 'Paid Off'
-                                  ? 'bg-blue-500'
-                                  : 'bg-slate-400'
-                              }`}
-                            />
-                            <span>{m.status}</span>
-                          </span>
-                        </td>
-
-                        {/* Actions */}
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={(e) => handleOpenPaymentModal(m, e)}
-                              title="Record Facility Payment"
-                              className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#04A26F] rounded-lg font-extrabold text-[11px] transition-colors border border-emerald-200 cursor-pointer"
-                            >
-                              + Pay
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => handleOpenEditModal(m, e)}
-                              title="Edit Facility"
-                              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => handleDeleteMortgage(m, e)}
-                              title="Delete Facility"
-                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {filteredMortgages.map((m) => renderMortgageRow(m, true))}
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* MODAL 1: ADD / EDIT MORTGAGE FACILITY MODAL */}
         {isAddModalOpen && (

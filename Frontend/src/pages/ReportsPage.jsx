@@ -216,11 +216,40 @@ export function ReportsPage() {
         setProperties(combinedProps);
         setUnits(combinedUnits);
 
-        if (activeTenants.length > 0) setSelectedTenantId((activeTenants[0]._id || activeTenants[0].id)?.toString());
-        if (activeLandlords.length > 0) setSelectedLandlordId((activeLandlords[0]._id || activeLandlords[0].id)?.toString());
-        if (activeAgents.length > 0) setSelectedAgentId((activeAgents[0]._id || activeAgents[0].id)?.toString());
-        if (combinedProps.length > 0) setSelectedPropertyId('All');
-        if (combinedUnits.length > 0) setSelectedUnitId((combinedUnits[0]._id || combinedUnits[0].id)?.toString());
+        const qTenant = searchParams.get('tenantId');
+        const qLandlord = searchParams.get('landlordId');
+        const qProperty = searchParams.get('propertyId');
+        const qAgent = searchParams.get('agentId');
+
+        if (qTenant) {
+          setSelectedTenantId(qTenant);
+        } else if (activeTenants.length > 0) {
+          setSelectedTenantId((activeTenants[0]._id || activeTenants[0].id)?.toString());
+        }
+
+        if (qLandlord) {
+          setSelectedLandlordId(qLandlord);
+        } else if (searchParams.get('type') === 'mortgage-report') {
+          setSelectedLandlordId('All');
+        } else if (activeLandlords.length > 0) {
+          setSelectedLandlordId((activeLandlords[0]._id || activeLandlords[0].id)?.toString());
+        }
+
+        if (qAgent) {
+          setSelectedAgentId(qAgent);
+        } else if (activeAgents.length > 0) {
+          setSelectedAgentId((activeAgents[0]._id || activeAgents[0].id)?.toString());
+        }
+
+        if (qProperty) {
+          setSelectedPropertyId(qProperty);
+        } else {
+          setSelectedPropertyId('All');
+        }
+
+        if (combinedUnits.length > 0) {
+          setSelectedUnitId((combinedUnits[0]._id || combinedUnits[0].id)?.toString());
+        }
       } catch (e) {
         console.warn('[Report Dropdowns Load Warning]', e.message);
         const localProps = getSavedProperties();
@@ -232,6 +261,15 @@ export function ReportsPage() {
     };
     loadDropdowns();
   }, []);
+
+  // Auto-generate mortgage report when arriving with type=mortgage-report and specific landlord
+  useEffect(() => {
+    const qType = searchParams.get('type');
+    const qLandlord = searchParams.get('landlordId');
+    if (qType === 'mortgage-report' && qLandlord && landlords.length > 0 && !reportData && !loading) {
+      handleGenerateReport(null, { reportType: 'mortgage-report', landlordId: qLandlord });
+    }
+  }, [searchParams, landlords.length]);
 
   // Filter units when property changes
   const availableUnits = useMemo(() => {
@@ -565,67 +603,83 @@ export function ReportsPage() {
     };
   };
 
-  const handleGenerateReport = async (e) => {
-    if (e) e.preventDefault();
+  const handleGenerateReport = async (e, overrides = {}) => {
+    if (e && e.preventDefault) e.preventDefault();
     setError('');
     setLoading(true);
     setReportData(null);
 
+    const repType = overrides.reportType || selectedReportType;
+    const lId = overrides.landlordId !== undefined ? overrides.landlordId : selectedLandlordId;
+    const pId = overrides.propertyId !== undefined ? overrides.propertyId : selectedPropertyId;
+    const tId = overrides.tenantId !== undefined ? overrides.tenantId : selectedTenantId;
+    const aId = overrides.agentId !== undefined ? overrides.agentId : selectedAgentId;
+    const uId = overrides.unitId !== undefined ? overrides.unitId : selectedUnitId;
+    const fDate = overrides.fromDate || dateFrom;
+    const tDate = overrides.toDate || dateTo;
+
+    if (overrides.reportType && overrides.reportType !== selectedReportType) {
+      setSelectedReportType(overrides.reportType);
+    }
+    if (overrides.landlordId && overrides.landlordId !== selectedLandlordId) {
+      setSelectedLandlordId(overrides.landlordId);
+    }
+
     try {
       let data = null;
-      switch (selectedReportType) {
+      switch (repType) {
         case 'tenant-statement':
-          if (!selectedTenantId) throw new Error('Please select a tenant');
-          data = await fetchTenantStatementAPI(selectedTenantId, {
-            fromDate: dateFrom,
-            toDate: dateTo,
-            propertyId: selectedPropertyId !== 'All' ? selectedPropertyId : '',
+          if (!tId) throw new Error('Please select a tenant');
+          data = await fetchTenantStatementAPI(tId, {
+            fromDate: fDate,
+            toDate: tDate,
+            propertyId: pId !== 'All' ? pId : '',
           });
           break;
 
         case 'landlord-report':
-          if (!selectedLandlordId) throw new Error('Please select a landlord');
-          data = await fetchLandlordReportAPI(selectedLandlordId, {
-            fromDate: dateFrom,
-            toDate: dateTo,
+          if (!lId) throw new Error('Please select a landlord');
+          data = await fetchLandlordReportAPI(lId, {
+            fromDate: fDate,
+            toDate: tDate,
           });
           break;
 
         case 'agent-report':
-          if (!selectedAgentId) throw new Error('Please select an agent');
-          data = await fetchAgentReportAPI(selectedAgentId, {
-            fromDate: dateFrom,
-            toDate: dateTo,
+          if (!aId) throw new Error('Please select an agent');
+          data = await fetchAgentReportAPI(aId, {
+            fromDate: fDate,
+            toDate: tDate,
           });
           break;
 
         case 'property-report':
-          if (!selectedPropertyId) throw new Error('Please select a property');
+          if (!pId) throw new Error('Please select a property');
           try {
-            data = await fetchPropertyReportAPI(selectedPropertyId, {
-              fromDate: dateFrom,
-              toDate: dateTo,
+            data = await fetchPropertyReportAPI(pId, {
+              fromDate: fDate,
+              toDate: tDate,
             });
           } catch (apiErr) {
             console.warn('[API Warning] Fetch property report fallback to local:', apiErr.message);
           }
           if (!data) {
-            data = buildLocalPropertyReport(selectedPropertyId, dateFrom, dateTo);
+            data = buildLocalPropertyReport(pId, fDate, tDate);
           }
           break;
 
         case 'unit-report':
-          if (!selectedUnitId) throw new Error('Please select a unit');
+          if (!uId) throw new Error('Please select a unit');
           try {
-            data = await fetchUnitReportAPI(selectedUnitId, {
-              fromDate: dateFrom,
-              toDate: dateTo,
+            data = await fetchUnitReportAPI(uId, {
+              fromDate: fDate,
+              toDate: tDate,
             });
           } catch (apiErr) {
             console.warn('[API Warning] Fetch unit report fallback to local:', apiErr.message);
           }
           if (!data) {
-            data = buildLocalUnitReport(selectedUnitId, dateFrom, dateTo);
+            data = buildLocalUnitReport(uId, fDate, tDate);
           }
           break;
 
@@ -633,41 +687,41 @@ export function ReportsPage() {
         case 'income-report':
         case 'invoice-report':
           data = await fetchPaymentReportAPI({
-            fromDate: dateFrom,
-            toDate: dateTo,
-            tenantId: selectedTenantId !== 'All' ? selectedTenantId : '',
-            propertyId: selectedPropertyId !== 'All' ? selectedPropertyId : '',
+            fromDate: fDate,
+            toDate: tDate,
+            tenantId: tId !== 'All' ? tId : '',
+            propertyId: pId !== 'All' ? pId : '',
           });
           break;
 
         case 'expense-report':
           data = await fetchExpenseReportAPI({
-            fromDate: dateFrom,
-            toDate: dateTo,
-            propertyId: selectedPropertyId !== 'All' ? selectedPropertyId : '',
+            fromDate: fDate,
+            toDate: tDate,
+            propertyId: pId !== 'All' ? pId : '',
           });
           break;
 
         case 'financial-summary':
           data = await fetchFinancialSummaryReportAPI({
-            fromDate: dateFrom,
-            toDate: dateTo,
+            fromDate: fDate,
+            toDate: tDate,
           });
           break;
 
         case 'mortgage-report':
           try {
             data = await fetchMortgageReportAPI({
-              fromDate: dateFrom,
-              toDate: dateTo,
-              propertyId: selectedPropertyId !== 'All' ? selectedPropertyId : '',
-              landlordId: selectedLandlordId !== 'All' ? selectedLandlordId : '',
+              fromDate: fDate,
+              toDate: tDate,
+              propertyId: pId !== 'All' ? pId : '',
+              landlordId: lId !== 'All' ? lId : '',
             });
           } catch (mErr) {
             console.warn('[API Warning] Mortgage report fallback:', mErr.message);
           }
           if (!data || !data.rows) {
-            data = await buildLocalMortgageReport(selectedLandlordId, selectedPropertyId, dateFrom, dateTo);
+            data = await buildLocalMortgageReport(lId, pId, fDate, tDate);
           }
           break;
 
