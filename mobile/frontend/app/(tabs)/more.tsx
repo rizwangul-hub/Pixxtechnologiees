@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '@/src/context/AuthContext';
@@ -10,10 +10,10 @@ export default function MoreTab() {
   const { manager, signOut } = useContext(AuthContext);
 
   const modules = [
+    { title: 'Tenants', icon: 'people', status: 'Active', route: '/(tabs)/tenants' },
     { title: 'Landlords', icon: 'person', status: 'Available via Properties', route: '/properties?landlord=All' },
     { title: 'Tenancies', icon: 'assignment', status: 'Active', route: '/tenancies' },
     { title: 'Expenses', icon: 'receipt-long', status: 'Active', route: '/expenses' },
-    { title: 'Mortgages', icon: 'account-balance', status: 'Active', route: '/mortgages' },
     { title: 'Documents', icon: 'folder-shared', status: 'Active', route: '/documents' },
     { title: 'Reports', icon: 'analytics', status: 'Active', route: '/reports' },
   ];
@@ -44,14 +44,32 @@ export default function MoreTab() {
       ]}
       showsVerticalScrollIndicator={false}
     >
+      {/* Top Header with Pixxtechnologiees Logo & Branding */}
+      <View style={styles.topHeader}>
+        <View style={styles.headerBrandWrap}>
+          <Image
+            source={require('@/assets/images/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.brandTitle}>Pixxtechnologiees</Text>
+            <Text style={styles.headerSubtitle}>System Hub & Management</Text>
+          </View>
+        </View>
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <MaterialIcons name="logout" size={20} color="#ef4444" />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.profileCard}>
         <View style={styles.avatarCircle}>
           <Text style={styles.avatarText}>
-            {manager?.name ? manager.name.charAt(0).toUpperCase() : 'M'}
+            {manager?.name && manager.name.toLowerCase() !== 'manager' ? manager.name.charAt(0).toUpperCase() : 'F'}
           </Text>
         </View>
         <View style={styles.profileInfo}>
-          <Text style={styles.managerName}>{manager?.name || 'Manager'}</Text>
+          <Text style={styles.managerName}>{manager?.name && manager.name.toLowerCase() !== 'manager' ? manager.name : 'Fahad'}</Text>
           <Text style={styles.managerEmail}>{manager?.email || 'manager@pixxtechnolgies.com'}</Text>
         </View>
       </View>
@@ -105,6 +123,42 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
+  },
+  topHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  headerBrandWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  headerLogo: {
+    width: 68,
+    height: 46,
+    borderRadius: 6,
+  },
+  brandTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: -0.4,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  logoutBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#fef2f2',
   },
   profileCard: {
     flexDirection: 'row',

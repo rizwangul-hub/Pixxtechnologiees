@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Printer, ChevronRight, CheckSquare, Square } from 'lucide-react';
+import { Plus, Printer, ChevronRight, CheckSquare, Square, Edit2, Trash2 } from 'lucide-react';
 import { formatCurrency } from '../../utils/currencyFormatter';
 
-export function PaymentTable({ payments, isIncomeTab, onAddPaymentClick }) {
+export function PaymentTable({ payments, isIncomeTab, onAddPaymentClick, onEditPayment, onDeletePayment }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
@@ -88,12 +88,13 @@ export function PaymentTable({ payments, isIncomeTab, onAddPaymentClick }) {
                 <th className="py-3 px-4 text-right">Payment Amount</th>
                 <th className="py-3 px-4 text-right">Allocated Amount</th>
                 <th className="py-3 px-4 text-right">Unallocated Amount</th>
+                <th className="py-3 px-4 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-400 font-medium">
+                  <td colSpan={10} className="py-8 text-center text-slate-400 font-medium">
                     No payment records found matching criteria.
                   </td>
                 </tr>
@@ -138,6 +139,30 @@ export function PaymentTable({ payments, isIncomeTab, onAddPaymentClick }) {
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-600 text-right">
                         {formatCurrency(item.unallocatedAmount)}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {onEditPayment && (
+                            <button
+                              type="button"
+                              onClick={() => onEditPayment(item.raw || item)}
+                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                              title="Edit payment"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {onDeletePayment && (
+                            <button
+                              type="button"
+                              onClick={() => onDeletePayment(item.raw || item)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Delete or reset payment"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -189,6 +214,30 @@ export function PaymentTable({ payments, isIncomeTab, onAddPaymentClick }) {
                 {item.reference && (
                   <div className="pt-1 text-[11px] text-slate-500 italic border-t border-slate-50">
                     Ref: {item.reference}
+                  </div>
+                )}
+                {(onEditPayment || onDeletePayment) && (
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
+                    {onEditPayment && (
+                      <button
+                        type="button"
+                        onClick={() => onEditPayment(item.raw || item)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                        <span>Edit</span>
+                      </button>
+                    )}
+                    {onDeletePayment && (
+                      <button
+                        type="button"
+                        onClick={() => onDeletePayment(item.raw || item)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-rose-700 bg-rose-50 rounded-lg hover:bg-rose-100 transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Delete / Reset</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

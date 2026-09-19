@@ -375,6 +375,46 @@ export async function recordPaymentAPI(paymentId, paymentData) {
   }
 }
 
+export async function updatePaymentAPI(paymentId, updateData) {
+  try {
+    const res = await fetchAPI(`/payments/${paymentId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updateData),
+    });
+    return res.data;
+  } catch (e) {
+    console.warn('[API Warning] Update payment error:', e.message);
+    throw e;
+  }
+}
+
+export async function resetPaymentAPI(paymentId) {
+  try {
+    const res = await fetchAPI(`/payments/${paymentId}/reset`, {
+      method: 'POST',
+    });
+    return res.data;
+  } catch (e) {
+    console.warn('[API Warning] Reset payment error:', e.message);
+    throw e;
+  }
+}
+
+export async function deletePaymentAPI(paymentId, resetOnly = false) {
+  try {
+    if (resetOnly) {
+      return await resetPaymentAPI(paymentId);
+    }
+    const res = await fetchAPI(`/payments/${paymentId}`, {
+      method: 'DELETE',
+    });
+    return res.data;
+  } catch (e) {
+    console.warn('[API Warning] Delete payment error:', e.message);
+    throw e;
+  }
+}
+
 // --- EXPENSES APIs ---
 
 export async function fetchExpensesAPI(filters = {}) {

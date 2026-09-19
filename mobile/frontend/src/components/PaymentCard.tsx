@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { StatusBadge } from './StatusBadge';
 import { formatCurrencyGBP, formatDateUK } from '@/src/utils/formatters';
 import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
 
 /**
  * Props for a payment card.
@@ -58,6 +59,20 @@ export const PaymentCard: React.FC<PaymentCardProps> = ({ payment }) => {
           <Text style={[styles.amountValue, { color: payment.remainingAmount > 0 ? '#dc2626' : '#059669' }]}>
             {formatCurrencyGBP(payment.remainingAmount)}
           </Text>
+        </View>
+      </View>
+      <View style={styles.cardFooter}>
+        <TouchableOpacity
+          style={styles.editQuickBtn}
+          onPress={() => router.push(`/payments/edit/${payment._id}` as any)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialIcons name="edit" size={14} color="#0284c7" />
+          <Text style={styles.editQuickText}>Edit</Text>
+        </TouchableOpacity>
+        <View style={styles.viewDetailLink}>
+          <Text style={styles.viewDetailText}>Details</Text>
+          <MaterialIcons name="chevron-right" size={16} color="#94a3b8" />
         </View>
       </View>
     </TouchableOpacity>
@@ -126,6 +141,41 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f172a',
     marginTop: 2,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  editQuickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    gap: 4,
+  },
+  editQuickText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284c7',
+  },
+  viewDetailLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  viewDetailText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94a3b8',
   },
 });
 

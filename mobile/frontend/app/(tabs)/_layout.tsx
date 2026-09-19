@@ -57,11 +57,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="tenants"
+        name="mortgages"
         options={{
-          title: 'Tenants',
+          title: 'Mortgages',
           tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="people" size={size || 24} color={color} />
+            <MaterialIcons name="account-balance" size={size || 24} color={color} />
           ),
         }}
       />
@@ -81,6 +81,12 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="menu" size={size || 24} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="tenants"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

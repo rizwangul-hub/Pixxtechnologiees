@@ -28,24 +28,69 @@ exports.getPayments = async (req, res) => {
   try {
     await generateMonthlyPayments();
 
-    const { property, unit, customer, tenancyId, status, date, month, year } = req.query;
+    const {
+      property,
+      propertyId,
+      unit,
+      customer,
+      customerId,
+      tenantId,
+      tenancyId,
+      status,
+      date,
+      month,
+      year,
+      search,
+    } = req.query;
 
     const filter = {};
-    if (property && mongoose.Types.ObjectId.isValid(property)) filter.propertyId = property;
-    
-    if (customer && mongoose.Types.ObjectId.isValid(customer)) filter.customerId = customer;
+    const propId = property || propertyId;
+    if (propId && mongoose.Types.ObjectId.isValid(propId)) filter.propertyId = propId;
+
+    const custId = customer || customerId || tenantId;
+    if (custId && mongoose.Types.ObjectId.isValid(custId)) filter.customerId = custId;
     if (tenancyId && mongoose.Types.ObjectId.isValid(tenancyId)) filter.tenancyId = tenancyId;
-    if (status) filter.status = status;
+
+    if (status && status !== 'All') {
+      if (status === 'Paid' || status === 'Received') {
+        filter.status = { $in: ['Paid', 'Received'] };
+      } else if (status === 'Partially Paid' || status === 'Partially Received') {
+        filter.status = { $in: ['Partially Paid', 'Partially Received'] };
+      } else {
+        filter.status = status;
+      }
+    }
     if (date) filter.dueDate = date;
     if (month) filter.billingMonth = Number(month);
     if (year) filter.billingYear = Number(year);
 
-    const payments = await Payment.find(filter)
+    let payments = await Payment.find(filter)
       .populate('customerId', 'fullName phone email cnicOrId tenantName contactNumber name')
       .populate('propertyId', 'propertyName propertyType address name')
-      
       .populate('tenancyId')
       .sort({ dueDate: -1, createdAt: -1 });
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      payments = payments.filter((p) => {
+        const cust = p.customerId;
+        const custName = (cust?.fullName || cust?.name || cust?.tenantName || '').toLowerCase();
+        const custPhone = (cust?.phone || cust?.contactNumber || '').toLowerCase();
+        const prop = p.propertyId;
+        const propName = (prop?.propertyName || prop?.name || prop?.address || '').toLowerCase();
+        const ref = (p.reference || '').toLowerCase();
+        const notes = (p.notes || '').toLowerCase();
+        const method = (p.paymentMethod || '').toLowerCase();
+        return (
+          custName.includes(q) ||
+          custPhone.includes(q) ||
+          propName.includes(q) ||
+          ref.includes(q) ||
+          notes.includes(q) ||
+          method.includes(q)
+        );
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -286,6 +331,9 @@ exports.recordPayment = async (req, res) => {
 /**
  * PUT /api/payments/:id
  */
+/**
+ * PUT /api/payments/:id
+ */
 exports.updatePayment = async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -297,23 +345,123 @@ exports.updatePayment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Payment record not found' });
     }
 
-    const { amount, paidAmount, dueDate, paymentMethod, reference, notes, status } = req.body;
+    const {
+      amount,
+      paidAmount,
+      dueDate,
+      paidDate,
+      paymentDate,
+      paymentMethod,
+      reference,
+      referenceNo,
+      notes,
+      status,
+    } = req.body;
 
-    if (amount !== undefined) payment.amount = Number(amount);
-    if (paidAmount !== undefined) payment.paidAmount = Number(paidAmount);
+    if (amount !== undefined) payment.amount = Math.max(0, Number(amount));
+    if (paidAmount !== undefined) payment.paidAmount = Math.max(0, Number(paidAmount));
     if (dueDate) payment.dueDate = dueDate;
-    if (paymentMethod) payment.paymentMethod = paymentMethod;
-    if (reference) payment.reference = reference;
-    if (notes) payment.notes = notes;
 
-    payment.remainingAmount = Math.max(0, payment.amount - payment.paidAmount);
-    payment.status = status || calculatePaymentStatus(payment.amount, payment.paidAmount, payment.dueDate);
+    const effectivePaidDate = paidDate !== undefined ? paidDate : paymentDate;
+    if (effectivePaidDate !== undefined) payment.paidDate = effectivePaidDate;
+
+    if (paymentMethod) payment.paymentMethod = paymentMethod;
+
+    const effectiveRef = reference !== undefined ? reference : referenceNo;
+    if (effectiveRef !== undefined) payment.reference = effectiveRef;
+
+    if (notes !== undefined) payment.notes = notes;
+
+    payment.remainingAmount = Math.max(0, payment.amount - (payment.paidAmount || 0));
+    payment.status = status || calculatePaymentStatus(payment.amount, payment.paidAmount || 0, payment.dueDate);
+
+    if (payment.paidAmount === 0 && !effectivePaidDate) {
+      payment.paidDate = '';
+    }
 
     await payment.save();
 
-    res.status(200).json({ success: true, message: 'Payment updated successfully', data: payment });
+    // Sync with corresponding Invoice
+    await Invoice.updateOne(
+      { paymentId: payment._id },
+      {
+        status: payment.status,
+        paymentInfo: {
+          paidAmount: payment.paidAmount,
+          paidDate: payment.paidDate || new Date().toISOString().split('T')[0],
+          paymentMethod: payment.paymentMethod || 'Cash',
+          reference: payment.reference || '',
+        },
+      }
+    );
+
+    const populatedPayment = await Payment.findById(payment._id)
+      .populate('customerId', 'fullName phone email cnicOrId tenantName contactNumber name')
+      .populate('propertyId', 'propertyName propertyType address name')
+      .populate('tenancyId');
+
+    res.status(200).json({
+      success: true,
+      message: 'Payment updated successfully',
+      data: populatedPayment,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to update payment', error: error.message });
+  }
+};
+
+/**
+ * POST /api/payments/:id/reset
+ * Rollback/undo an accidental or duplicate recorded payment back to unpaid
+ */
+exports.resetPayment = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'Payment record not found' });
+    }
+
+    const payment = await Payment.findById(req.params.id);
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment record not found' });
+    }
+
+    payment.paidAmount = 0;
+    payment.paidDate = '';
+    payment.remainingAmount = payment.amount;
+    payment.status = calculatePaymentStatus(payment.amount, 0, payment.dueDate);
+    payment.reference = '';
+    if (payment.notes) {
+      // Remove recorded receipt notes if appended with pipe
+      payment.notes = payment.notes.replace(/\|\s*[^|]*$/, '').trim();
+    }
+
+    await payment.save();
+
+    await Invoice.updateOne(
+      { paymentId: payment._id },
+      {
+        status: payment.status,
+        paymentInfo: {
+          paidAmount: 0,
+          paidDate: '',
+          paymentMethod: 'Cash',
+          reference: '',
+        },
+      }
+    );
+
+    const populatedPayment = await Payment.findById(payment._id)
+      .populate('customerId', 'fullName phone email cnicOrId tenantName contactNumber name')
+      .populate('propertyId', 'propertyName propertyType address name')
+      .populate('tenancyId');
+
+    res.status(200).json({
+      success: true,
+      message: 'Payment record successfully reset to unpaid status',
+      data: populatedPayment,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to reset payment', error: error.message });
   }
 };
 
@@ -326,11 +474,36 @@ exports.deletePayment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Payment record not found' });
     }
 
-    const payment = await Payment.findByIdAndDelete(req.params.id);
+    const payment = await Payment.findById(req.params.id);
     if (!payment) {
       return res.status(404).json({ success: false, message: 'Payment record not found' });
     }
 
+    // If query ?reset=true or resetOnly is passed, reset payment rather than permanently deleting
+    if (req.query.reset === 'true' || req.body?.resetOnly) {
+      payment.paidAmount = 0;
+      payment.paidDate = '';
+      payment.remainingAmount = payment.amount;
+      payment.status = calculatePaymentStatus(payment.amount, 0, payment.dueDate);
+      payment.reference = '';
+      await payment.save();
+
+      await Invoice.updateOne(
+        { paymentId: payment._id },
+        {
+          status: payment.status,
+          paymentInfo: { paidAmount: 0, paidDate: '', reference: '' },
+        }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'Payment reset to unpaid successfully',
+        data: payment,
+      });
+    }
+
+    await Payment.findByIdAndDelete(req.params.id);
     await Invoice.deleteMany({ paymentId: req.params.id });
 
     res.status(200).json({ success: true, message: 'Payment deleted successfully' });

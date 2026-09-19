@@ -2,7 +2,8 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Alert } from 'react-native';
 
-const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || '';
+const apiBaseUrl =
+  process.env.EXPO_PUBLIC_API_BASE_URL || 'https://pixxtechnologiees-tji2.vercel.app/api';
 
 const client = axios.create({
   baseURL: apiBaseUrl,

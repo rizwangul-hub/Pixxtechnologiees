@@ -11,6 +11,7 @@ import {
   Modal,
   ScrollView,
   Platform,
+  Image,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -19,6 +20,17 @@ import { getProperties, PropertyItem } from '@/src/services/propertyService';
 import { getLandlordsList } from '@/src/services/landlordService';
 import { LandlordBrief } from '@/src/services/propertyService';
 import DatabaseLoading from '../components/DatabaseLoading';
+
+export interface LandlordPropertyGroup {
+  landlordId: string;
+  landlordName: string;
+  landlordLogoUrl?: string;
+  properties: PropertyItem[];
+  totalProperties: number;
+  totalMonthlyRent: number;
+  occupiedCount: number;
+  availableCount: number;
+}
 
 const PROPERTY_TYPES = ['All', 'Shop', 'Office', 'House', 'Flat', 'Apartment', 'Building', 'Other'];
 const STATUSES = ['All', 'Available', 'Occupied', 'Reserved', 'Maintenance', 'Archived'];
@@ -91,6 +103,60 @@ export default function PropertiesScreen() {
     if (selectedLandlordId !== 'All') count++;
     return count;
   }, [selectedType, selectedStatus, selectedLandlordId]);
+
+  // View mode: 'grouped' by landlord (default) or 'flat' list
+  const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
+
+  // Group properties by landlord (matching web version)
+  const groupedByLandlord = useMemo<LandlordPropertyGroup[]>(() => {
+    const groupsMap: Record<string, LandlordPropertyGroup> = {};
+
+    properties.forEach((p) => {
+      const landlordObj = (p.landlordId && typeof p.landlordId === 'object') ? (p.landlordId as any) : null;
+      const landlordId = landlordObj
+        ? (landlordObj._id || landlordObj.id || 'unassigned').toString()
+        : (p.landlordId ? (p.landlordId as any).toString() : 'unassigned');
+
+      let matchedLandlord = landlordObj;
+      if (!matchedLandlord && landlords.length > 0) {
+        matchedLandlord = landlords.find((l) => (l._id || (l as any).id)?.toString() === landlordId);
+      }
+
+      const landlordName =
+        matchedLandlord?.fullName ||
+        matchedLandlord?.name ||
+        (landlordId !== 'unassigned' ? 'Landlord' : 'General Portfolio (Unassigned)');
+      const landlordLogoUrl =
+        matchedLandlord?.logo?.url || matchedLandlord?.logoUrl || '';
+
+      if (!groupsMap[landlordId]) {
+        groupsMap[landlordId] = {
+          landlordId,
+          landlordName,
+          landlordLogoUrl,
+          properties: [],
+          totalProperties: 0,
+          totalMonthlyRent: 0,
+          occupiedCount: 0,
+          availableCount: 0,
+        };
+      }
+
+      const group = groupsMap[landlordId];
+      group.properties.push(p);
+      group.totalProperties += 1;
+      const rent = Number(p.monthlyRent || p.price || 0);
+      group.totalMonthlyRent += isNaN(rent) ? 0 : rent;
+      const st = (p.status || '').toLowerCase();
+      if (st === 'occupied') {
+        group.occupiedCount += 1;
+      } else {
+        group.availableCount += 1;
+      }
+    });
+
+    return Object.values(groupsMap);
+  }, [properties, landlords]);
 
   const clearAllFilters = () => {
     setSelectedType('All');
@@ -183,26 +249,33 @@ export default function PropertiesScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Top Header */}
+      {/* Top Header with Pixxtechnologiees Branding & Logo */}
       <View
         style={[
           styles.topHeader,
           { paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 20 : 12) + 8 },
         ]}
       >
-        <View style={{ flex: 1, marginRight: 8 }}>
-          <Text style={styles.screenTitle}>Properties</Text>
-          <Text style={styles.screenSubtitle} numberOfLines={1}>
-            {loading ? 'Loading properties...' : `${properties.length} ${properties.length === 1 ? 'property' : 'properties'} listed`}
-          </Text>
+        <View style={styles.headerBrandWrap}>
+          <Image
+            source={require('@/assets/images/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.brandTitle}>Pixxtechnologiees</Text>
+            <Text style={styles.screenSubtitle} numberOfLines={1}>
+              {loading ? 'Loading properties...' : `${properties.length} ${properties.length === 1 ? 'property' : 'properties'} listed`}
+            </Text>
+          </View>
         </View>
         <TouchableOpacity
           style={styles.addBtnHeader}
           onPress={() => router.push('/properties/create')}
           activeOpacity={0.8}
         >
-          <MaterialIcons name="add" size={20} color="#ffffff" />
-          <Text style={styles.addBtnHeaderText}>Add</Text>
+          <MaterialIcons name="add-business" size={18} color="#ffffff" />
+          <Text style={styles.addBtnHeaderText}>+ Add</Text>
         </TouchableOpacity>
       </View>
 
@@ -243,6 +316,39 @@ export default function PropertiesScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* View Mode Switcher: Grouped by Landlord vs All Properties */}
+      <View style={styles.viewModeContainer}>
+        <TouchableOpacity
+          style={[styles.viewModeTab, viewMode === 'grouped' && styles.viewModeTabActive]}
+          onPress={() => setViewMode('grouped')}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons
+            name="group-work"
+            size={16}
+            color={viewMode === 'grouped' ? '#0284c7' : '#64748b'}
+          />
+          <Text style={[styles.viewModeText, viewMode === 'grouped' && styles.viewModeTextActive]}>
+            Grouped by Landlord
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.viewModeTab, viewMode === 'flat' && styles.viewModeTabActive]}
+          onPress={() => setViewMode('flat')}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons
+            name="view-list"
+            size={16}
+            color={viewMode === 'flat' ? '#0284c7' : '#64748b'}
+          />
+          <Text style={[styles.viewModeText, viewMode === 'flat' && styles.viewModeTextActive]}>
+            All Properties List
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Content Area */}
       {loading && !refreshing ? (
         <DatabaseLoading />
@@ -255,6 +361,133 @@ export default function PropertiesScreen() {
             <Text style={styles.retryBtnText}>Try Again</Text>
           </TouchableOpacity>
         </View>
+      ) : viewMode === 'grouped' ? (
+        <ScrollView
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom, 16) + 80 },
+          ]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0284c7']} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {groupedByLandlord.length === 0 ? (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="domain-disabled" size={54} color="#cbd5e1" />
+              <Text style={styles.emptyTitle}>No properties found</Text>
+              <Text style={styles.emptySubtitle}>
+                {searchQuery || activeFiltersCount > 0
+                  ? 'Try changing your search keywords or clear your active filters.'
+                  : 'Get started by adding your first rentable property.'}
+              </Text>
+              {searchQuery || activeFiltersCount > 0 ? (
+                <TouchableOpacity style={styles.clearFilterBtn} onPress={clearAllFilters}>
+                  <Text style={styles.clearFilterBtnText}>Clear Filters</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.addFirstBtn}
+                  onPress={() => router.push('/properties/create')}
+                >
+                  <MaterialIcons name="add" size={20} color="#ffffff" />
+                  <Text style={styles.addFirstBtnText}>Add Property</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            groupedByLandlord.map((group) => (
+              <View key={group.landlordId} style={styles.landlordGroupCard}>
+                {/* Landlord Header Banner */}
+                <View style={styles.landlordGroupHeader}>
+                  <View style={styles.landlordGroupHeaderTop}>
+                    <View style={styles.landlordProfileWrap}>
+                      {group.landlordLogoUrl ? (
+                        <Image source={{ uri: group.landlordLogoUrl }} style={styles.landlordLogo} />
+                      ) : (
+                        <View style={styles.landlordInitialsCircle}>
+                          <Text style={styles.landlordInitialsText}>
+                            {group.landlordName.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={styles.landlordGroupName} numberOfLines={1}>
+                          {group.landlordName}
+                        </Text>
+                        <Text style={styles.landlordGroupSub}>
+                          Landlord Property Portfolio
+                        </Text>
+                      </View>
+                    </View>
+
+                    {group.landlordId !== 'unassigned' && (
+                      <TouchableOpacity
+                        style={styles.landlordReportBtn}
+                        onPress={() => router.push(`/reports/property?landlordId=${group.landlordId}` as any)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons name="assessment" size={14} color="#0284c7" />
+                        <Text style={styles.landlordReportBtnText}>Report</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Landlord Metric Chips */}
+                  <View style={styles.groupMetricChipsRow}>
+                    <View style={styles.groupMetricChip}>
+                      <MaterialIcons name="business" size={13} color="#0284c7" />
+                      <Text style={styles.groupMetricChipText}>
+                        {group.totalProperties} {group.totalProperties === 1 ? 'Unit' : 'Units'}
+                      </Text>
+                    </View>
+                    <View style={[styles.groupMetricChip, { backgroundColor: '#ecfdf5' }]}>
+                      <MaterialIcons name="payments" size={13} color="#059669" />
+                      <Text style={[styles.groupMetricChipText, { color: '#059669' }]}>
+                        £{group.totalMonthlyRent.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo
+                      </Text>
+                    </View>
+                    <View style={[styles.groupMetricChip, { backgroundColor: '#f0fdf4' }]}>
+                      <MaterialIcons name="check-circle" size={13} color="#16a34a" />
+                      <Text style={[styles.groupMetricChipText, { color: '#16a34a' }]}>
+                        {group.occupiedCount} Occupied
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Properties in this Group */}
+                <View style={styles.groupPropertiesContainer}>
+                  {group.properties.map((p) => (
+                    <View key={p._id} style={{ marginBottom: 10 }}>
+                      {renderPropertyCard({ item: p })}
+                    </View>
+                  ))}
+                </View>
+
+                {/* Landlord Group Footer Summary */}
+                <View style={styles.landlordGroupFooter}>
+                  <View style={styles.groupFooterItem}>
+                    <Text style={styles.groupFooterLabel}>Total Units</Text>
+                    <Text style={styles.groupFooterValue}>{group.totalProperties}</Text>
+                  </View>
+                  <View style={styles.groupFooterDivider} />
+                  <View style={styles.groupFooterItem}>
+                    <Text style={styles.groupFooterLabel}>Occupied</Text>
+                    <Text style={[styles.groupFooterValue, { color: '#059669' }]}>
+                      {group.occupiedCount}
+                    </Text>
+                  </View>
+                  <View style={styles.groupFooterDivider} />
+                  <View style={styles.groupFooterItem}>
+                    <Text style={styles.groupFooterLabel}>Monthly Rent Roll</Text>
+                    <Text style={[styles.groupFooterValue, { color: '#0284c7' }]}>
+                      £{group.totalMonthlyRent.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
       ) : (
         <FlatList
           data={properties}
@@ -410,6 +643,184 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  headerBrandWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  headerLogo: {
+    width: 68,
+    height: 46,
+    borderRadius: 6,
+  },
+  brandTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: -0.4,
+  },
+  viewModeContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  viewModeTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 6,
+  },
+  viewModeTabActive: {
+    backgroundColor: '#e0f2fe',
+    borderColor: '#bae6fd',
+  },
+  viewModeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  viewModeTextActive: {
+    color: '#0284c7',
+    fontWeight: '700',
+  },
+  landlordGroupCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  landlordGroupHeader: {
+    backgroundColor: '#f8fafc',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  landlordGroupHeaderTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  landlordProfileWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  landlordLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#e2e8f0',
+  },
+  landlordInitialsCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0284c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  landlordInitialsText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  landlordGroupName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  landlordGroupSub: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  landlordReportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e0f2fe',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    gap: 4,
+  },
+  landlordReportBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284c7',
+  },
+  groupMetricChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  groupMetricChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e0f2fe',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    gap: 4,
+  },
+  groupMetricChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0284c7',
+  },
+  groupPropertiesContainer: {
+    padding: 12,
+  },
+  landlordGroupFooter: {
+    flexDirection: 'row',
+    backgroundColor: '#f8fafc',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  groupFooterItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  groupFooterDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#e2e8f0',
+  },
+  groupFooterLabel: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  groupFooterValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginTop: 2,
   },
   screenTitle: {
     fontSize: 22,

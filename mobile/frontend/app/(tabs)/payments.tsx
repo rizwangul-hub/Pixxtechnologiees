@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, TextInput, TouchableOpacity, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, TextInput, TouchableOpacity, Modal, Platform, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -60,11 +60,18 @@ export default function PaymentsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Top Header with Safe Area Inset */}
+      {/* Top Header with Pixxtechnologiees Logo & Branding */}
       <View style={[styles.topHeader, { paddingTop: Math.max(insets.top, 16) + 12 }]}>
-        <View style={styles.topHeaderLeft}>
-          <Text style={styles.topHeaderTitle}>Payments</Text>
-          <Text style={styles.topHeaderSubtitle}>{payments.length} Records</Text>
+        <View style={styles.headerBrandWrap}>
+          <Image
+            source={require('@/assets/images/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.brandTitle}>Pixxtechnologiees</Text>
+            <Text style={styles.topHeaderSubtitle}>{payments.length} Payment Records</Text>
+          </View>
         </View>
         <TouchableOpacity
           style={styles.collectRentBtn}
@@ -207,6 +214,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   topHeaderLeft: { flex: 1 },
+  headerBrandWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  headerLogo: {
+    width: 68,
+    height: 46,
+    borderRadius: 6,
+  },
+  brandTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: -0.4,
+  },
   topHeaderTitle: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
   topHeaderSubtitle: { fontSize: 12, color: '#64748b', marginTop: 2 },
   collectRentBtn: {

@@ -59,9 +59,40 @@ export const getPaymentById = async (id: string): Promise<PaymentDetailResponse>
 /** Record a payment against a payment record */
 export const recordPayment = async (
   paymentId: string,
-  payload: { amountPaid: number; paymentMethod?: string; reference?: string; notes?: string }
+  payload: { amountPaid: number; paymentDate?: string; paymentMethod?: string; reference?: string; notes?: string }
 ): Promise<PaymentDetailResponse> => {
   const res = await client.post<PaymentDetailResponse>(`/payments/${paymentId}/pay`, payload);
+  return res.data;
+};
+
+/** Update an existing payment record */
+export const updatePayment = async (
+  paymentId: string,
+  payload: {
+    amount?: number;
+    paidAmount?: number;
+    dueDate?: string;
+    paidDate?: string;
+    paymentDate?: string;
+    paymentMethod?: string;
+    reference?: string;
+    notes?: string;
+    status?: string;
+  }
+): Promise<PaymentDetailResponse> => {
+  const res = await client.put<PaymentDetailResponse>(`/payments/${paymentId}`, payload);
+  return res.data;
+};
+
+/** Reset a payment back to unpaid (clears received amount and restores balance) */
+export const resetPayment = async (paymentId: string): Promise<PaymentDetailResponse> => {
+  const res = await client.post<PaymentDetailResponse>(`/payments/${paymentId}/reset`);
+  return res.data;
+};
+
+/** Delete a payment record permanently */
+export const deletePayment = async (paymentId: string): Promise<{ success: boolean; message: string }> => {
+  const res = await client.delete<{ success: boolean; message: string }>(`/payments/${paymentId}`);
   return res.data;
 };
 

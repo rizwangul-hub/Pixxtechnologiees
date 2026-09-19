@@ -1,5 +1,5 @@
-import React, { useContext, useEffect } from 'react';
-import { View, Image, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useContext, useEffect, useState } from 'react';
+import { View, Image, StyleSheet } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -11,42 +11,51 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootNavigation() {
   const { token, isLoading } = useContext(AuthContext);
+  const [showInitialSplash, setShowInitialSplash] = useState(true);
 
   useEffect(() => {
-    if (!isLoading) {
-      SplashScreen.hideAsync().catch(() => {});
-      const timer = setTimeout(() => {
-        if (!token) {
-          router.replace('/(auth)/login');
-        } else {
-          router.replace('/(tabs)');
-        }
-      }, 50);
-      return () => clearTimeout(timer);
+    SplashScreen.hideAsync().catch(() => {});
+    try {
+      const { requireOptionalNativeModule } = require('expo');
+      const DevMenuPreferences = requireOptionalNativeModule?.('DevMenuPreferences');
+      DevMenuPreferences?.setPreferencesAsync?.({ showFloatingActionButton: false });
+    } catch {}
+    const splashTimer = setTimeout(() => {
+      setShowInitialSplash(false);
+    }, 2200);
+    return () => clearTimeout(splashTimer);
+  }, []);
+
+  const isAppLoading = isLoading || showInitialSplash;
+
+  useEffect(() => {
+    if (!isAppLoading) {
+      if (!token) {
+        router.replace('/(auth)/login');
+      } else {
+        router.replace('/(tabs)');
+      }
     }
-  }, [isLoading, token]);
+  }, [isAppLoading, token]);
 
   return (
-    <View style={{ flex: 1 }}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Info' }} />
-      </Stack>
+    <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+      <StatusBar hidden={isAppLoading} style="dark" />
 
-      {isLoading && (
+      {isAppLoading ? (
         <View style={StyleSheet.absoluteFill}>
-          <View style={styles.splashContainer}>
-            <Image
-              source={require('@/assets/images/loading.png')}
-              style={styles.splashImage}
-              resizeMode="contain"
-            />
-            <ActivityIndicator size="large" color="#0284c7" style={styles.spinner} />
-          </View>
+          <Image
+            source={require('@/assets/images/loading.png')}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
         </View>
+      ) : (
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        </Stack>
       )}
-      <StatusBar style="dark" />
     </View>
   );
 }
@@ -60,20 +69,3 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  splashContainer: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  splashImage: {
-    width: '80%',
-    height: 260,
-  },
-  spinner: {
-    marginTop: 24,
-  },
-});

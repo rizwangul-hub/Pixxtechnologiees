@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -82,11 +83,18 @@ export default function DashboardScreen() {
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-        <View style={{ flex: 1, marginRight: 8 }}>
-          <Text style={styles.brandTitle}>PixxTechnologies</Text>
-          <Text style={styles.welcomeText} numberOfLines={1}>
-            Welcome, {manager?.name || 'Manager'}
-          </Text>
+        <View style={styles.brandContainer}>
+          <Image
+            source={require('@/assets/images/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+          <View style={{ flex: 1, marginLeft: 8 }}>
+            <Text style={styles.brandTitle}>Pixxtechnologiees</Text>
+            <Text style={styles.welcomeText} numberOfLines={1}>
+              Welcome, Fahad
+            </Text>
+          </View>
         </View>
         <TouchableOpacity
           style={styles.logoutBtn}
@@ -280,14 +288,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  brandContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  headerLogo: {
+    width: 68,
+    height: 46,
+    borderRadius: 6,
+  },
   brandTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: '#0f172a',
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
   welcomeText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748b',
     marginTop: 2,
   },

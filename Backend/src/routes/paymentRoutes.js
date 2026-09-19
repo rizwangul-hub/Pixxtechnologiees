@@ -8,6 +8,7 @@ const {
   getPaymentById,
   recordPayment,
   updatePayment,
+  resetPayment,
   deletePayment,
 } = require('../controllers/paymentController');
 const { protect } = require('../middleware/authMiddleware');
@@ -18,6 +19,7 @@ router.get('/summary', protect, getPaymentSummary);
 router.get('/', protect, getPayments);
 router.get('/:id', protect, getPaymentById);
 router.post('/:id/pay', protect, recordPayment);
+router.post('/:id/reset', protect, resetPayment);
 router.put('/:id', protect, updatePayment);
 router.delete('/:id', protect, deletePayment);
 

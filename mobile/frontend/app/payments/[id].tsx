@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getPaymentById, PaymentDetailResponse } from '@/src/services/paymentService';
+import { getPaymentById, resetPayment, PaymentDetailResponse } from '@/src/services/paymentService';
 import { StatusBadge } from '@/src/components/StatusBadge';
 import { formatCurrencyGBP, formatDateUK } from '@/src/utils/formatters';
 
@@ -167,6 +167,56 @@ export default function PaymentDetailScreen() {
             <Text style={styles.recordBtnText}>Record Payment</Text>
           </TouchableOpacity>
         )}
+
+        {/* Edit Payment Button */}
+        <TouchableOpacity
+          style={styles.editBtn}
+          onPress={() => router.push(`/payments/edit/${payment._id}` as any)}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="edit" size={20} color="#0284c7" />
+          <Text style={styles.editBtnText}>Edit Payment Details</Text>
+        </TouchableOpacity>
+
+        {/* Reset Payment to Unpaid if paidAmount > 0 */}
+        {Number(paidAmount || 0) > 0 && (
+          <TouchableOpacity
+            style={styles.resetBtn}
+            onPress={() => {
+              Alert.alert(
+                'Reset Payment',
+                'Are you sure you want to reset this payment back to unpaid?\n\nThis will clear the received amount and restore the tenant\'s full remaining rent balance.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Reset to Unpaid',
+                    style: 'destructive',
+                    onPress: async () => {
+                      setLoading(true);
+                      try {
+                        const res = await resetPayment(payment._id);
+                        if (res && res.success) {
+                          Alert.alert('Payment Reset', 'Payment has been reset to unpaid status.');
+                          loadPayment();
+                        } else {
+                          Alert.alert('Error', res?.message || 'Failed to reset payment');
+                        }
+                      } catch (err: any) {
+                        Alert.alert('Error', err.response?.data?.message || err.message || 'Network error');
+                      } finally {
+                        setLoading(false);
+                      }
+                    },
+                  },
+                ]
+              );
+            }}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="restore" size={20} color="#d97706" />
+            <Text style={styles.resetBtnText}>Reset to Unpaid (Undo Payment)</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </View>
   );
@@ -204,6 +254,32 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   recordBtnText: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 46,
+    borderRadius: 10,
+    backgroundColor: '#f0f9ff',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    marginTop: 10,
+    gap: 8,
+  },
+  editBtnText: { color: '#0284c7', fontWeight: '700', fontSize: 14 },
+  resetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 46,
+    borderRadius: 10,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    marginTop: 10,
+    gap: 8,
+  },
+  resetBtnText: { color: '#d97706', fontWeight: '700', fontSize: 14 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 12, color: '#64748b' },
   errorTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginTop: 12 },

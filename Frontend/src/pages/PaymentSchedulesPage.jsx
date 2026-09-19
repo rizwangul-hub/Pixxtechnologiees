@@ -10,9 +10,13 @@ import {
   Calendar,
   ArrowLeft,
   Filter,
+  Edit2,
+  RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout/AppLayout';
 import RecordPaymentModal from '../components/payments/RecordPaymentModal';
+import EditPaymentModal from '../components/payments/EditPaymentModal';
 import {
   getSavedPaymentSchedules,
   getOverallPaymentMetrics,
@@ -21,7 +25,7 @@ import {
 } from '../data/customersData';
 import { getSavedProperties } from '../data/propertiesData';
 import { formatCurrency } from '../utils/currencyFormatter';
-import { fetchPaymentsAPI, fetchPropertiesFromAPI } from '../services/apiData';
+import { fetchPaymentsAPI, fetchPropertiesFromAPI, resetPaymentAPI, deletePaymentAPI } from '../services/apiData';
 import { downloadFileAPI } from '../services/api';
 
 export default function PaymentSchedulesPage() {
@@ -33,6 +37,9 @@ export default function PaymentSchedulesPage() {
 
   const [selectedSchedule, setSelectedSchedule] = useState(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+  const [selectedPaymentForEdit, setSelectedPaymentForEdit] = useState(null);
+  const [isEditPaymentModalOpen, setIsEditPaymentModalOpen] = useState(false);
 
   const loadData = async () => {
     const [list, remoteProperties] = await Promise.all([fetchPaymentsAPI(), fetchPropertiesFromAPI()]);
@@ -265,17 +272,79 @@ export default function PaymentSchedulesPage() {
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-right">
-                        {s.status !== 'Paid' && s.status !== 'Received' && (
+                        <div className="flex items-center justify-end gap-1.5">
+                          {s.remainingAmount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedSchedule(s);
+                                setIsPaymentModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 bg-[#04A26F] text-white text-xs font-semibold rounded hover:bg-[#03885c] transition-colors shadow-xs cursor-pointer"
+                              title="Record received rent"
+                            >
+                              Record
+                            </button>
+                          )}
                           <button
+                            type="button"
                             onClick={() => {
-                              setSelectedSchedule(s);
-                              setIsPaymentModalOpen(true);
+                              setSelectedPaymentForEdit(s);
+                              setIsEditPaymentModalOpen(true);
                             }}
-                            className="px-3 py-1 bg-[#04A26F] text-white text-xs font-semibold rounded hover:bg-[#03885c] transition-colors shadow-xs"
+                            className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                            title="Edit payment"
                           >
-                            Record Payment
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                        )}
+                          {Number(s.paidAmount || 0) > 0 ? (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const custName = s.customerName || s.customerId?.fullName || 'Tenant';
+                                if (
+                                  window.confirm(
+                                    `Are you sure you want to reset this received payment of ${formatCurrency(s.paidAmount)} for "${custName}" back to unpaid?\n\nThis will restore the rent balance.`
+                                  )
+                                ) {
+                                  try {
+                                    await resetPaymentAPI(s._id || s.id);
+                                    loadData();
+                                  } catch (e) {
+                                    alert(e.message || 'Failed to reset payment');
+                                  }
+                                }
+                              }}
+                              className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                              title="Reset payment to unpaid"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const custName = s.customerName || s.customerId?.fullName || 'Tenant';
+                                if (
+                                  window.confirm(
+                                    `Are you sure you want to delete this payment schedule for "${custName}"?`
+                                  )
+                                ) {
+                                  try {
+                                    await deletePaymentAPI(s._id || s.id);
+                                    loadData();
+                                  } catch (e) {
+                                    alert(e.message || 'Failed to delete payment');
+                                  }
+                                }
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Delete payment schedule"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -291,6 +360,14 @@ export default function PaymentSchedulesPage() {
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         scheduleItem={selectedSchedule}
+        onSuccess={loadData}
+      />
+
+      {/* Edit Payment Modal */}
+      <EditPaymentModal
+        isOpen={isEditPaymentModalOpen}
+        onClose={() => setIsEditPaymentModalOpen(false)}
+        payment={selectedPaymentForEdit}
         onSuccess={loadData}
       />
     </AppLayout>

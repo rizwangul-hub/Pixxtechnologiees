@@ -16,11 +16,14 @@ import {
   Clock,
   XCircle,
   History,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { EntityReportDownloadBar } from '../components/common/EntityReportDownloadBar';
 import AssignUnitModal from '../components/customers/AssignUnitModal';
 import RecordPaymentModal from '../components/payments/RecordPaymentModal';
+import EditPaymentModal from '../components/payments/EditPaymentModal';
 import { TenantDocumentSection } from '../components/tenants/TenantDocumentSection';
 import {
   getSavedCustomers,
@@ -30,6 +33,8 @@ import {
   fetchPaymentsAPI,
   fetchTenanciesAPI,
   endTenancyAPI,
+  resetPaymentAPI,
+  deletePaymentAPI,
 } from '../services/apiData';
 import { formatCurrency } from '../utils/currencyFormatter';
 
@@ -59,6 +64,8 @@ export default function CustomerDetailPage() {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedScheduleForPayment, setSelectedScheduleForPayment] = useState(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedPaymentForEdit, setSelectedPaymentForEdit] = useState(null);
+  const [isEditPaymentModalOpen, setIsEditPaymentModalOpen] = useState(false);
 
   const loadCustomerData = async () => {
     setLoading(true);
@@ -496,12 +503,13 @@ export default function CustomerDetailPage() {
                   <th className="py-3 px-4">Amount Paid</th>
                   <th className="py-3 px-4">Remaining</th>
                   <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {apiPayments.filter((p) => p.paymentType !== 'Opening Balance' && (p.paidAmount || 0) > 0).length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="py-6 text-center text-gray-500 text-sm">
+                    <td colSpan="7" className="py-6 text-center text-gray-500 text-sm">
                       No payment receipts recorded yet.
                     </td>
                   </tr>
@@ -526,6 +534,42 @@ export default function CustomerDetailPage() {
                             {p.status === 'Paid' ? 'Received' : p.status === 'Partially Paid' ? 'Partially Received' : p.status}
                           </span>
                         </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedPaymentForEdit(p);
+                                setIsEditPaymentModalOpen(true);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                              title="Edit received payment"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (
+                                  window.confirm(
+                                    `Are you sure you want to reset this received payment of ${formatCurrency(p.paidAmount)} back to unpaid?\n\nThis restores the remaining rent balance. Use this if the payment was added by mistake or duplicate.`
+                                  )
+                                ) {
+                                  try {
+                                    await resetPaymentAPI(p._id);
+                                    loadCustomerData();
+                                  } catch (e) {
+                                    alert(e.message || 'Failed to reset payment');
+                                  }
+                                }
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Reset / Undo payment"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))
                 )}
@@ -547,6 +591,13 @@ export default function CustomerDetailPage() {
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         scheduleItem={selectedScheduleForPayment}
+        onSuccess={loadCustomerData}
+      />
+
+      <EditPaymentModal
+        isOpen={isEditPaymentModalOpen}
+        onClose={() => setIsEditPaymentModalOpen(false)}
+        payment={selectedPaymentForEdit}
         onSuccess={loadCustomerData}
       />
     </AppLayout>
