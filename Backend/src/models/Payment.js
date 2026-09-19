@@ -77,6 +77,30 @@ const paymentSchema = new mongoose.Schema(
       enum: ['Rent', 'Opening Balance', 'Security Deposit', 'Other'],
       default: 'Rent',
     },
+    agentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Agent',
+      default: null,
+    },
+    agentFee: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    expenseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Expense',
+      default: null,
+    },
+    expenseAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    netLandlordAmount: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

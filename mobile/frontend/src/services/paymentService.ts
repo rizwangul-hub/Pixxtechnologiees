@@ -20,6 +20,11 @@ export interface Payment {
   reference?: string;
   notes?: string;
   paymentType?: string;
+  agentId?: any;
+  agentFee?: number;
+  expenseId?: any;
+  expenseAmount?: number;
+  netLandlordAmount?: number;
   // populated references
   customer?: any;
   property?: any;
@@ -59,7 +64,19 @@ export const getPaymentById = async (id: string): Promise<PaymentDetailResponse>
 /** Record a payment against a payment record */
 export const recordPayment = async (
   paymentId: string,
-  payload: { amountPaid: number; paymentDate?: string; paymentMethod?: string; reference?: string; notes?: string }
+  payload: {
+    amountPaid: number;
+    paymentDate?: string;
+    paymentMethod?: string;
+    reference?: string;
+    notes?: string;
+    agentId?: string;
+    agentFee?: number;
+    expenseAmount?: number;
+    expenseDescription?: string;
+    expenseCategory?: string;
+    expenseReceiptUrl?: string;
+  }
 ): Promise<PaymentDetailResponse> => {
   const res = await client.post<PaymentDetailResponse>(`/payments/${paymentId}/pay`, payload);
   return res.data;

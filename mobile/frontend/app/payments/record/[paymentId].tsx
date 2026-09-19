@@ -19,6 +19,9 @@ export default function RecordPaymentScreen() {
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Bank Transfer' | 'Online' | 'Other'>('Cash');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
+  const [agentFee, setAgentFee] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseDescription, setExpenseDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const loadPayment = useCallback(async () => {
@@ -29,6 +32,15 @@ export default function RecordPaymentScreen() {
       if (res && res.success) {
         setPayment(res.data);
         setAmountPaid(String(res.data.remainingAmount ?? ''));
+        const d = res.data as any;
+        const initialFee =
+          d?.agentFee ||
+          d?.propertyId?.agentFee ||
+          d?.property?.agentFee ||
+          d?.tenancyId?.companyMonthlyAmount ||
+          d?.tenancy?.companyMonthlyAmount ||
+          '';
+        if (initialFee) setAgentFee(String(initialFee));
       } else {
         setError('Failed to load payment');
       }
@@ -54,6 +66,14 @@ export default function RecordPaymentScreen() {
       Alert.alert('Exceeds remaining', `Maximum amount is ${formatCurrencyGBP(payment.remainingAmount)}`);
       return;
     }
+
+    const agentFeeNum = Number(agentFee) || 0;
+    const expenseNum = Number(expenseAmount) || 0;
+    if (agentFeeNum + expenseNum > amountNum) {
+      Alert.alert('Invalid deduction', 'Agent Fee and Expense cannot exceed rent received.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const payload = {
@@ -61,6 +81,9 @@ export default function RecordPaymentScreen() {
         paymentMethod,
         reference: reference || undefined,
         notes: notes || undefined,
+        agentFee: agentFeeNum > 0 ? agentFeeNum : undefined,
+        expenseAmount: expenseNum > 0 ? expenseNum : undefined,
+        expenseDescription: expenseDescription || undefined,
       };
       const res = await recordPayment(paymentId, payload);
       if (res && res.success) {
@@ -180,6 +203,67 @@ export default function RecordPaymentScreen() {
               numberOfLines={3}
             />
 
+            <View style={styles.divider} />
+
+            {/* Agent Fee */}
+            <Text style={styles.inputLabel}>Agent Fee (£) (deducted & credited to agent)</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="numeric"
+              value={agentFee}
+              onChangeText={setAgentFee}
+              placeholder="0.00"
+              placeholderTextColor="#94a3b8"
+            />
+
+            {/* Property Expense */}
+            <Text style={styles.inputLabel}>Property Expense (£) (optional deduction)</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="numeric"
+              value={expenseAmount}
+              onChangeText={setExpenseAmount}
+              placeholder="0.00"
+              placeholderTextColor="#94a3b8"
+            />
+
+            {Number(expenseAmount) > 0 && (
+              <>
+                <Text style={styles.inputLabel}>Expense Description</Text>
+                <TextInput
+                  style={styles.input}
+                  value={expenseDescription}
+                  onChangeText={setExpenseDescription}
+                  placeholder="e.g. Boiler repair, Lock change"
+                  placeholderTextColor="#94a3b8"
+                />
+              </>
+            )}
+
+            {/* Live Financial Breakdown */}
+            <View style={styles.breakdownBox}>
+              <View style={styles.rowSpaceBetween}>
+                <Text style={styles.breakdownLabel}>Rent Received:</Text>
+                <Text style={styles.breakdownVal}>{formatCurrencyGBP(Number(amountPaid) || 0)}</Text>
+              </View>
+              <View style={styles.rowSpaceBetween}>
+                <Text style={styles.breakdownLabel}>Less Agent Fee:</Text>
+                <Text style={[styles.breakdownVal, { color: '#f43f5e' }]}>-{formatCurrencyGBP(Number(agentFee) || 0)}</Text>
+              </View>
+              {Number(expenseAmount) > 0 && (
+                <View style={styles.rowSpaceBetween}>
+                  <Text style={styles.breakdownLabel}>Less Expense:</Text>
+                  <Text style={[styles.breakdownVal, { color: '#f43f5e' }]}>-{formatCurrencyGBP(Number(expenseAmount) || 0)}</Text>
+                </View>
+              )}
+              <View style={[styles.rowSpaceBetween, styles.breakdownTotalRow]}>
+                <Text style={styles.breakdownTotalLabel}>Net to Landlord:</Text>
+                <Text style={styles.breakdownTotalVal}>
+                  {formatCurrencyGBP(Math.max(0, (Number(amountPaid) || 0) - (Number(agentFee) || 0) - (Number(expenseAmount) || 0)))}
+                </Text>
+              </View>
+            </View>
+
             <TouchableOpacity
               style={[styles.saveBtn, submitting && styles.disabledBtn]}
               onPress={handleSubmit}
@@ -251,6 +335,38 @@ const styles = StyleSheet.create({
   },
   disabledBtn: { backgroundColor: '#94a3b8' },
   saveBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+  breakdownBox: {
+    backgroundColor: '#0f172a',
+    borderRadius: 10,
+    padding: 14,
+    marginTop: 18,
+  },
+  breakdownLabel: {
+    fontSize: 13,
+    color: '#94a3b8',
+    fontWeight: '500',
+  },
+  breakdownVal: {
+    fontSize: 13,
+    color: '#f8fafc',
+    fontWeight: '600',
+  },
+  breakdownTotalRow: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  breakdownTotalLabel: {
+    fontSize: 14,
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  breakdownTotalVal: {
+    fontSize: 15,
+    color: '#34d399',
+    fontWeight: '800',
+  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   loadingText: { marginTop: 12, color: '#64748b' },
   errorTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginTop: 12 },

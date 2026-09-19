@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
 import { DashboardQuickActions } from '../components/dashboard/DashboardQuickActions';
@@ -46,6 +46,11 @@ import {
   Wallet,
   Receipt,
   Landmark,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  List,
+  Grid,
 } from 'lucide-react';
 
 export function DashboardPage() {
@@ -120,6 +125,78 @@ export function DashboardPage() {
 
   const [selectedScheduleForPayment, setSelectedScheduleForPayment] = useState(null);
   const [isRecordPaymentModalOpen, setIsRecordPaymentModalOpen] = useState(false);
+
+  // Landlord-wise Overdue Payments state
+  const [selectedOverdueLandlord, setSelectedOverdueLandlord] = useState('All');
+  const [overdueViewMode, setOverdueViewMode] = useState('grouped'); // 'grouped' | 'flat'
+  const [collapsedLandlordGroups, setCollapsedLandlordGroups] = useState({});
+
+  const toggleCollapseLandlord = (id) => {
+    setCollapsedLandlordGroups((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const overdueByLandlord = useMemo(() => {
+    const groups = {};
+
+    overduePayments.forEach((p) => {
+      const landlordObj = p.landlord || p.propertyId?.landlordId || p.tenancyId?.landlordId || null;
+      const landlordId = (landlordObj?._id || landlordObj?.id || 'unassigned').toString();
+      const landlordName =
+        landlordObj?.fullName ||
+        landlordObj?.name ||
+        (landlordId !== 'unassigned' ? 'Landlord' : 'General Portfolio (Unassigned)');
+      const landlordLogo = landlordObj?.logo?.url || landlordObj?.logoUrl || landlordObj?.logo || '';
+      const landlordPhone = landlordObj?.phone || '';
+      const landlordEmail = landlordObj?.email || '';
+
+      if (!groups[landlordId]) {
+        groups[landlordId] = {
+          landlordId,
+          landlordName,
+          landlordLogo,
+          landlordPhone,
+          landlordEmail,
+          landlordObj,
+          payments: [],
+          totalOverdue: 0,
+          totalExpected: 0,
+          totalPaid: 0,
+        };
+      }
+
+      groups[landlordId].payments.push(p);
+      const rem =
+        Number(p.remainingAmount !== undefined ? p.remainingAmount : (p.amount || 0) - (p.paidAmount || 0)) || 0;
+      groups[landlordId].totalOverdue += rem;
+      groups[landlordId].totalExpected += Number(p.amount || 0);
+      groups[landlordId].totalPaid += Number(p.paidAmount || 0);
+    });
+
+    return Object.values(groups).sort((a, b) => b.totalOverdue - a.totalOverdue);
+  }, [overduePayments]);
+
+  const uniqueLandlordsList = useMemo(() => {
+    return overdueByLandlord.map((g) => ({
+      id: g.landlordId,
+      name: g.landlordName,
+      count: g.payments.length,
+      totalOverdue: g.totalOverdue,
+    }));
+  }, [overdueByLandlord]);
+
+  const displayedOverdueGroups = useMemo(() => {
+    if (selectedOverdueLandlord === 'All') return overdueByLandlord;
+    return overdueByLandlord.filter((g) => g.landlordId === selectedOverdueLandlord);
+  }, [overdueByLandlord, selectedOverdueLandlord]);
+
+  const displayedOverdueFlatList = useMemo(() => {
+    if (selectedOverdueLandlord === 'All') return overduePayments;
+    return overduePayments.filter((p) => {
+      const landlordObj = p.landlord || p.propertyId?.landlordId || p.tenancyId?.landlordId || null;
+      const landlordId = (landlordObj?._id || landlordObj?.id || 'unassigned').toString();
+      return landlordId === selectedOverdueLandlord;
+    });
+  }, [overduePayments, selectedOverdueLandlord]);
 
   const loadDashboardData = async () => {
     try {
@@ -772,97 +849,324 @@ export function DashboardPage() {
           </div>
         )}
 
-        {/* 4. OVERDUE PAYMENTS SECTION */}
-        <div className="bg-white rounded-xl border-2 border-rose-200 shadow-sm p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center font-bold">
+        {/* 4. OVERDUE PAYMENTS SECTION - GROUPED BY LANDLORD */}
+        <div className="bg-white rounded-2xl border-2 border-rose-200 shadow-sm p-5 sm:p-6 space-y-5">
+          {/* Section Header with Controls */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-rose-100">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold shadow-xs">
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Overdue Payments</h2>
-                <p className="text-xs text-rose-600 font-medium">Requires immediate manager follow-up</p>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Overdue Payments</h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                    {overduePayments.length} Total Overdue
+                  </span>
+                  {financials?.overdueAmount > 0 && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-600 text-white shadow-2xs">
+                      {formatCurrency(financials.overdueAmount)}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-rose-600 font-medium mt-0.5">
+                  Action required by property managers • Grouped Landlord-wise with automated deductions
+                </p>
               </div>
             </div>
-            <Link
-              to="/payments/schedules"
-              className="text-xs font-semibold text-rose-600 hover:underline flex items-center space-x-1"
-            >
-              <span>View All Schedules</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+
+            {/* Filter & View Mode Controls */}
+            <div className="flex items-center gap-2.5 flex-wrap self-start md:self-auto">
+              {/* Landlord Filter Dropdown */}
+              {uniqueLandlordsList.length > 1 && (
+                <div className="flex items-center space-x-1.5 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-200">
+                  <Filter className="w-3.5 h-3.5 text-gray-400" />
+                  <select
+                    value={selectedOverdueLandlord}
+                    onChange={(e) => setSelectedOverdueLandlord(e.target.value)}
+                    className="text-xs font-semibold text-gray-700 bg-transparent border-none focus:outline-none cursor-pointer"
+                  >
+                    <option value="All">All Landlords ({uniqueLandlordsList.length})</option>
+                    {uniqueLandlordsList.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name} ({l.count} • {formatCurrency(l.totalOverdue)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* View Switcher (Grouped vs Flat) */}
+              <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setOverdueViewMode('grouped')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer ${
+                    overdueViewMode === 'grouped'
+                      ? 'bg-white text-gray-900 shadow-2xs'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                  title="Group by Landlord"
+                >
+                  <Grid className="w-3.5 h-3.5" />
+                  <span>By Landlord</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOverdueViewMode('flat')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer ${
+                    overdueViewMode === 'flat'
+                      ? 'bg-white text-gray-900 shadow-2xs'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                  title="Flat Table View"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>Flat List</span>
+                </button>
+              </div>
+
+              <Link
+                to="/payments/schedules"
+                className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline flex items-center space-x-1 shrink-0 ml-1"
+              >
+                <span>All Schedules</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="bg-rose-50/50 border-b border-rose-100 text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  <th className="py-3 px-4">Tenant</th>
-                  <th className="py-3 px-4">Property</th>
-                  <th className="py-3 px-4">Unit</th>
-                  <th className="py-3 px-4">Expected</th>
-                  <th className="py-3 px-4">Paid</th>
-                  <th className="py-3 px-4">Remaining</th>
-                  <th className="py-3 px-4">Due Date</th>
-                  <th className="py-3 px-4">Days Overdue</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {overduePayments.length === 0 ? (
-                  <tr>
-                    <td colSpan="10" className="py-6 text-center text-emerald-700 font-medium text-sm bg-emerald-50/50">
-                      ✓ No overdue payments! All accounts are up to date.
-                    </td>
+          {/* No Overdue Payments Notice */}
+          {overduePayments.length === 0 ? (
+            <div className="py-8 text-center text-emerald-700 font-semibold text-sm bg-emerald-50/60 rounded-xl border border-emerald-100">
+              ✓ No overdue payments! All accounts are completely up to date.
+            </div>
+          ) : overdueViewMode === 'grouped' ? (
+            /* GROUPED LANDLORD-WISE VIEW */
+            <div className="space-y-4">
+              {displayedOverdueGroups.map((group) => {
+                const isCollapsed = Boolean(collapsedLandlordGroups[group.landlordId]);
+
+                return (
+                  <div
+                    key={group.landlordId}
+                    className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-2xs hover:border-gray-300 transition-all"
+                  >
+                    {/* Landlord Header Banner */}
+                    <div className="bg-slate-900 text-white px-4 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center space-x-3">
+                        {group.landlordLogo ? (
+                          <img
+                            src={group.landlordLogo}
+                            alt={group.landlordName}
+                            className="w-9 h-9 rounded-lg object-contain bg-white p-1 border border-slate-700 shrink-0 shadow-2xs"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs">
+                            <UserCheck className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-sm sm:text-base text-white">
+                              {group.landlordName}
+                            </span>
+                            {group.landlordId !== 'unassigned' && (
+                              <Link
+                                to={`/landlords/${group.landlordId}`}
+                                className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 hover:underline"
+                              >
+                                View Landlord Profile &rarr;
+                              </Link>
+                            )}
+                          </div>
+                          {group.landlordPhone && (
+                            <p className="text-[11px] text-slate-400 font-medium">
+                              Tel: {group.landlordPhone} {group.landlordEmail ? `• ${group.landlordEmail}` : ''}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Landlord Badges & Toggle */}
+                      <div className="flex items-center gap-2 flex-wrap justify-between sm:justify-end">
+                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                          {group.payments.length} Overdue Account{group.payments.length === 1 ? '' : 's'}
+                        </span>
+                        <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-rose-950/80 text-rose-300 border border-rose-800">
+                          Total: {formatCurrency(group.totalOverdue)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => toggleCollapseLandlord(group.landlordId)}
+                          className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                          title={isCollapsed ? 'Expand group' : 'Collapse group'}
+                        >
+                          {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Table of Overdue Payments for this Landlord */}
+                    {!isCollapsed && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                          <thead>
+                            <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-600 uppercase tracking-wider">
+                              <th className="py-2.5 px-4">Tenant</th>
+                              <th className="py-2.5 px-4">Property</th>
+                              <th className="py-2.5 px-4">Unit</th>
+                              <th className="py-2.5 px-4">Expected</th>
+                              <th className="py-2.5 px-4">Paid</th>
+                              <th className="py-2.5 px-4">Remaining Overdue</th>
+                              <th className="py-2.5 px-4">Due Date</th>
+                              <th className="py-2.5 px-4">Days Overdue</th>
+                              <th className="py-2.5 px-4 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {group.payments.map((item, index) => {
+                              const key = item._id || item.id || `landlord-overdue-${index}`;
+                              const custName =
+                                item.customerId?.fullName || item.customerId?.name || item.customerName || 'N/A';
+                              const custId = item.customerId?._id || item.customerId || '';
+                              const propName =
+                                item.propertyId?.propertyName || item.propertyId?.name || item.propertyName || 'N/A';
+                              const unitName = item.unitId?.unitName || item.unitId?.name || item.unitName || '-';
+                              const rem =
+                                item.remainingAmount !== undefined
+                                  ? item.remainingAmount
+                                  : (item.amount || item.expectedAmount || 0) - (item.paidAmount || 0);
+
+                              return (
+                                <tr key={key} className="hover:bg-rose-50/40 transition-colors">
+                                  <td className="py-3 px-4 font-bold text-gray-900">
+                                    {custId ? (
+                                      <Link to={`/tenants/${custId}`} className="text-[#04A26F] hover:underline">
+                                        {custName}
+                                      </Link>
+                                    ) : (
+                                      custName
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4 text-gray-700 font-medium">{propName}</td>
+                                  <td className="py-3 px-4 text-gray-600">{unitName}</td>
+                                  <td className="py-3 px-4 font-semibold text-gray-900">
+                                    {formatCurrency(item.amount || item.expectedAmount || 0)}
+                                  </td>
+                                  <td className="py-3 px-4 text-emerald-700 font-medium">
+                                    {formatCurrency(item.paidAmount || 0)}
+                                  </td>
+                                  <td className="py-3 px-4 font-black text-rose-600">
+                                    {formatCurrency(rem)}
+                                  </td>
+                                  <td className="py-3 px-4 font-mono text-xs text-gray-600">{item.dueDate}</td>
+                                  <td className="py-3 px-4">
+                                    <span className="bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded text-xs">
+                                      {item.daysOverdue || 0} days
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenRecordPaymentModal(item)}
+                                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-2xs"
+                                    >
+                                      Record Payment
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* FLAT TABLE VIEW (WITH LANDLORD COLUMN) */
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="bg-rose-50/50 border-b border-rose-100 text-xs font-bold text-gray-700 uppercase tracking-wider">
+                    <th className="py-3 px-4">Landlord</th>
+                    <th className="py-3 px-4">Tenant</th>
+                    <th className="py-3 px-4">Property</th>
+                    <th className="py-3 px-4">Unit</th>
+                    <th className="py-3 px-4">Expected</th>
+                    <th className="py-3 px-4">Paid</th>
+                    <th className="py-3 px-4">Remaining Overdue</th>
+                    <th className="py-3 px-4">Due Date</th>
+                    <th className="py-3 px-4">Days Overdue</th>
+                    <th className="py-3 px-4 text-right">Action</th>
                   </tr>
-                ) : (
-                  overduePayments.map((item, index) => {
-                    const key = item._id || item.id || `overdue-${index}`;
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {displayedOverdueFlatList.map((item, index) => {
+                    const key = item._id || item.id || `flat-overdue-${index}`;
                     const custName = item.customerId?.fullName || item.customerId?.name || item.customerName || 'N/A';
+                    const custId = item.customerId?._id || item.customerId || '';
                     const propName = item.propertyId?.propertyName || item.propertyId?.name || item.propertyName || 'N/A';
-                    const unitName = item.unitId?.unitName || item.unitId?.name || item.unitName || 'N/A';
+                    const unitName = item.unitId?.unitName || item.unitId?.name || item.unitName || '-';
+                    const landlordObj = item.landlord || item.propertyId?.landlordId || item.tenancyId?.landlordId || null;
+                    const landlordName = landlordObj?.fullName || landlordObj?.name || 'General Portfolio';
+                    const rem =
+                      item.remainingAmount !== undefined
+                        ? item.remainingAmount
+                        : (item.amount || item.expectedAmount || 0) - (item.paidAmount || 0);
 
                     return (
                       <tr key={key} className="hover:bg-rose-50/30 transition-colors">
-                        <td className="py-3 px-4 font-bold text-gray-900">{custName}</td>
-                        <td className="py-3 px-4 text-gray-700">{propName}</td>
-                        <td className="py-3 px-4 font-medium text-gray-800">{unitName}</td>
+                        <td className="py-3 px-4">
+                          <span className="font-bold text-gray-900 bg-slate-100 px-2 py-1 rounded text-xs">
+                            {landlordName}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-bold text-gray-900">
+                          {custId ? (
+                            <Link to={`/tenants/${custId}`} className="text-[#04A26F] hover:underline">
+                              {custName}
+                            </Link>
+                          ) : (
+                            custName
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-gray-700 font-medium">{propName}</td>
+                        <td className="py-3 px-4 text-gray-600">{unitName}</td>
                         <td className="py-3 px-4 font-semibold text-gray-900">
                           {formatCurrency(item.amount || item.expectedAmount || 0)}
                         </td>
                         <td className="py-3 px-4 text-emerald-700 font-medium">
                           {formatCurrency(item.paidAmount || 0)}
                         </td>
-                        <td className="py-3 px-4 font-bold text-rose-600">
-                          {formatCurrency(item.remainingAmount || item.expectedAmount || 0)}
+                        <td className="py-3 px-4 font-black text-rose-600">
+                          {formatCurrency(rem)}
                         </td>
                         <td className="py-3 px-4 font-mono text-xs text-gray-700">{item.dueDate}</td>
-                        <td className="py-3 px-4 font-bold text-rose-600">
-                          <span className="bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-xs">
-                            {item.daysOverdue || 0} days
-                          </span>
-                        </td>
                         <td className="py-3 px-4">
-                          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800">
-                            Overdue
+                          <span className="bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded text-xs">
+                            {item.daysOverdue || 0} days
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">
                           <button
+                            type="button"
                             onClick={() => handleOpenRecordPaymentModal(item)}
-                            className="px-3 py-1 bg-rose-600 text-white text-xs font-semibold rounded hover:bg-rose-700 transition-colors cursor-pointer"
+                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-2xs"
                           >
                             Record Payment
                           </button>
                         </td>
                       </tr>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* 5. UPCOMING PAYMENTS & RECENT PAYMENTS GRID */}

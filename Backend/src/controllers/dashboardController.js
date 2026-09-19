@@ -218,16 +218,30 @@ const getUnifiedDashboard = async (req, res) => {
       ]
     })
       .populate('customerId', 'fullName phone email name')
-      .populate('propertyId', 'propertyName name address')
+      .populate({
+        path: 'propertyId',
+        select: 'propertyName name address landlordId agentId agentFee',
+        populate: { path: 'landlordId', select: 'fullName name phone email logo' },
+      })
+      .populate({
+        path: 'tenancyId',
+        populate: [
+          { path: 'landlordId', select: 'fullName name phone email logo' },
+          { path: 'agentId', select: 'fullName name phone email' },
+        ],
+      })
+      .populate('agentId', 'fullName name phone email')
+      .populate('expenseId')
       .sort({ dueDate: 1 })
-      .limit(10);
+      .limit(100);
 
     const todayMs = new Date().getTime();
     const overduePayments = rawOverdue.map((p) => {
       const pObj = p.toObject();
       const dueMs = new Date(p.dueDate).getTime();
       const diffDays = Math.max(0, Math.floor((todayMs - dueMs) / (1000 * 60 * 60 * 24)));
-      return { ...pObj, daysOverdue: diffDays };
+      const landlord = p.propertyId?.landlordId || p.tenancyId?.landlordId || null;
+      return { ...pObj, daysOverdue: diffDays, landlord };
     });
 
     const upcomingPayments = await Payment.find({
