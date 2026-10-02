@@ -201,39 +201,438 @@ async function renderExcelReportWorkbook(options) {
 // ----------------------------------------------------
 
 async function generateTenantStatementExcel(data) {
-  return renderExcelReportWorkbook({
-    reportTitle: 'STATEMENT OF ACCOUNT',
-    generatedAt: data.statementDate,
-    periodText: `${formatUKDate(data.fromDate)} - ${formatUKDate(data.toDate)}`,
-    metaFields: [
-      { label: 'Tenant', value: data.tenant.name },
-      { label: 'Tenant Address', value: data.tenant.address || '-' },
-      { label: 'Property', value: `${data.property.name} ${data.property.address ? '(' + data.property.address + ')' : ''}` },
-      { label: 'Landlord', value: data.landlord.name },
-    ],
-    summaryKPIs: [
-      { label: 'Balance Forward', numValue: data.summary.balanceForward, value: data.summary.balanceForwardFormatted },
-      { label: 'Total Rent Due', numValue: data.summary.totalRentDue, value: data.summary.totalRentDueFormatted },
-      { label: 'Total Payments Received', numValue: data.summary.totalPayments, value: data.summary.totalPaymentsFormatted },
-      { label: 'Total Outstanding Balance', numValue: data.summary.totalOutstanding, value: data.summary.totalOutstandingFormatted },
-    ],
-    columns: [
-      { key: 'date', label: 'Date', width: 14 },
-      { key: 'reference', label: 'Reference', width: 16 },
-      { key: 'description', label: 'Description', width: 30 },
-      { key: 'payee', label: 'Payee', width: 22 },
-      { key: 'debitFormatted', numKey: 'debit', label: 'Debit (£)', align: 'right', isCurrency: true, width: 16 },
-      { key: 'creditFormatted', numKey: 'credit', label: 'Credit (£)', align: 'right', isCurrency: true, width: 16 },
-      { key: 'balanceFormatted', numKey: 'balance', label: 'Balance (£)', align: 'right', isCurrency: true, width: 16 },
-    ],
-    rows: (data.transactions || []).map((t) => ({ ...t, date: formatUKDate(t.date) })),
-    totalRow: {
-      date: 'TOTALS',
-      debit: data.summary.totalRentDue,
-      credit: data.summary.totalPayments,
-      balance: data.summary.totalOutstanding,
-    },
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'PixxTechnologies Property Management';
+  workbook.lastModifiedBy = 'PixxTechnologies Property Management';
+  workbook.created = new Date();
+
+  const tenantName = data.tenant?.fullName || data.tenant?.name || 'Tenant';
+  const propertyName = data.property?.name || 'Assigned Property';
+  const propertyAddress = data.property?.address || '';
+  const landlordName = data.landlord?.name || 'PixxTechnologies';
+  const statementDateStr = formatUKDate(data.statementDate || new Date());
+  const fromDateStr = formatUKDate(data.fromDate);
+  const toDateStr = formatUKDate(data.toDate);
+
+  const sheet = workbook.addWorksheet('Tenant Statement', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToWidth: 1 },
+    views: [{ showGridLines: true, state: 'frozen', ySplit: 15 }],
   });
+
+  // Set explicit column widths so no text or numbers are clipped
+  sheet.columns = [
+    { key: 'colA', width: 14 }, // Date
+    { key: 'colB', width: 18 }, // Reference
+    { key: 'colC', width: 36 }, // Description
+    { key: 'colD', width: 24 }, // Payee / Account
+    { key: 'colE', width: 18 }, // Debit (£)
+    { key: 'colF', width: 18 }, // Credit (£)
+    { key: 'colG', width: 20 }, // Balance (£)
+  ];
+
+  const thinBorder = {
+    top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+    bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+    left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+    right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+  };
+
+  const cardBorder = {
+    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+  };
+
+  // Row 1: Top Accent Bar
+  sheet.mergeCells('A1:G1');
+  const bar = sheet.getCell('A1');
+  bar.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF04A26F' } };
+  sheet.getRow(1).height = 6;
+
+  // Row 2: Main Document Header
+  sheet.mergeCells('A2:D2');
+  const title = sheet.getCell('A2');
+  title.value = 'STATEMENT OF ACCOUNT';
+  title.font = { name: 'Calibri', size: 18, bold: true, color: { argb: 'FF0F172A' } };
+  title.alignment = { horizontal: 'left', vertical: 'middle' };
+
+  sheet.mergeCells('E2:G2');
+  const dateCell = sheet.getCell('E2');
+  dateCell.value = `Statement Date: ${statementDateStr}`;
+  dateCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF0F172A' } };
+  dateCell.alignment = { horizontal: 'right', vertical: 'middle' };
+  sheet.getRow(2).height = 28;
+
+  // Row 3: Subtitle & Period
+  sheet.mergeCells('A3:D3');
+  const subtitle = sheet.getCell('A3');
+  subtitle.value = 'Official Rental Ledger & Transaction History';
+  subtitle.font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF64748B' } };
+  subtitle.alignment = { horizontal: 'left', vertical: 'top' };
+
+  sheet.mergeCells('E3:G3');
+  const period = sheet.getCell('E3');
+  period.value = `Period: ${fromDateStr} – ${toDateStr}`;
+  period.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF04A26F' } };
+  period.alignment = { horizontal: 'right', vertical: 'top' };
+  sheet.getRow(3).height = 18;
+
+  // Row 4: Empty spacer
+  sheet.getRow(4).height = 8;
+
+  // Rows 5 to 9: Two Information Cards Side-by-Side
+  // Left: Tenant Details (Cols A to C)
+  // Right: Property & Landlord Details (Cols D to G)
+
+  // Card Headers (Row 5)
+  sheet.mergeCells('A5:C5');
+  const tHeader = sheet.getCell('A5');
+  tHeader.value = 'TENANT INFORMATION';
+  tHeader.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+  tHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+  tHeader.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+  sheet.mergeCells('D5:G5');
+  const pHeader = sheet.getCell('D5');
+  pHeader.value = 'PROPERTY & LANDLORD INFORMATION';
+  pHeader.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+  pHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+  pHeader.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+  sheet.getRow(5).height = 20;
+
+  // Card Content Rows 6-9
+  const leftDetails = [
+    { label: 'Tenant Name:', val: tenantName, isBold: true },
+    { label: 'Address:', val: data.tenant?.address || propertyAddress || 'N/A' },
+    { label: 'Phone / Email:', val: `${data.tenant?.phone || '-'} ${data.tenant?.email ? '• ' + data.tenant.email : ''}` },
+    { label: 'Status:', val: 'Active Tenancy Account' },
+  ];
+
+  const rightDetails = [
+    { label: 'Property:', val: propertyName, isBold: true },
+    { label: 'Address:', val: propertyAddress || '-' },
+    { label: 'Landlord / Client:', val: landlordName },
+    { label: 'Statement Ref:', val: `STMT-${data.tenant?.id ? String(data.tenant.id).slice(-6).toUpperCase() : 'ACC'}` },
+  ];
+
+  for (let i = 0; i < 4; i++) {
+    const rIdx = 6 + i;
+    sheet.getRow(rIdx).height = 18;
+
+    // Left
+    sheet.getCell(`A${rIdx}`).value = leftDetails[i].label;
+    sheet.getCell(`A${rIdx}`).font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF64748B' } };
+    sheet.getCell(`A${rIdx}`).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+    sheet.mergeCells(`B${rIdx}:C${rIdx}`);
+    const leftValCell = sheet.getCell(`B${rIdx}`);
+    leftValCell.value = leftDetails[i].val;
+    leftValCell.font = { name: 'Calibri', size: 9.5, bold: !!leftDetails[i].isBold, color: { argb: 'FF0F172A' } };
+    leftValCell.alignment = { horizontal: 'left', vertical: 'middle' };
+
+    // Right
+    sheet.getCell(`D${rIdx}`).value = rightDetails[i].label;
+    sheet.getCell(`D${rIdx}`).font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF64748B' } };
+    sheet.getCell(`D${rIdx}`).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+
+    sheet.mergeCells(`E${rIdx}:G${rIdx}`);
+    const rightValCell = sheet.getCell(`E${rIdx}`);
+    rightValCell.value = rightDetails[i].val;
+    rightValCell.font = { name: 'Calibri', size: 9.5, bold: !!rightDetails[i].isBold, color: { argb: 'FF0F172A' } };
+    rightValCell.alignment = { horizontal: 'left', vertical: 'middle' };
+  }
+
+  // Border boxes around both cards (Rows 5-9)
+  ['A', 'B', 'C', 'D', 'E', 'F', 'G'].forEach((col) => {
+    for (let rowNum = 5; rowNum <= 9; rowNum++) {
+      const c = sheet.getCell(`${col}${rowNum}`);
+      c.border = cardBorder;
+    }
+  });
+
+  // Row 10: Spacer
+  sheet.getRow(10).height = 10;
+
+  // Rows 11-13: 4 Executive KPI Cards horizontally
+  // Card 1: Balance Forward (Cols A-B)
+  sheet.mergeCells('A11:B11');
+  sheet.getCell('A11').value = 'BALANCE FORWARD';
+  sheet.getCell('A11').font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF475569' } };
+  sheet.getCell('A11').alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getCell('A11').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+
+  sheet.mergeCells('A12:B12');
+  const kpi1Val = sheet.getCell('A12');
+  kpi1Val.value = Number(data.summary?.balanceForward || 0);
+  kpi1Val.numFmt = CURRENCY_FORMAT;
+  kpi1Val.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF0F172A' } };
+  kpi1Val.alignment = { horizontal: 'center', vertical: 'middle' };
+  kpi1Val.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+
+  sheet.mergeCells('A13:B13');
+  sheet.getCell('A13').value = `As of ${fromDateStr}`;
+  sheet.getCell('A13').font = { name: 'Calibri', size: 8.5, italic: true, color: { argb: 'FF94A3B8' } };
+  sheet.getCell('A13').alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getCell('A13').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+
+  // Card 2: Total Rent Due / Invoiced (Cols C-D)
+  sheet.mergeCells('C11:D11');
+  sheet.getCell('C11').value = 'TOTAL RENT DUE';
+  sheet.getCell('C11').font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FFB45309' } };
+  sheet.getCell('C11').alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getCell('C11').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+
+  sheet.mergeCells('C12:D12');
+  const kpi2Val = sheet.getCell('C12');
+  kpi2Val.value = Number(data.summary?.totalRentDue || 0);
+  kpi2Val.numFmt = CURRENCY_FORMAT;
+  kpi2Val.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF92400E' } };
+  kpi2Val.alignment = { horizontal: 'center', vertical: 'middle' };
+  kpi2Val.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+
+  sheet.mergeCells('C13:D13');
+  sheet.getCell('C13').value = 'Total charged in period';
+  sheet.getCell('C13').font = { name: 'Calibri', size: 8.5, italic: true, color: { argb: 'FFB45309' } };
+  sheet.getCell('C13').alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getCell('C13').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+
+  // Card 3: Total Payments Received (Cols E-F)
+  sheet.mergeCells('E11:F11');
+  sheet.getCell('E11').value = 'TOTAL PAYMENTS RECEIVED';
+  sheet.getCell('E11').font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF047857' } };
+  sheet.getCell('E11').alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getCell('E11').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+
+  sheet.mergeCells('E12:F12');
+  const kpi3Val = sheet.getCell('E12');
+  kpi3Val.value = Number(data.summary?.totalPayments || 0);
+  kpi3Val.numFmt = CURRENCY_FORMAT;
+  kpi3Val.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF065F46' } };
+  kpi3Val.alignment = { horizontal: 'center', vertical: 'middle' };
+  kpi3Val.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+
+  sheet.mergeCells('E13:F13');
+  sheet.getCell('E13').value = 'Total credits applied';
+  sheet.getCell('E13').font = { name: 'Calibri', size: 8.5, italic: true, color: { argb: 'FF047857' } };
+  sheet.getCell('E13').alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getCell('E13').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+
+  // Card 4: Net Outstanding (Col G)
+  const isOverdue = Number(data.summary?.totalOutstanding || 0) > 0;
+  const kpi4Bg = isOverdue ? 'FFFFE4E6' : 'FFD1FAE5';
+  const kpi4Fg = isOverdue ? 'FF9F1239' : 'FF065F46';
+
+  sheet.getCell('G11').value = 'NET OUTSTANDING';
+  sheet.getCell('G11').font = { name: 'Calibri', size: 9, bold: true, color: { argb: isOverdue ? 'FFBE123C' : 'FF047857' } };
+  sheet.getCell('G11').alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getCell('G11').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: kpi4Bg } };
+
+  const kpi4Val = sheet.getCell('G12');
+  kpi4Val.value = Number(data.summary?.totalOutstanding || 0);
+  kpi4Val.numFmt = CURRENCY_FORMAT;
+  kpi4Val.font = { name: 'Calibri', size: 14, bold: true, color: { argb: kpi4Fg } };
+  kpi4Val.alignment = { horizontal: 'center', vertical: 'middle' };
+  kpi4Val.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: kpi4Bg } };
+
+  sheet.getCell('G13').value = isOverdue ? 'Payment required' : 'Paid in full';
+  sheet.getCell('G13').font = { name: 'Calibri', size: 8.5, italic: true, color: { argb: isOverdue ? 'FFBE123C' : 'FF047857' } };
+  sheet.getCell('G13').alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getCell('G13').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: kpi4Bg } };
+
+  sheet.getRow(11).height = 18;
+  sheet.getRow(12).height = 24;
+  sheet.getRow(13).height = 16;
+
+  // Add borders to KPI cards
+  ['A', 'B', 'C', 'D', 'E', 'F', 'G'].forEach((col) => {
+    for (let r = 11; r <= 13; r++) {
+      sheet.getCell(`${col}${r}`).border = cardBorder;
+    }
+  });
+
+  // Row 14: Spacer
+  sheet.getRow(14).height = 10;
+
+  // Row 15: Table Header
+  sheet.getRow(15).height = 26;
+  const colHeaders = [
+    { col: 'A', label: 'Date', align: 'center' },
+    { col: 'B', label: 'Reference', align: 'center' },
+    { col: 'C', label: 'Description', align: 'left' },
+    { col: 'D', label: 'Payee / Account', align: 'left' },
+    { col: 'E', label: 'Debit (£)', align: 'right' },
+    { col: 'F', label: 'Credit (£)', align: 'right' },
+    { col: 'G', label: 'Balance (£)', align: 'right' },
+  ];
+
+  colHeaders.forEach((h) => {
+    const c = sheet.getCell(`${h.col}15`);
+    c.value = h.label;
+    c.font = { name: 'Calibri', size: 10.5, bold: true, color: { argb: 'FFFFFFFF' } };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    c.alignment = { horizontal: h.align, vertical: 'middle', indent: h.align === 'left' ? 1 : 0 };
+    c.border = thinBorder;
+  });
+
+  // Rows 16+: Statement Transactions
+  let currentRow = 16;
+  const txns = data.transactions || [];
+
+  txns.forEach((txn, idx) => {
+    sheet.getRow(currentRow).height = 21;
+    const isEven = idx % 2 === 0;
+    const rowBg = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
+
+    // Date
+    const cDate = sheet.getCell(`A${currentRow}`);
+    cDate.value = formatUKDate(txn.date);
+    cDate.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    // Reference
+    const cRef = sheet.getCell(`B${currentRow}`);
+    cRef.value = txn.reference || '—';
+    cRef.alignment = { horizontal: 'center', vertical: 'middle' };
+    cRef.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF475569' } };
+
+    // Description
+    const cDesc = sheet.getCell(`C${currentRow}`);
+    cDesc.value = txn.description || '—';
+    cDesc.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    cDesc.font = { name: 'Calibri', size: 9.5, bold: txn.description === 'Starting Balance', color: { argb: 'FF0F172A' } };
+
+    // Payee
+    const cPayee = sheet.getCell(`D${currentRow}`);
+    cPayee.value = txn.payee || '—';
+    cPayee.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    cPayee.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF475569' } };
+
+    // Debit
+    const cDebit = sheet.getCell(`E${currentRow}`);
+    const debitVal = Number(txn.debit || 0);
+    if (debitVal > 0) {
+      cDebit.value = debitVal;
+      cDebit.numFmt = CURRENCY_FORMAT;
+      cDebit.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
+    } else {
+      cDebit.value = '-';
+      cDebit.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF94A3B8' } };
+    }
+    cDebit.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    // Credit
+    const cCredit = sheet.getCell(`F${currentRow}`);
+    const creditVal = Number(txn.credit || 0);
+    if (creditVal > 0) {
+      cCredit.value = creditVal;
+      cCredit.numFmt = CURRENCY_FORMAT;
+      cCredit.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF047857' } };
+    } else {
+      cCredit.value = '-';
+      cCredit.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF94A3B8' } };
+    }
+    cCredit.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    // Balance
+    const cBal = sheet.getCell(`G${currentRow}`);
+    const balVal = Number(txn.balance !== undefined ? txn.balance : 0);
+    cBal.value = balVal;
+    cBal.numFmt = CURRENCY_FORMAT;
+    cBal.font = {
+      name: 'Calibri',
+      size: 9.5,
+      bold: true,
+      color: { argb: balVal > 0 ? 'FF9F1239' : balVal < 0 ? 'FF047857' : 'FF0F172A' },
+    };
+    cBal.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    // Row styling & borders
+    ['A', 'B', 'C', 'D', 'E', 'F', 'G'].forEach((col) => {
+      const cell = sheet.getCell(`${col}${currentRow}`);
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+      cell.border = thinBorder;
+      if (!cell.font) cell.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF0F172A' } };
+    });
+
+    currentRow++;
+  });
+
+  // Accounting Summary Totals Row
+  sheet.getRow(currentRow).height = 24;
+
+  sheet.mergeCells(`A${currentRow}:D${currentRow}`);
+  const totLabel = sheet.getCell(`A${currentRow}`);
+  totLabel.value = 'TOTALS FOR STATEMENT PERIOD:';
+  totLabel.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+  totLabel.alignment = { horizontal: 'right', vertical: 'middle', indent: 1 };
+
+  const totDebit = sheet.getCell(`E${currentRow}`);
+  totDebit.value = Number(data.summary?.totalRentDue || 0);
+  totDebit.numFmt = CURRENCY_FORMAT;
+  totDebit.font = { name: 'Calibri', size: 10.5, bold: true, color: { argb: 'FF0F172A' } };
+  totDebit.alignment = { horizontal: 'right', vertical: 'middle' };
+
+  const totCredit = sheet.getCell(`F${currentRow}`);
+  totCredit.value = Number(data.summary?.totalPayments || 0);
+  totCredit.numFmt = CURRENCY_FORMAT;
+  totCredit.font = { name: 'Calibri', size: 10.5, bold: true, color: { argb: 'FF047857' } };
+  totCredit.alignment = { horizontal: 'right', vertical: 'middle' };
+
+  const totBal = sheet.getCell(`G${currentRow}`);
+  totBal.value = Number(data.summary?.totalOutstanding || 0);
+  totBal.numFmt = CURRENCY_FORMAT;
+  totBal.font = { name: 'Calibri', size: 11, bold: true, color: { argb: isOverdue ? 'FF9F1239' : 'FF047857' } };
+  totBal.alignment = { horizontal: 'right', vertical: 'middle' };
+
+  const totalsBorder = {
+    top: { style: 'thin', color: { argb: 'FF0F172A' } },
+    bottom: { style: 'double', color: { argb: 'FF0F172A' } },
+    left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+    right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+  };
+
+  ['A', 'B', 'C', 'D', 'E', 'F', 'G'].forEach((col) => {
+    const cell = sheet.getCell(`${col}${currentRow}`);
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    cell.border = totalsBorder;
+  });
+
+  currentRow += 2;
+
+  // Closing Balance Callout Box
+  sheet.mergeCells(`D${currentRow}:G${currentRow}`);
+  const callout = sheet.getCell(`D${currentRow}`);
+  callout.value = `CLOSING BALANCE AT ${toDateStr}:  ${data.summary?.totalOutstandingFormatted || (Number(data.summary?.totalOutstanding || 0)).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}`;
+  callout.font = { name: 'Calibri', size: 11, bold: true, color: { argb: isOverdue ? 'FF9F1239' : 'FF065F46' } };
+  callout.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isOverdue ? 'FFFFE4E6' : 'FFD1FAE5' } };
+  callout.alignment = { horizontal: 'center', vertical: 'middle' };
+  callout.border = {
+    top: { style: 'medium', color: { argb: isOverdue ? 'FFE11D48' : 'FF059669' } },
+    bottom: { style: 'medium', color: { argb: isOverdue ? 'FFE11D48' : 'FF059669' } },
+    left: { style: 'medium', color: { argb: isOverdue ? 'FFE11D48' : 'FF059669' } },
+    right: { style: 'medium', color: { argb: isOverdue ? 'FFE11D48' : 'FF059669' } },
+  };
+  sheet.getRow(currentRow).height = 26;
+
+  currentRow += 2;
+
+  // Statement Footer Note
+  sheet.mergeCells(`A${currentRow}:G${currentRow}`);
+  const footerNote = sheet.getCell(`A${currentRow}`);
+  footerNote.value = 'Please check this statement carefully. All payments should be remitted using your tenant reference number. Contact management for any discrepancies.';
+  footerNote.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF64748B' } };
+  footerNote.alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getRow(currentRow).height = 18;
+
+  currentRow += 1;
+  sheet.mergeCells(`A${currentRow}:G${currentRow}`);
+  const footerSys = sheet.getCell(`A${currentRow}`);
+  footerSys.value = `Generated on ${statementDateStr} by PixxTechnologies UK Property Management System`;
+  footerSys.font = { name: 'Calibri', size: 8.5, color: { argb: 'FF94A3B8' } };
+  footerSys.alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getRow(currentRow).height = 16;
+
+  return await workbook.xlsx.writeBuffer();
 }
 
 async function generateLandlordExcelWorkbook(data) {

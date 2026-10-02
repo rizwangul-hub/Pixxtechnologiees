@@ -633,7 +633,6 @@ export function ReportsPage() {
           data = await fetchTenantStatementAPI(tId, {
             fromDate: fDate,
             toDate: tDate,
-            propertyId: pId !== 'All' ? pId : '',
           });
           break;
 
@@ -742,11 +741,14 @@ export function ReportsPage() {
     const query = `fromDate=${dateFrom}&toDate=${dateTo}`;
 
     switch (reportType) {
-      case 'tenant-statement':
+      case 'tenant-statement': {
+        const selectedTenantObj = tenants.find((t) => (t._id || t.id)?.toString() === selectedTenantId?.toString());
+        const tenantSafeName = (selectedTenantObj?.fullName || selectedTenantObj?.name || 'Tenant').replace(/[^a-zA-Z0-9]/g, '_');
         return {
-          url: `/reports/tenant-statement/${selectedTenantId}/${format}?${query}&propertyId=${selectedPropertyId !== 'All' ? selectedPropertyId : ''}`,
-          filename: `Tenant_Statement.${formatExt}`,
+          url: `/reports/tenant-statement/${selectedTenantId}/${format}?${query}`,
+          filename: `Tenant_Statement_${tenantSafeName}.${formatExt}`,
         };
+      }
       case 'landlord-report':
         return {
           url: `/reports/landlord/${selectedLandlordId}/${format}?${query}`,
@@ -951,6 +953,11 @@ export function ReportsPage() {
                       </option>
                     ))}
                   </select>
+                  {selectedReportType === 'tenant-statement' && (
+                    <p className="text-xs text-slate-500 mt-1 font-medium">
+                      ✓ Rented property, rent charges, and payment history are automatically pulled for the selected tenant.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -1088,7 +1095,6 @@ export function ReportsPage() {
 
               {/* Property Selection */}
               {(selectedReportType === 'property-report' ||
-                selectedReportType === 'tenant-statement' ||
                 selectedReportType === 'unit-report' ||
                 selectedReportType === 'expense-report') && (
                 <div>
