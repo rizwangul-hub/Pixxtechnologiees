@@ -9,7 +9,7 @@ import {
   getSavedExpensePayments,
   filterPayments,
 } from '../data/paymentsData';
-import { fetchPaymentsAPI, deletePaymentAPI, resetPaymentAPI } from '../services/apiData';
+import { fetchPaymentsAPI, fetchExpensesAPI, deletePaymentAPI, resetPaymentAPI } from '../services/apiData';
 
 export function PaymentsPage() {
   const location = useLocation();
@@ -29,6 +29,7 @@ export function PaymentsPage() {
   const [filters, setFilters] = useState({
     search: '',
     searchBy: '- All -',
+    status: '- All -',
     dateFrom: '',
     dateTo: '',
     amountFrom: '',
@@ -38,42 +39,70 @@ export function PaymentsPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Load Expense Payments from local storage / fallback
-      setExpensePayments(getSavedExpensePayments());
+      // 1. Load Real Expenses from Backend API (with local fallback)
+      const [apiPayments, apiExpenses] = await Promise.all([
+        fetchPaymentsAPI(),
+        fetchExpensesAPI(),
+      ]);
+
+      if (Array.isArray(apiExpenses) && apiExpenses.length > 0) {
+        const mappedExpenses = apiExpenses.map((e) => {
+          const propName = e.propertyId?.propertyName || e.propertyId?.name || e.propertyId?.address || e.propertyName || 'Property';
+          return {
+            id: e._id || e.id,
+            _id: e._id || e.id,
+            supplier: e.supplier || e.category || 'Supplier',
+            property: propName,
+            date: String(e.date || e.createdAt || '').slice(0, 10),
+            dueDate: e.dueDate,
+            account: e.paymentMethod || 'Bank Account',
+            paymentMethod: e.paymentMethod || 'Bank Account',
+            reference: e.description || e.reference || '',
+            notes: e.description || '',
+            paymentAmount: Number(e.amount || 0),
+            allocatedAmount: Number(e.paidAmount !== undefined ? e.paidAmount : e.amount || 0),
+            unallocatedAmount: Number(e.remainingAmount || 0),
+            status: e.status || 'Paid',
+            raw: e,
+          };
+        });
+        setExpensePayments(mappedExpenses);
+      } else {
+        setExpensePayments(getSavedExpensePayments());
+      }
 
       // 2. Load Real Tenant Payments from Backend API
-      const apiPayments = await fetchPaymentsAPI();
       if (Array.isArray(apiPayments)) {
-        // Map backend Payment documents to PaymentTable format
-        const mappedIncome = apiPayments
-          .filter((p) => (p.paidAmount && p.paidAmount > 0) || p.status === 'Paid' || p.status === 'Received' || p.status === 'Partially Received' || p.status === 'Partially Paid')
-          .map((p) => {
-            const custName = p.customerId?.fullName || p.customerId?.name || p.customerId?.tenantName || p.customerName || 'Tenant';
-            const propName = p.propertyId?.propertyName || p.propertyId?.name || p.propertyId?.address || p.propertyName || 'Property';
-            return {
-              id: p._id || p.id,
-              _id: p._id || p.id,
-              payer: custName,
-              property: propName,
-              date: (p.paidDate || p.dueDate || '').slice(0, 10),
-              dueDate: p.dueDate,
-              paidDate: p.paidDate,
-              account: p.paymentMethod || 'Bank Transfer',
-              paymentMethod: p.paymentMethod,
-              reference: p.reference || '',
-              notes: p.notes || '',
-              paymentAmount: Number(p.paidAmount || p.amount || 0),
-              allocatedAmount: Number(p.paidAmount || 0),
-              unallocatedAmount: Number(p.remainingAmount || 0),
-              status: p.status,
-              raw: p,
-            };
-          });
+        const mappedIncome = apiPayments.map((p) => {
+          const custName = p.customerId?.fullName || p.customerId?.name || p.customerId?.tenantName || p.customerName || 'Tenant';
+          const propName = p.propertyId?.propertyName || p.propertyId?.name || p.propertyId?.address || p.propertyName || 'Property';
+          const due = Number(p.amount || p.expectedAmount || p.paidAmount || 0);
+          const paid = Number(p.paidAmount || 0);
+          const remaining = p.remainingAmount !== undefined ? Number(p.remainingAmount) : Math.max(0, due - paid);
+          return {
+            id: p._id || p.id,
+            _id: p._id || p.id,
+            payer: custName,
+            property: propName,
+            date: String(p.paidDate || p.dueDate || '').slice(0, 10),
+            dueDate: p.dueDate,
+            paidDate: p.paidDate,
+            account: p.paymentMethod || 'Bank Transfer',
+            paymentMethod: p.paymentMethod,
+            reference: p.reference || '',
+            notes: p.notes || '',
+            paymentAmount: due,
+            allocatedAmount: paid,
+            unallocatedAmount: remaining,
+            status: p.status || (remaining === 0 ? 'Received' : paid > 0 ? 'Partially Received' : 'Pending'),
+            raw: p,
+          };
+        });
 
         setIncomePayments(mappedIncome);
       }
     } catch (err) {
-      console.warn('[PaymentsPage] Failed to fetch live payments:', err.message);
+      console.warn('[PaymentsPage] Failed to fetch live payments/expenses:', err.message);
     } finally {
       setLoading(false);
     }
@@ -95,6 +124,7 @@ export function PaymentsPage() {
     setFilters({
       search: '',
       searchBy: '- All -',
+      status: '- All -',
       dateFrom: '',
       dateTo: '',
       amountFrom: '',

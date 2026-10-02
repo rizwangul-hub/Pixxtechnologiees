@@ -154,13 +154,18 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
       paymentQuery.propertyId = new mongoose.Types.ObjectId();
     }
   }
-  const allPayments = await Payment.find(paymentQuery).sort({ dueDate: 1, createdAt: 1 });
+  const allPayments = await Payment.find(paymentQuery)
+    .populate('customerId')
+    .populate('propertyId')
+    .sort({ dueDate: 1, createdAt: 1 });
 
   // Build full raw transaction list
   const allTransactions = [];
 
   for (const p of allPayments) {
-    const rentPeriod = `Rent for ${p.billingMonth < 10 ? '0' + p.billingMonth : p.billingMonth}/${p.billingYear}`;
+    const payeeName = p.customerId?.fullName || p.customerId?.name || tenant.fullName || tenant.name;
+    const propName = p.propertyId?.title || p.propertyId?.name || p.propertyId?.propertyName || property?.title || property?.name || '';
+    const rentPeriod = `Rent for ${p.billingMonth < 10 ? '0' + p.billingMonth : p.billingMonth}/${p.billingYear}${isAll && propName ? ` (${propName})` : ''}`;
     const refNo = p.invoiceNumber || (p._id ? `INV-${p._id.toString().slice(-4).toUpperCase()}` : '');
 
     // Rent Charge (Debit)
@@ -170,7 +175,8 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
       createdAt: p.createdAt || p.dueDate,
       reference: refNo,
       description: rentPeriod,
-      payee: tenant.fullName || tenant.name,
+      payee: payeeName,
+      propertyName: propName,
       debit: p.amount || 0,
       credit: 0,
       type: 'Charge',
@@ -183,8 +189,9 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
         date: p.paidDate || p.dueDate,
         createdAt: p.updatedAt || p.paidDate || p.dueDate,
         reference: p.reference || p.paymentMethod || '',
-        description: 'Payment',
-        payee: tenant.fullName || tenant.name,
+        description: isAll && propName ? `Payment (${propName})` : 'Payment',
+        payee: payeeName,
+        propertyName: propName,
         debit: 0,
         credit: p.paidAmount,
         type: 'Payment',
@@ -226,7 +233,8 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
     date: periodStart,
     reference: '',
     description: 'Starting Balance',
-    payee: '',
+    payee: isAll ? 'Portfolio Opening Balance' : '',
+    propertyName: '',
     debit: 0,
     credit: 0,
     debitFormatted: '',
@@ -245,6 +253,7 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
       reference: txn.reference,
       description: txn.description,
       payee: txn.payee,
+      propertyName: txn.propertyName || '',
       debit: txn.debit,
       credit: txn.credit,
       debitFormatted: txn.debit > 0 ? formatReportCurrency(txn.debit) : '',
@@ -258,10 +267,11 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
   const totalOutstanding = runningBalance;
 
   return {
-    reportType: 'Tenant Statement',
+    reportType: isAll ? 'Tenant Statement & Payments (All Tenants)' : 'Tenant Statement',
     statementDate: new Date().toISOString().split('T')[0],
     fromDate: periodStart,
     toDate: periodEnd,
+    isAllTenants: isAll,
     landlord: {
       id: landlord?._id || '',
       name: landlord?.fullName || 'PixxTechnologies Property Management',
@@ -277,7 +287,7 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
     },
     property: {
       id: property?._id || '',
-      name: property?.title || property?.name || 'Assigned Property',
+      name: property?.title || property?.name || (isAll ? 'Portfolio Wide' : 'Assigned Property'),
       address: property?.address || '',
       unitName: unit?.name || '',
     },
@@ -292,8 +302,27 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
       totalPaymentsFormatted: formatReportCurrency(totalPayments),
       totalOutstanding,
       totalOutstandingFormatted: formatReportCurrency(totalOutstanding),
+      // Payment Report Compatibility aliases:
+      totalRecords: allPayments.length,
+      totalExpected: totalRentDue,
+      totalPaid: totalPayments,
+      totalRemaining: totalOutstanding,
     },
     transactions: statementRows,
+    payments: allPayments.map((p) => ({
+      id: p._id,
+      dueDate: p.dueDate,
+      paidDate: p.paidDate || '',
+      tenantName: p.customerId?.fullName || p.customerId?.name || tenant.fullName || tenant.name || 'N/A',
+      propertyName: p.propertyId?.name || p.propertyId?.propertyName || p.propertyId?.title || 'N/A',
+      unitName: p.propertyId?.name || p.propertyId?.propertyName || 'N/A',
+      amount: p.amount,
+      paidAmount: p.paidAmount,
+      remainingAmount: p.remainingAmount,
+      status: p.status,
+      paymentMethod: p.paymentMethod || 'Cash',
+      reference: p.reference || '',
+    })),
   };
 }
 
@@ -632,16 +661,108 @@ async function generateAgentReportData(agentId, fromDate, toDate) {
     .populate('tenantId')
     .sort({ billingYear: -1, billingMonth: -1 });
 
-  const assignedTenancyQuery = isAll ? { status: 'Active' } : { agentId: agent._id, status: 'Active' };
-  const assignedTenancies = await Tenancy.find(assignedTenancyQuery)
-    .populate('propertyId')
-    .populate('customerId');
+  // 1. Resolve Assigned Properties (Directly assigned or linked via agent tenancies)
+  const propFilter = isAll
+    ? { isArchived: { $ne: true } }
+    : {
+        $or: [
+          { agentId: agent._id },
+        ],
+        isArchived: { $ne: true },
+      };
+
+  if (!isAll && agent._id && agent._id !== 'all_agents') {
+    const linkedTenancies = await Tenancy.find({ agentId: agent._id, isArchived: { $ne: true } }).select('propertyId');
+    const linkedPropIds = linkedTenancies.map((t) => t.propertyId).filter(Boolean);
+    if (linkedPropIds.length > 0) {
+      propFilter.$or.push({ _id: { $in: linkedPropIds } });
+    }
+  }
+
+  const assignedProperties = await Property.find(propFilter)
+    .populate('landlordId', 'fullName name email phone')
+    .sort({ name: 1 });
+
+  const assignedPropIds = assignedProperties.map((p) => p._id);
+
+  // 2. Resolve Active Tenancies on these properties or explicitly linked to this agent
+  const activeTenancyQuery = isAll
+    ? { status: 'Active', isArchived: { $ne: true } }
+    : {
+        $or: [
+          { agentId: agent._id, status: 'Active', isArchived: { $ne: true } },
+          { propertyId: { $in: assignedPropIds }, status: 'Active', isArchived: { $ne: true } },
+        ],
+      };
+
+  const activeTenancies = await Tenancy.find(activeTenancyQuery)
+    .populate('customerId', 'fullName name email phone')
+    .populate('propertyId');
+
+  const tenancyByPropId = new Map();
+  activeTenancies.forEach((t) => {
+    if (t.propertyId) {
+      const pid = (t.propertyId._id || t.propertyId).toString();
+      tenancyByPropId.set(pid, t);
+    }
+  });
+
+  // 3. Build rich Assigned Units list
+  const assignedUnits = assignedProperties.map((p, idx) => {
+    const pid = p._id.toString();
+    const activeTenancy = tenancyByPropId.get(pid);
+    const tenantName = activeTenancy?.customerId?.fullName || activeTenancy?.customerId?.name || p.customerName || 'Vacant';
+    const isOccupied = Boolean(activeTenancy);
+    const status = isOccupied ? 'Occupied' : (p.status || 'Available');
+    const monthlyRent = Number(activeTenancy?.monthlyRent ?? p.monthlyRent ?? p.price ?? 0);
+    const agentFee = Number(activeTenancy?.companyMonthlyAmount ?? p.agentFee ?? 0);
+
+    return {
+      index: idx + 1,
+      propertyId: pid,
+      propertyName: p.name || p.propertyName || p.title || `Unit ${idx + 1}`,
+      address: p.address || '',
+      type: p.assetType || p.propertyType || p.type || 'Commercial',
+      status,
+      tenantName,
+      monthlyRent,
+      monthlyRentFormatted: formatReportCurrency(monthlyRent),
+      agentFee,
+      agentFeeFormatted: formatReportCurrency(agentFee),
+      startDate: activeTenancy?.startDate || '-',
+      landlordName: p.landlordId?.fullName || p.landlordId?.name || p.landlordName || 'N/A',
+    };
+  });
 
   const expectedAmount = settlements.reduce((sum, s) => sum + (s.expectedAmount || 0), 0);
   const expenseAmount = settlements.reduce((sum, s) => sum + (s.expenseAmount || 0), 0);
   const netAmount = settlements.reduce((sum, s) => sum + (s.netAmount || 0), 0);
   const paidAmount = settlements.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
   const remainingAmount = settlements.reduce((sum, s) => sum + (s.remainingAmount || 0), 0);
+
+  const collections = settlements.map((s) => {
+    const expected = s.expectedAmount || 0;
+    const expense = s.expenseAmount || 0;
+    const received = s.paidAmount || 0;
+    const outstanding = s.remainingAmount || 0;
+    return {
+      id: s._id,
+      date: s.dueDate || s.createdAt || '',
+      monthYear: `${s.billingMonth}/${s.billingYear}`,
+      tenantName: s.tenantId?.fullName || s.tenantId?.name || 'N/A',
+      propertyName: s.propertyId?.title || s.propertyId?.name || 'N/A',
+      unitName: s.propertyId?.name || 'N/A',
+      expected,
+      expectedFormatted: formatReportCurrency(expected),
+      expense,
+      expenseFormatted: formatReportCurrency(expense),
+      received,
+      receivedFormatted: formatReportCurrency(received),
+      outstanding,
+      outstandingFormatted: formatReportCurrency(outstanding),
+      status: s.status,
+    };
+  });
 
   return {
     reportType: 'Agent Report',
@@ -657,19 +778,32 @@ async function generateAgentReportData(agentId, fromDate, toDate) {
       profileImage: agent.profileImage || '',
     },
     summary: {
-      assignedPropertiesCount: assignedTenancies.length,
-      assignedUnitsCount: assignedTenancies.length,
+      assignedPropertiesCount: assignedUnits.length,
+      assignedUnitsCount: assignedUnits.length,
+      occupiedUnitsCount: assignedUnits.filter((u) => u.status === 'Occupied').length,
+      vacantUnitsCount: assignedUnits.filter((u) => u.status !== 'Occupied').length,
       expectedAmount,
       expectedAmountFormatted: formatReportCurrency(expectedAmount),
+      totalExpected: expectedAmount,
+      totalExpectedFormatted: formatReportCurrency(expectedAmount),
       expenseAmount,
       expenseAmountFormatted: formatReportCurrency(expenseAmount),
+      totalExpenses: expenseAmount,
+      totalExpensesFormatted: formatReportCurrency(expenseAmount),
       netAmount,
       netAmountFormatted: formatReportCurrency(netAmount),
+      netAmountDue: netAmount,
+      netAmountDueFormatted: formatReportCurrency(netAmount),
       paidAmount,
       paidAmountFormatted: formatReportCurrency(paidAmount),
+      totalReceived: paidAmount,
+      totalReceivedFormatted: formatReportCurrency(paidAmount),
       remainingAmount,
       remainingAmountFormatted: formatReportCurrency(remainingAmount),
+      totalOutstanding: remainingAmount,
+      totalOutstandingFormatted: formatReportCurrency(remainingAmount),
     },
+    assignedUnits,
     settlements: settlements.map((s) => ({
       id: s._id,
       monthYear: `${s.billingMonth}/${s.billingYear}`,
@@ -684,6 +818,7 @@ async function generateAgentReportData(agentId, fromDate, toDate) {
       remainingAmount: s.remainingAmount,
       status: s.status,
     })),
+    collections,
   };
 }
 
@@ -1036,37 +1171,317 @@ async function generateExpenseReportData(filters = {}) {
 }
 
 /**
- * 8. INCOME REPORT DATA GENERATOR
+ * 8. INCOME REPORT DATA GENERATOR (Rental Income Performance)
  */
 async function generateIncomeReportData(filters = {}) {
-  return await generatePaymentReportData(filters);
+  const { fromDate, toDate, propertyId, tenantId, landlordId } = filters;
+  const query = {};
+
+  if (tenantId && tenantId !== 'All' && tenantId !== 'all') {
+    const tDoc = await findEntitySafely(Customer, tenantId);
+    const validT = filterValidObjectIds([tDoc?._id, tDoc?.id, tenantId]);
+    if (validT.length > 0) query.customerId = { $in: validT };
+    else query.customerId = new mongoose.Types.ObjectId();
+  }
+
+  if (propertyId && propertyId !== 'All' && propertyId !== 'all') {
+    const pDoc = await findEntitySafely(Property, propertyId);
+    const validP = filterValidObjectIds([pDoc?._id, pDoc?.id, propertyId]);
+    if (validP.length > 0) query.propertyId = { $in: validP };
+    else query.propertyId = new mongoose.Types.ObjectId();
+  } else if (landlordId && landlordId !== 'All' && landlordId !== 'all') {
+    const lDoc = await findEntitySafely(Landlord, landlordId);
+    const validL = filterValidObjectIds([lDoc?._id, lDoc?.id, landlordId]);
+    if (validL.length > 0) {
+      const landlordProps = await Property.find({ landlordId: { $in: validL } }).select('_id');
+      query.propertyId = { $in: landlordProps.map((p) => p._id) };
+    }
+  }
+
+  if (fromDate && toDate) {
+    query.dueDate = { $gte: fromDate, $lte: toDate };
+  }
+
+  const payments = await Payment.find(query)
+    .populate('customerId')
+    .populate('propertyId')
+    .sort({ dueDate: 1 });
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+
+  const monthMap = new Map();
+
+  payments.forEach((p) => {
+    let yr = Number(p.billingYear);
+    let m = Number(p.billingMonth);
+    if (!yr || !m) {
+      const d = new Date(p.dueDate || p.createdAt || Date.now());
+      yr = isNaN(d.getFullYear()) ? new Date().getFullYear() : d.getFullYear();
+      m = isNaN(d.getMonth()) ? 1 : d.getMonth() + 1;
+    }
+    const key = `${yr}-${String(m).padStart(2, '0')}`;
+    if (!monthMap.has(key)) {
+      monthMap.set(key, {
+        key,
+        year: yr,
+        monthNum: m,
+        monthName: `${monthNames[m - 1] || 'Month ' + m} ${yr}`,
+        expected: 0,
+        received: 0,
+        outstanding: 0,
+        count: 0,
+      });
+    }
+    const row = monthMap.get(key);
+    const amt = Number(p.amount) || 0;
+    const paid = Number(p.paidAmount) || 0;
+    row.expected += amt;
+    row.received += paid;
+    row.outstanding += Math.max(0, amt - paid);
+    row.count++;
+  });
+
+  const rows = Array.from(monthMap.values())
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map((r) => {
+      const rate = r.expected > 0 ? Math.min(100, Math.round((r.received / r.expected) * 100)) : 100;
+      return {
+        ...r,
+        expectedFormatted: formatReportCurrency(r.expected),
+        receivedFormatted: formatReportCurrency(r.received),
+        outstandingFormatted: formatReportCurrency(r.outstanding),
+        collectionRate: rate,
+      };
+    });
+
+  const totalExpected = rows.reduce((s, r) => s + r.expected, 0);
+  const totalReceived = rows.reduce((s, r) => s + r.received, 0);
+  const totalOutstanding = Math.max(0, totalExpected - totalReceived);
+  const collectionRate = totalExpected > 0 ? Math.min(100, Math.round((totalReceived / totalExpected) * 100)) : 100;
+
+  return {
+    reportType: 'Rental Income Performance Report',
+    reportDate: new Date().toISOString().split('T')[0],
+    generatedAt: new Date().toISOString().split('T')[0],
+    fromDate: fromDate || '',
+    toDate: toDate || '',
+    year: toDate ? new Date(toDate).getFullYear() : new Date().getFullYear(),
+    summary: {
+      totalExpected,
+      totalExpectedFormatted: formatReportCurrency(totalExpected),
+      totalReceived,
+      totalReceivedFormatted: formatReportCurrency(totalReceived),
+      totalOutstanding,
+      totalOutstandingFormatted: formatReportCurrency(totalOutstanding),
+      collectionRate,
+      totalMonths: rows.length,
+      totalRecords: payments.length,
+      // Compatibility aliases:
+      totalPaid: totalReceived,
+      totalRemaining: totalOutstanding,
+    },
+    rows,
+    monthlyBreakdown: rows,
+    payments: payments.map((p) => ({
+      id: p._id,
+      dueDate: p.dueDate,
+      paidDate: p.paidDate || '',
+      tenantName: p.customerId?.fullName || p.customerId?.name || 'N/A',
+      propertyName: p.propertyId?.name || p.propertyId?.propertyName || p.propertyId?.title || 'N/A',
+      unitName: p.propertyId?.name || p.propertyId?.propertyName || 'N/A',
+      amount: p.amount || 0,
+      paidAmount: p.paidAmount || 0,
+      remainingAmount: Math.max(0, (p.amount || 0) - (p.paidAmount || 0)),
+      status: p.status || (p.paidAmount >= p.amount ? 'Paid' : 'Pending'),
+      paymentMethod: p.paymentMethod || 'Cash',
+      reference: p.reference || '',
+    })),
+  };
 }
 
 /**
- * 9. INVOICE REPORT DATA GENERATOR
+ * 9. INVOICE REPORT DATA GENERATOR (Rent Invoices & Billing Tracking)
  */
 async function generateInvoiceReportData(filters = {}) {
-  return await generatePaymentReportData(filters);
+  const { fromDate, toDate, tenantId, propertyId, status } = filters;
+  const query = {};
+
+  if (tenantId && tenantId !== 'All' && tenantId !== 'all') {
+    const tDoc = await findEntitySafely(Customer, tenantId);
+    const validT = filterValidObjectIds([tDoc?._id, tDoc?.id, tenantId]);
+    if (validT.length > 0) query.customerId = { $in: validT };
+    else query.customerId = new mongoose.Types.ObjectId();
+  }
+
+  if (propertyId && propertyId !== 'All' && propertyId !== 'all') {
+    const pDoc = await findEntitySafely(Property, propertyId);
+    const validP = filterValidObjectIds([pDoc?._id, pDoc?.id, propertyId]);
+    if (validP.length > 0) query.propertyId = { $in: validP };
+    else query.propertyId = new mongoose.Types.ObjectId();
+  }
+
+  if (status && status !== 'All' && status !== 'all') {
+    query.status = status;
+  }
+
+  if (fromDate && toDate) {
+    query.dueDate = { $gte: fromDate, $lte: toDate };
+  }
+
+  const payments = await Payment.find(query)
+    .populate('customerId')
+    .populate('propertyId')
+    .sort({ dueDate: -1, createdAt: -1 });
+
+  const rows = payments.map((p) => {
+    const invYear = p.billingYear || (p.dueDate ? p.dueDate.slice(0, 4) : '2026');
+    const invMonth = String(p.billingMonth || 1).padStart(2, '0');
+    const invNum = p.invoiceNumber || `INV-${invYear}-${invMonth}-${String(p._id).slice(-4).toUpperCase()}`;
+    const amount = Number(p.amount) || 0;
+    const paidAmount = Number(p.paidAmount) || 0;
+    const outstanding = Math.max(0, amount - paidAmount);
+    const issueDate = p.dueDate || (p.createdAt ? String(p.createdAt).slice(0, 10) : '-');
+    const tenantName = p.customerId?.fullName || p.customerId?.name || 'Tenant';
+    const propertyName = p.propertyId?.name || p.propertyId?.propertyName || p.propertyId?.title || 'Property';
+    const rowStatus = p.status || (paidAmount >= amount && amount > 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Overdue');
+
+    return {
+      id: p._id,
+      invoiceNumber: invNum,
+      issueDate,
+      dueDate: p.dueDate || issueDate,
+      paidDate: p.paidDate || '',
+      tenantName,
+      propertyName,
+      amount,
+      amountFormatted: formatReportCurrency(amount),
+      paidAmount,
+      paidAmountFormatted: formatReportCurrency(paidAmount),
+      outstanding,
+      outstandingFormatted: formatReportCurrency(outstanding),
+      remainingAmount: outstanding,
+      status: rowStatus,
+      paymentMethod: p.paymentMethod || 'Cash',
+      reference: p.reference || '',
+    };
+  });
+
+  const totalInvoiced = rows.reduce((s, r) => s + r.amount, 0);
+  const totalPaid = rows.reduce((s, r) => s + r.paidAmount, 0);
+  const totalOutstanding = Math.max(0, totalInvoiced - totalPaid);
+  const paidCount = rows.filter((r) => r.status === 'Paid' || r.status === 'Received').length;
+  const overdueCount = rows.filter((r) => r.status === 'Overdue').length;
+  const partialCount = rows.filter((r) => r.status === 'Partial').length;
+
+  return {
+    reportType: 'Rent Invoice Report',
+    reportDate: new Date().toISOString().split('T')[0],
+    generatedAt: new Date().toISOString().split('T')[0],
+    fromDate: fromDate || '',
+    toDate: toDate || '',
+    summary: {
+      totalInvoices: rows.length,
+      totalInvoiced,
+      totalInvoicedFormatted: formatReportCurrency(totalInvoiced),
+      totalPaid,
+      totalPaidFormatted: formatReportCurrency(totalPaid),
+      totalOutstanding,
+      totalOutstandingFormatted: formatReportCurrency(totalOutstanding),
+      paidCount,
+      overdueCount,
+      partialCount,
+      // Compatibility aliases:
+      totalRecords: rows.length,
+      totalExpected: totalInvoiced,
+      totalRemaining: totalOutstanding,
+    },
+    rows,
+    invoices: rows,
+    payments: rows,
+  };
 }
 
 /**
  * 10. FINANCIAL SUMMARY DATA GENERATOR
  */
-async function generateFinancialSummaryData(fromDate, toDate) {
+async function generateFinancialSummaryData(fromDate, toDate, filters = {}) {
+  // Support both (fromDate, toDate, filters) and (filtersObject) signatures
+  if (fromDate && typeof fromDate === 'object') {
+    filters = fromDate;
+    fromDate = filters.fromDate;
+    toDate = filters.toDate;
+  }
+
+  const { propertyId, landlordId } = filters || {};
+
+  // 1. Resolve Properties scope
+  let propQuery = {};
+  if (propertyId && propertyId !== 'All' && propertyId !== 'all') {
+    if (mongoose.Types.ObjectId.isValid(propertyId)) {
+      propQuery._id = propertyId;
+    }
+  } else if (landlordId && landlordId !== 'All' && landlordId !== 'all') {
+    if (mongoose.Types.ObjectId.isValid(landlordId)) {
+      propQuery.landlordId = landlordId;
+    }
+  }
+
+  const allProperties = await Property.find(propQuery).select('title name propertyName propertyType type units landlordId').lean();
+  const propertyIds = allProperties.map((p) => p._id);
+
+  // 2. Query Payments (Populated with Tenant and Property details)
   const pQuery = {};
   if (fromDate && toDate) pQuery.dueDate = { $gte: fromDate, $lte: toDate };
-  const payments = await Payment.find(pQuery);
+  if (propertyIds.length > 0 && (propertyId && propertyId !== 'All' || landlordId && landlordId !== 'All')) {
+    pQuery.propertyId = { $in: propertyIds };
+  }
+  const payments = await Payment.find(pQuery)
+    .populate('customerId', 'fullName name email phone')
+    .populate('propertyId', 'title name propertyName address')
+    .sort({ dueDate: -1 })
+    .lean();
 
+  // 3. Query Property Expenses (Populated with Property details)
   const eQuery = {};
   if (fromDate && toDate) eQuery.date = { $gte: fromDate, $lte: toDate };
-  const propertyExpenses = await Expense.find(eQuery);
-  const agentExpenses = await AgentExpense.find({ ...eQuery, status: 'Approved' });
+  if (propertyIds.length > 0 && (propertyId && propertyId !== 'All' || landlordId && landlordId !== 'All')) {
+    eQuery.propertyId = { $in: propertyIds };
+  }
+  const propertyExpenses = await Expense.find(eQuery)
+    .populate('propertyId', 'title name propertyName address')
+    .sort({ date: -1 })
+    .lean();
 
-  const agentPayments = await AgentPayment.find();
+  // 4. Query Agent Expenses & Payments (Populated with Agent and Property details)
+  const aeQuery = { status: 'Approved' };
+  if (fromDate && toDate) aeQuery.date = { $gte: fromDate, $lte: toDate };
+  const agentExpenses = await AgentExpense.find(aeQuery)
+    .populate('agentId', 'fullName name email phone')
+    .populate('propertyId', 'title name propertyName')
+    .sort({ date: -1 })
+    .lean();
 
+  const agentPayments = await AgentPayment.find().lean();
+
+  // 5. Query Mortgages
+  let mQuery = {};
+  if (propertyId && propertyId !== 'All' && mongoose.Types.ObjectId.isValid(propertyId)) {
+    mQuery = { $or: [{ propertyId }, { 'properties.propertyId': propertyId }] };
+  } else if (landlordId && landlordId !== 'All' && mongoose.Types.ObjectId.isValid(landlordId)) {
+    mQuery = { landlordId };
+  }
+  const mortgages = await Mortgage.find(mQuery).lean();
+  const totalMortgageDebt = mortgages.reduce((sum, m) => sum + (m.currentOutstandingBalance || m.originalLoanAmount || 0), 0);
+  const totalMonthlyMortgage = mortgages.reduce((sum, m) => sum + (m.monthlyPayment || 0), 0);
+
+  // 6. Aggregate Totals
   const totalRentDue = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const totalPaymentsReceived = payments.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
   const totalOutstandingRent = totalRentDue - totalPaymentsReceived;
+  const collectionRate = totalRentDue > 0 ? Number(((totalPaymentsReceived / totalRentDue) * 100).toFixed(1)) : 0;
 
   const totalPropExp = propertyExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
   const totalAgentExp = agentExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
@@ -1078,12 +1493,200 @@ async function generateFinancialSummaryData(fromDate, toDate) {
 
   const netFinancialPosition = totalPaymentsReceived - totalExpenses;
 
+  // 7. Structured Category Rows (Executive Summary)
+  const rows = [
+    {
+      key: 'rental-income',
+      category: 'Gross Rental Income (Tenant Collections)',
+      expected: totalRentDue,
+      expectedFormatted: formatReportCurrency(totalRentDue),
+      received: totalPaymentsReceived,
+      receivedFormatted: formatReportCurrency(totalPaymentsReceived),
+      net: totalPaymentsReceived,
+      netFormatted: formatReportCurrency(totalPaymentsReceived),
+      notes: `${payments.length} scheduled rent payments (${collectionRate}% collected)`,
+    },
+    {
+      key: 'property-expenses',
+      category: 'Property Maintenance & Operating Expenses',
+      expected: totalPropExp,
+      expectedFormatted: formatReportCurrency(totalPropExp),
+      received: totalPropExp,
+      receivedFormatted: formatReportCurrency(totalPropExp),
+      net: -totalPropExp,
+      netFormatted: formatReportCurrency(-totalPropExp),
+      notes: `${propertyExpenses.length} direct property expense records`,
+    },
+    {
+      key: 'agent-fees',
+      category: 'Agent Management & Commission Fees',
+      expected: totalAgentExpected,
+      expectedFormatted: formatReportCurrency(totalAgentExpected),
+      received: totalAgentReceived,
+      receivedFormatted: formatReportCurrency(totalAgentReceived),
+      net: -totalAgentReceived,
+      netFormatted: formatReportCurrency(-totalAgentReceived),
+      notes: `${agentPayments.length} agent payment settlements`,
+    },
+    {
+      key: 'agent-repairs',
+      category: 'Agent Approved Repairs & Deductions',
+      expected: totalAgentExp,
+      expectedFormatted: formatReportCurrency(totalAgentExp),
+      received: totalAgentExp,
+      receivedFormatted: formatReportCurrency(totalAgentExp),
+      net: -totalAgentExp,
+      netFormatted: formatReportCurrency(-totalAgentExp),
+      notes: `${agentExpenses.length} approved repair maintenance items`,
+    },
+  ];
+
+  if (totalMonthlyMortgage > 0) {
+    rows.push({
+      key: 'mortgage-commitments',
+      category: 'Financing & Mortgage Debt Commitments',
+      expected: totalMonthlyMortgage,
+      expectedFormatted: formatReportCurrency(totalMonthlyMortgage),
+      received: totalMonthlyMortgage,
+      receivedFormatted: formatReportCurrency(totalMonthlyMortgage),
+      net: -totalMonthlyMortgage,
+      netFormatted: formatReportCurrency(-totalMonthlyMortgage),
+      notes: `${mortgages.length} active mortgage facilities (${formatReportCurrency(totalMortgageDebt)} principal debt)`,
+    });
+  }
+
+  // 8. Itemized Rent Payment Transactions (Every rent collection record)
+  const rentTransactions = payments.map((pm) => {
+    const due = Number(pm.amount) || 0;
+    const paid = Number(pm.paidAmount) || 0;
+    const remaining = Math.max(0, due - paid);
+    const dateVal = pm.dueDate || pm.paidDate || pm.createdAt;
+    return {
+      id: pm._id.toString(),
+      date: dateVal ? String(dateVal).slice(0, 10) : '-',
+      dateFormatted: formatUKDate(dateVal),
+      tenantName: pm.customerId?.fullName || pm.customerId?.name || 'Tenant',
+      propertyName: pm.propertyId?.title || pm.propertyId?.name || pm.propertyId?.propertyName || 'Property',
+      amount: due,
+      amountFormatted: formatReportCurrency(due),
+      paidAmount: paid,
+      paidAmountFormatted: formatReportCurrency(paid),
+      remainingAmount: remaining,
+      remainingAmountFormatted: formatReportCurrency(remaining),
+      status: pm.status || (remaining === 0 ? 'Paid' : paid > 0 ? 'Partial' : 'Overdue'),
+      paymentMethod: pm.paymentMethod || 'Bank Transfer',
+      reference: pm.reference || '-',
+      notes: pm.notes || '-',
+    };
+  });
+
+  // 9. Itemized Operating & Maintenance Expenses (Every expense record)
+  const expenseTransactions = [
+    ...propertyExpenses.map((exp) => {
+      const amt = Number(exp.amount) || 0;
+      return {
+        id: exp._id.toString(),
+        date: exp.date ? String(exp.date).slice(0, 10) : '-',
+        dateFormatted: formatUKDate(exp.date),
+        type: 'Property Operating Expense',
+        propertyName: exp.propertyId?.title || exp.propertyId?.name || exp.propertyId?.propertyName || 'Property',
+        category: exp.category || 'Maintenance & Repairs',
+        supplier: exp.supplier || exp.payee || 'Direct Supplier',
+        description: exp.description || exp.notes || 'Operating repair / cost',
+        amount: amt,
+        amountFormatted: formatReportCurrency(amt),
+      };
+    }),
+    ...agentExpenses.map((ae) => {
+      const amt = Number(ae.amount) || 0;
+      return {
+        id: ae._id.toString(),
+        date: ae.date ? String(ae.date).slice(0, 10) : '-',
+        dateFormatted: formatUKDate(ae.date),
+        type: 'Agent Approved Repair',
+        propertyName: ae.propertyId?.title || ae.propertyId?.name || ae.propertyId?.propertyName || ae.agentId?.fullName || 'Property / Agent',
+        category: ae.category || 'Repair & Maintenance',
+        supplier: ae.agentId?.fullName || ae.agentId?.name || 'Agent Management',
+        description: ae.description || ae.title || 'Agent repair deduction',
+        amount: amt,
+        amountFormatted: formatReportCurrency(amt),
+      };
+    }),
+  ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+  // 10. Property Performance Breakdown
+  const propMap = new Map();
+  allProperties.forEach((p) => {
+    const pId = p._id.toString();
+    propMap.set(pId, {
+      propertyId: pId,
+      name: p.title || p.name || p.propertyName || 'Property',
+      propertyType: p.propertyType || p.type || 'Residential',
+      totalUnits: p.units ? p.units.length : 1,
+      occupiedUnits: p.units ? p.units.filter((u) => u.status === 'Occupied' || u.isOccupied).length : 1,
+      totalRentDue: 0,
+      totalPaid: 0,
+      totalExpenses: 0,
+    });
+  });
+
+  payments.forEach((pm) => {
+    const pId = pm.propertyId?._id ? pm.propertyId._id.toString() : pm.propertyId ? pm.propertyId.toString() : null;
+    if (!pId) return;
+    let entry = propMap.get(pId);
+    if (!entry) {
+      entry = {
+        propertyId: pId,
+        name: pm.propertyId?.title || pm.propertyId?.name || 'Property',
+        propertyType: 'Residential',
+        totalUnits: 1,
+        occupiedUnits: 1,
+        totalRentDue: 0,
+        totalPaid: 0,
+        totalExpenses: 0,
+      };
+      propMap.set(pId, entry);
+    }
+    entry.totalRentDue += pm.amount || 0;
+    entry.totalPaid += pm.paidAmount || 0;
+  });
+
+  propertyExpenses.forEach((exp) => {
+    const pId = exp.propertyId?._id ? exp.propertyId._id.toString() : exp.propertyId ? exp.propertyId.toString() : null;
+    if (!pId) return;
+    let entry = propMap.get(pId);
+    if (entry) {
+      entry.totalExpenses += exp.amount || 0;
+    }
+  });
+
+  const propertiesBreakdown = Array.from(propMap.values())
+    .filter((p) => p.totalRentDue > 0 || p.totalPaid > 0 || p.totalExpenses > 0)
+    .map((p) => {
+      const net = p.totalPaid - p.totalExpenses;
+      const rate = p.totalRentDue > 0 ? Number(((p.totalPaid / p.totalRentDue) * 100).toFixed(1)) : 0;
+      return {
+        ...p,
+        netIncome: net,
+        collectionRate: rate,
+        totalRentDueFormatted: formatReportCurrency(p.totalRentDue),
+        totalPaidFormatted: formatReportCurrency(p.totalPaid),
+        totalExpensesFormatted: formatReportCurrency(p.totalExpenses),
+        netIncomeFormatted: formatReportCurrency(net),
+      };
+    });
+
   return {
     reportType: 'Financial Summary',
+    generatedAt: new Date().toISOString(),
     reportDate: new Date().toISOString().split('T')[0],
     fromDate: fromDate || '',
     toDate: toDate || '',
     summary: {
+      grossIncome: totalRentDue,
+      grossIncomeFormatted: formatReportCurrency(totalRentDue),
+      totalReceived: totalPaymentsReceived,
+      totalReceivedFormatted: formatReportCurrency(totalPaymentsReceived),
       totalRentDue,
       totalRentDueFormatted: formatReportCurrency(totalRentDue),
       totalPaymentsReceived,
@@ -1102,9 +1705,26 @@ async function generateFinancialSummaryData(fromDate, toDate) {
       totalAgentReceivedFormatted: formatReportCurrency(totalAgentReceived),
       totalAgentOutstanding,
       totalAgentOutstandingFormatted: formatReportCurrency(totalAgentOutstanding),
+      mortgageDebt: totalMortgageDebt,
+      mortgageDebtFormatted: formatReportCurrency(totalMortgageDebt),
+      monthlyMortgageCommitment: totalMonthlyMortgage,
+      monthlyMortgageCommitmentFormatted: formatReportCurrency(totalMonthlyMortgage),
+      netIncome: netFinancialPosition,
+      netIncomeFormatted: formatReportCurrency(netFinancialPosition),
       netFinancialPosition,
       netFinancialPositionFormatted: formatReportCurrency(netFinancialPosition),
+      collectionRate,
+      totalPaymentsCount: payments.length,
+      totalExpensesCount: propertyExpenses.length + agentExpenses.length,
+      totalPropertiesCount: propertiesBreakdown.length,
     },
+    rows,
+    rentTransactions,
+    expenseTransactions,
+    payments: rentTransactions,
+    expenses: expenseTransactions,
+    properties: propertiesBreakdown,
+    propertiesBreakdown,
   };
 }
 

@@ -128,6 +128,19 @@ export function filterPayments(payments, filters, isIncomeTab = false) {
       if (item.paymentAmount > parseFloat(filters.amountTo)) return false;
     }
 
+    // Status Filter
+    if (filters.status && filters.status !== '- All -') {
+      const target = filters.status.toLowerCase();
+      const itemStatus = (item.status || '').toLowerCase();
+      if (target === 'received' || target === 'paid') {
+        if (itemStatus !== 'received' && itemStatus !== 'paid') return false;
+      } else if (target.includes('partial')) {
+        if (!itemStatus.includes('partial')) return false;
+      } else if (itemStatus !== target) {
+        return false;
+      }
+    }
+
     return true;
   });
 }

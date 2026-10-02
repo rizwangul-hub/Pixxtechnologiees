@@ -282,81 +282,129 @@ async function renderWordReportDoc(options) {
     );
   }
 
-  // 4. DETAILED REPORT TABLE
-  children.push(
-    new Paragraph({
-      spacing: { after: 100 },
-      children: [
-        new TextRun({
-          text: 'DETAILED REPORT TRANSACTIONS',
-          bold: true,
-          size: 20,
-          color: '0F172A',
-        }),
-      ],
-    })
-  );
+  // 4. DETAILED REPORT TABLES (Supports multi-table reports)
+  const tablesList = (options.tables && options.tables.length > 0)
+    ? options.tables
+    : [{ title: 'DETAILED REPORT TRANSACTIONS', columns, rows, totalRow }];
 
-  const tableRows = [];
+  tablesList.forEach((tbl) => {
+    const tblCols = tbl.columns || [];
+    const tblRows = tbl.rows || [];
+    const tblTotal = tbl.totalRow;
+    if (tblCols.length === 0) return;
 
-  // Table Header Row
-  const headerCells = columns.map(
-    (col) =>
-      new TableCell({
-        shading: { fill: '1E293B' },
-        children: [
-          new Paragraph({
-            alignment: col.align === 'right' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-            children: [new TextRun({ text: col.label, bold: true, color: 'FFFFFF', size: 16 })],
-          }),
-        ],
-      })
-  );
-  tableRows.push(new TableRow({ children: headerCells }));
+    if (tbl.title) {
+      children.push(
+        new Paragraph({
+          spacing: { before: 240, after: 120 },
+          children: [
+            new TextRun({
+              text: tbl.title.toUpperCase(),
+              bold: true,
+              size: 20, // 10pt
+              color: '0F172A',
+            }),
+          ],
+        })
+      );
+    }
 
-  // Data Rows
-  rows.forEach((row, rIdx) => {
-    const dataCells = columns.map((col) => {
-      const rawVal = row[col.key];
-      const valStr = rawVal !== undefined && rawVal !== null ? String(rawVal) : '-';
-      return new TableCell({
-        shading: rIdx % 2 === 1 ? { fill: 'F8FAFC' } : undefined,
-        children: [
-          new Paragraph({
-            alignment: col.align === 'right' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-            children: [new TextRun({ text: valStr, size: 16, color: '1E293B' })],
-          }),
-        ],
+    const tableRows = [];
+
+    // Table Header Row
+    const headerCells = tblCols.map(
+      (col) =>
+        new TableCell({
+          shading: { fill: '1E293B' },
+          children: [
+            new Paragraph({
+              alignment: col.align === 'right' ? AlignmentType.RIGHT : col.align === 'center' ? AlignmentType.CENTER : AlignmentType.LEFT,
+              children: [new TextRun({ text: col.label, bold: true, color: 'FFFFFF', size: 15 })],
+            }),
+          ],
+        })
+    );
+    tableRows.push(new TableRow({ children: headerCells }));
+
+    // Data Rows
+    if (tblRows.length === 0) {
+      tableRows.push(
+        new TableRow({
+          children: [
+            new TableCell({
+              columnSpan: tblCols.length,
+              shading: { fill: 'F8FAFC' },
+              children: [
+                new Paragraph({
+                  children: [new TextRun({ text: 'No recorded transactions in this period.', italics: true, color: '94A3B8', size: 15 })],
+                }),
+              ],
+            }),
+          ],
+        })
+      );
+    } else {
+      tblRows.forEach((row, rIdx) => {
+        const dataCells = tblCols.map((col) => {
+          const rawVal = row[col.key];
+          const valStr = rawVal !== undefined && rawVal !== null ? String(rawVal) : '-';
+          return new TableCell({
+            shading: rIdx % 2 === 1 ? { fill: 'F8FAFC' } : undefined,
+            children: [
+              new Paragraph({
+                alignment: col.align === 'right' ? AlignmentType.RIGHT : col.align === 'center' ? AlignmentType.CENTER : AlignmentType.LEFT,
+                children: [
+                  new TextRun({
+                    text: valStr,
+                    size: 15, // 7.5pt
+                    color: col.align === 'right' && valStr.includes('£') ? '0F172A' : '334155',
+                  }),
+                ],
+              }),
+            ],
+          });
+        });
+        tableRows.push(new TableRow({ children: dataCells }));
       });
-    });
-    tableRows.push(new TableRow({ children: dataCells }));
+    }
+
+    // Total Row
+    if (tblTotal) {
+      const totalCells = tblCols.map((col, cIdx) => {
+        const totVal = tblTotal[col.key];
+        const valStr = totVal !== undefined && totVal !== null ? String(totVal) : (cIdx === 0 ? 'TOTAL' : '');
+        return new TableCell({
+          shading: { fill: 'F1F5F9' },
+          children: [
+            new Paragraph({
+              alignment: col.align === 'right' ? AlignmentType.RIGHT : AlignmentType.LEFT,
+              children: [
+                new TextRun({
+                  text: valStr,
+                  bold: true,
+                  size: 15,
+                  color: '0F172A',
+                }),
+              ],
+            }),
+          ],
+        });
+      });
+      tableRows.push(new TableRow({ children: totalCells }));
+    }
+
+    children.push(
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        margins: { top: 80, bottom: 80, left: 100, right: 100 },
+        rows: tableRows,
+      }),
+      new Paragraph({ spacing: { after: 180 } })
+    );
   });
 
-  // Total Row
-  if (totalRow) {
-    const totalCells = columns.map((col, cIdx) => {
-      const totVal = totalRow[col.key];
-      const valStr = totVal !== undefined && totVal !== null ? String(totVal) : (cIdx === 0 ? 'TOTAL' : '');
-      return new TableCell({
-        shading: { fill: 'F1F5F9' },
-        children: [
-          new Paragraph({
-            alignment: col.align === 'right' ? AlignmentType.RIGHT : AlignmentType.LEFT,
-            children: [new TextRun({ text: valStr, bold: true, size: 16, color: '0F172A' })],
-          }),
-        ],
-      });
-    });
-    tableRows.push(new TableRow({ children: totalCells }));
-  }
-
+  // FOOTER
   children.push(
-    new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      rows: tableRows,
-    }),
-    new Paragraph({ spacing: { after: 300 } }),
-    // FOOTER
     new Paragraph({
       alignment: AlignmentType.CENTER,
       children: [
@@ -381,20 +429,34 @@ async function renderWordReportDoc(options) {
 // ----------------------------------------------------
 
 async function generateTenantStatementWord(data) {
+  const isAll = Boolean(
+    data.isAllTenants ||
+    data.tenant?.id === 'all_tenants' ||
+    String(data.tenant?.name).toLowerCase().includes('all tenants') ||
+    String(data.reportType).includes('All Tenants')
+  );
+
   return renderWordReportDoc({
-    reportTitle: 'STATEMENT OF ACCOUNT',
+    reportTitle: isAll ? 'TENANT STATEMENT & PAYMENTS' : 'STATEMENT OF ACCOUNT',
     generatedAt: data.statementDate,
     periodText: `${formatUKDate(data.fromDate)} - ${formatUKDate(data.toDate)}`,
     logoUrl: data.landlord?.logoUrl || data.landlord?.logo?.url || null,
-    metaFields: [
-      { label: 'Tenant', value: data.tenant.name },
-      { label: 'Tenant Address', value: data.tenant.address || '-' },
-      { label: 'Property', value: `${data.property.name} ${data.property.address ? '(' + data.property.address + ')' : ''}` },
-      { label: 'Landlord', value: data.landlord.name },
-    ],
+    metaFields: isAll
+      ? [
+          { label: 'Report Scope', value: 'All Tenants Portfolio (Combined)' },
+          { label: 'Total Records', value: `${data.summary?.totalRecords || data.transactions?.length || 0} transactions` },
+          { label: 'Property Scope', value: 'Portfolio Wide' },
+          { label: 'Management', value: data.landlord?.name || 'PixxTechnologies Property Management' },
+        ]
+      : [
+          { label: 'Tenant', value: data.tenant?.name || 'Tenant' },
+          { label: 'Tenant Address', value: data.tenant?.address || '-' },
+          { label: 'Property', value: `${data.property?.name || 'Property'} ${data.property?.address ? '(' + data.property.address + ')' : ''}` },
+          { label: 'Landlord', value: data.landlord?.name || 'Landlord' },
+        ],
     summaryCards: [
-      { label: 'Balance Forward', value: data.summary.balanceForwardFormatted },
-      { label: 'Total Rent Due', value: data.summary.totalRentDueFormatted },
+      { label: isAll ? 'Opening Balance' : 'Balance Forward', value: data.summary.balanceForwardFormatted },
+      { label: isAll ? 'Total Rent Charged' : 'Total Rent Due', value: data.summary.totalRentDueFormatted },
       { label: 'Total Payments', value: data.summary.totalPaymentsFormatted },
       { label: 'Total Outstanding', value: data.summary.totalOutstandingFormatted },
     ],
@@ -464,15 +526,16 @@ async function generateAgentReportWord(data) {
     metaFields: [
       { label: 'Agent Name', value: data.agent.name },
       { label: 'Phone', value: data.agent.phone || '-' },
-      { label: 'Email', value: data.agent.email || '-' },
       { label: 'Region', value: data.agent.region || 'All' },
+      { label: 'Assigned Units', value: `${data.summary?.assignedUnitsCount || 0} (${data.summary?.occupiedUnitsCount || 0} Occupied)` },
     ],
     summaryCards: [
-      { label: 'Expected Rent', value: data.summary.totalExpectedFormatted },
-      { label: 'Approved Expenses', value: data.summary.totalExpensesFormatted },
-      { label: 'Net Due', value: data.summary.netAmountDueFormatted },
-      { label: 'Total Received', value: data.summary.totalReceivedFormatted },
-      { label: 'Outstanding', value: data.summary.totalOutstandingFormatted },
+      { label: 'Assigned Units', value: String(data.summary?.assignedUnitsCount || 0) },
+      { label: 'Expected Rent', value: data.summary?.totalExpectedFormatted || data.summary?.expectedAmountFormatted || '£0.00' },
+      { label: 'Approved Expenses', value: data.summary?.totalExpensesFormatted || data.summary?.expenseAmountFormatted || '£0.00' },
+      { label: 'Net Due', value: data.summary?.netAmountDueFormatted || data.summary?.netAmountFormatted || '£0.00' },
+      { label: 'Total Received', value: data.summary?.totalReceivedFormatted || data.summary?.paidAmountFormatted || '£0.00' },
+      { label: 'Outstanding', value: data.summary?.totalOutstandingFormatted || data.summary?.remainingAmountFormatted || '£0.00' },
     ],
     columns: [
       { key: 'date', label: 'Date' },
@@ -548,37 +611,7 @@ async function generatePropertyReportWord(data) {
 }
 
 async function generateUnitReportWord(data) {
-  return renderWordReportDoc({
-    reportTitle: 'UNIT FINANCIAL REPORT',
-    generatedAt: data.reportDate,
-    periodText: `${formatUKDate(data.fromDate)} - ${formatUKDate(data.toDate)}`,
-    metaFields: [
-      { label: 'Unit', value: data.unit.name },
-      { label: 'Property', value: data.property.name },
-      { label: 'Type', value: data.unit.type || '-' },
-      { label: 'Current Tenant', value: data.tenant?.name || 'Available' },
-    ],
-    summaryCards: [
-      { label: 'Monthly Rent', value: data.summary.monthlyRentFormatted },
-      { label: 'Total Rent Due', value: data.summary.totalRentDueFormatted },
-      { label: 'Rent Collected', value: data.summary.totalPaymentsFormatted },
-      { label: 'Expenses', value: data.summary.totalExpensesFormatted },
-      { label: 'Net Balance', value: data.summary.netBalanceFormatted },
-    ],
-    columns: [
-      { key: 'date', label: 'Date' },
-      { key: 'type', label: 'Type' },
-      { key: 'reference', label: 'Reference' },
-      { key: 'description', label: 'Description' },
-      { key: 'amountFormatted', label: 'Amount (£)', align: 'right' },
-      { key: 'status', label: 'Status' },
-    ],
-    rows: (data.transactions || []).map((t) => ({ ...t, date: formatUKDate(t.date) })),
-    totalRow: {
-      date: 'TOTALS',
-      amountFormatted: data.summary.netBalanceFormatted,
-    },
-  });
+  return generatePropertyReportWord(data);
 }
 
 async function generatePaymentReportWord(data) {
@@ -706,29 +739,76 @@ async function generateInvoiceReportWord(data) {
 }
 
 async function generateFinancialSummaryWord(data) {
+  const summary = data.summary || {};
+  const rentList = data.rentTransactions || data.payments || [];
+  const expList = data.expenseTransactions || data.expenses || [];
+
   return renderWordReportDoc({
     reportTitle: 'FINANCIAL PERFORMANCE SUMMARY',
-    generatedAt: formatUKDate(data.generatedAt),
-    periodText: `${formatUKDate(data.fromDate)} - ${formatUKDate(data.toDate)}`,
+    generatedAt: formatUKDate(data.generatedAt || data.reportDate || new Date()),
+    periodText: data.fromDate && data.toDate ? `${formatUKDate(data.fromDate)} - ${formatUKDate(data.toDate)}` : 'Full Portfolio History',
     summaryCards: [
-      { label: 'Gross Income', value: data.summary.grossIncomeFormatted },
-      { label: 'Operating Expenses', value: data.summary.totalExpensesFormatted },
-      { label: 'Net Income', value: data.summary.netIncomeFormatted },
-      { label: 'Bank Debt', value: data.summary.mortgageDebtFormatted },
+      { label: 'Gross Expected Rent', value: summary.grossIncomeFormatted || summary.totalRentDueFormatted || '£0.00' },
+      { label: 'Rent Cleared / Received', value: summary.totalReceivedFormatted || summary.totalPaymentsReceivedFormatted || '£0.00' },
+      { label: 'Operating Expenses', value: summary.totalExpensesFormatted || '£0.00' },
+      { label: 'Net Cash Flow', value: summary.netIncomeFormatted || summary.netFinancialPositionFormatted || '£0.00' },
     ],
-    columns: [
-      { key: 'category', label: 'Financial Category' },
-      { key: 'expectedFormatted', label: 'Expected (£)', align: 'right' },
-      { key: 'receivedFormatted', label: 'Actual Received (£)', align: 'right' },
-      { key: 'netFormatted', label: 'Net Position (£)', align: 'right' },
+    tables: [
+      {
+        title: 'SECTION 1: FINANCIAL CATEGORY PERFORMANCE',
+        columns: [
+          { key: 'category', label: 'Financial Category' },
+          { key: 'expectedFormatted', label: 'Expected (£)', align: 'right' },
+          { key: 'receivedFormatted', label: 'Actual Received / Paid (£)', align: 'right' },
+          { key: 'netFormatted', label: 'Net Position (£)', align: 'right' },
+        ],
+        rows: data.rows || [],
+        totalRow: {
+          category: 'NET FINANCIAL POSITION',
+          expectedFormatted: summary.grossIncomeFormatted || summary.totalRentDueFormatted || '£0.00',
+          receivedFormatted: summary.totalReceivedFormatted || summary.totalPaymentsReceivedFormatted || '£0.00',
+          netFormatted: summary.netIncomeFormatted || summary.netFinancialPositionFormatted || '£0.00',
+        },
+      },
+      {
+        title: `SECTION 2: ITEMIZED RENT PAYMENT TRANSACTIONS (${rentList.length} Records)`,
+        columns: [
+          { key: 'dateFormatted', label: 'Date', align: 'center' },
+          { key: 'tenantName', label: 'Tenant' },
+          { key: 'propertyName', label: 'Property' },
+          { key: 'amountFormatted', label: 'Due (£)', align: 'right' },
+          { key: 'paidAmountFormatted', label: 'Received (£)', align: 'right' },
+          { key: 'remainingAmountFormatted', label: 'Arrears (£)', align: 'right' },
+          { key: 'status', label: 'Status', align: 'center' },
+        ],
+        rows: rentList,
+        totalRow: {
+          dateFormatted: 'TOTALS',
+          tenantName: `${rentList.length} Payments`,
+          amountFormatted: summary.totalRentDueFormatted || summary.grossIncomeFormatted || '£0.00',
+          paidAmountFormatted: summary.totalReceivedFormatted || summary.totalPaymentsReceivedFormatted || '£0.00',
+          remainingAmountFormatted: summary.totalOutstandingRentFormatted || '£0.00',
+          status: `${summary.collectionRate || 0}%`,
+        },
+      },
+      {
+        title: `SECTION 3: ITEMIZED OPERATING & MAINTENANCE EXPENSES (${expList.length} Records)`,
+        columns: [
+          { key: 'dateFormatted', label: 'Date', align: 'center' },
+          { key: 'propertyName', label: 'Property / Location' },
+          { key: 'category', label: 'Category' },
+          { key: 'supplier', label: 'Payee / Supplier' },
+          { key: 'description', label: 'Details' },
+          { key: 'amountFormatted', label: 'Amount (£)', align: 'right' },
+        ],
+        rows: expList,
+        totalRow: {
+          dateFormatted: 'TOTALS',
+          propertyName: `${expList.length} Expenses`,
+          amountFormatted: summary.totalExpensesFormatted || '£0.00',
+        },
+      },
     ],
-    rows: data.rows || [],
-    totalRow: {
-      category: 'NET FINANCIAL POSITION',
-      expectedFormatted: data.summary.grossIncomeFormatted,
-      receivedFormatted: data.summary.grossIncomeFormatted,
-      netFormatted: data.summary.netIncomeFormatted,
-    },
   });
 }
 

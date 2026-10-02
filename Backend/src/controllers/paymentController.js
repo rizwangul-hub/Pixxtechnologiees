@@ -1,4 +1,7 @@
 const mongoose = require('mongoose');
+const Customer = require('../models/Customer');
+const Landlord = require('../models/Landlord');
+const Agent = require('../models/Agent');
 const Payment = require('../models/Payment');
 const Invoice = require('../models/Invoice');
 const Tenancy = require('../models/Tenancy');

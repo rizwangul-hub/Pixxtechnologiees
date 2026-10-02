@@ -108,6 +108,25 @@ export function PaymentFilters({ filters, setFilters, onSearch, onClear, isIncom
           </div>
         </div>
 
+        {/* Status */}
+        <div className="space-y-1">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+            <Tag className="w-3.5 h-3.5 text-slate-400" />
+            <span>Status</span>
+          </label>
+          <select
+            value={filters.status || '- All -'}
+            onChange={(e) => handleChange('status', e.target.value)}
+            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a36f]/20 focus:border-[#00a36f] bg-white cursor-pointer"
+          >
+            <option value="- All -">- All Statuses -</option>
+            <option value="Received">Received / Paid</option>
+            <option value="Partially Received">Partially Received</option>
+            <option value="Overdue">Overdue</option>
+            <option value="Pending">Pending</option>
+          </select>
+        </div>
+
         {/* Buttons */}
         <div className="flex items-end gap-2 md:col-span-3 pt-1">
           <button

@@ -42,6 +42,8 @@ import {
   fetchUnitReportAPI,
   fetchPaymentReportAPI,
   fetchExpenseReportAPI,
+  fetchIncomeReportAPI,
+  fetchInvoiceReportAPI,
   fetchFinancialSummaryReportAPI,
   fetchMortgageReportAPI,
   fetchMortgagesAPI,
@@ -50,8 +52,8 @@ import {
 const REPORT_TYPES = [
   {
     id: 'tenant-statement',
-    name: 'Tenant Statement',
-    description: 'View complete rent, charges, and payment history statement for a tenant with running balance.',
+    name: 'Tenant Statement & Payments',
+    description: 'View complete rent ledger, payment receipts, running balance, and portfolio-wide payment collections for all tenants or an individual tenant.',
     icon: FileText,
     badge: 'Most Important',
     color: 'emerald',
@@ -72,24 +74,10 @@ const REPORT_TYPES = [
   },
   {
     id: 'property-report',
-    name: 'Property Portfolio Report',
-    description: 'View property occupancy, property breakdown, rent, payments, and expenses.',
+    name: 'Property Report',
+    description: 'View portfolio-wide or individual property occupancy, rent, payments, and financial breakdown.',
     icon: Building2,
     color: 'indigo',
-  },
-  {
-    id: 'unit-report',
-    name: 'Individual Property Report',
-    description: 'View individual property status, rent history, active tenant, and financial records.',
-    icon: Layers,
-    color: 'cyan',
-  },
-  {
-    id: 'payment-report',
-    name: 'Payment Report',
-    description: 'Filter and view all rent and tenant payment transactions.',
-    icon: DollarSign,
-    color: 'emerald',
   },
   {
     id: 'expense-report',
@@ -132,7 +120,11 @@ export function ReportsPage() {
   const [searchParams] = useSearchParams();
 
   // Selection state
-  const [selectedReportType, setSelectedReportType] = useState(() => searchParams.get('type') || null);
+  const [selectedReportType, setSelectedReportType] = useState(() => {
+    const t = searchParams.get('type');
+    return t === 'unit-report' ? 'property-report' : t === 'payment-report' ? 'tenant-statement' : t || null;
+  });
+  const [activeLedgerTab, setActiveLedgerTab] = useState('statement'); // 'statement' | 'payments'
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -145,7 +137,7 @@ export function ReportsPage() {
   const [units, setUnits] = useState([]);
 
   // Generator Form Parameters
-  const [selectedTenantId, setSelectedTenantId] = useState(() => searchParams.get('tenantId') || '');
+  const [selectedTenantId, setSelectedTenantId] = useState(() => searchParams.get('tenantId') || 'All');
   const [selectedLandlordId, setSelectedLandlordId] = useState(() => searchParams.get('landlordId') || 'All');
   const [selectedAgentId, setSelectedAgentId] = useState(() => searchParams.get('agentId') || '');
   const [selectedPropertyId, setSelectedPropertyId] = useState(() => searchParams.get('propertyId') || 'All');
@@ -158,13 +150,14 @@ export function ReportsPage() {
 
   const [dateFrom, setDateFrom] = useState(defaultFrom);
   const [dateTo, setDateTo] = useState(defaultTo);
+  const [financialSummaryTab, setFinancialSummaryTab] = useState('all');
 
   // Sync with searchParams if navigated from other pages (e.g. Landlord Detail)
   useEffect(() => {
     const qType = searchParams.get('type');
     const qLandlord = searchParams.get('landlordId');
     const qProperty = searchParams.get('propertyId');
-    if (qType) setSelectedReportType(qType);
+    if (qType) setSelectedReportType(qType === 'unit-report' ? 'property-report' : qType === 'payment-report' ? 'tenant-statement' : qType);
     if (qLandlord) setSelectedLandlordId(qLandlord);
     if (qProperty) setSelectedPropertyId(qProperty);
   }, [searchParams]);
@@ -223,8 +216,8 @@ export function ReportsPage() {
 
         if (qTenant) {
           setSelectedTenantId(qTenant);
-        } else if (activeTenants.length > 0) {
-          setSelectedTenantId((activeTenants[0]._id || activeTenants[0].id)?.toString());
+        } else {
+          setSelectedTenantId('All');
         }
 
         if (qLandlord) {
@@ -300,19 +293,7 @@ export function ReportsPage() {
     return filtered.length > 0 ? filtered : properties;
   }, [properties, selectedLandlordId]);
 
-  // Auto select first unit when availableUnits changes
-  useEffect(() => {
-    if (selectedReportType === 'unit-report') {
-      if (availableUnits.length > 0) {
-        const matching = availableUnits.find((u) => (u._id || u.id)?.toString() === selectedUnitId?.toString());
-        if (!matching) {
-          setSelectedUnitId((availableUnits[0]._id || availableUnits[0].id)?.toString() || '');
-        }
-      } else {
-        setSelectedUnitId('');
-      }
-    }
-  }, [selectedPropertyId, availableUnits, selectedReportType]);
+
 
   const buildLocalUnitReport = (unitId, fromDateStr, toDateStr) => {
     const localUnits = getSavedUnits();
@@ -629,12 +610,15 @@ export function ReportsPage() {
       let data = null;
       switch (repType) {
         case 'tenant-statement':
-          if (!tId) throw new Error('Please select a tenant');
-          data = await fetchTenantStatementAPI(tId, {
+        case 'payment-report': {
+          const targetTenant = tId || 'All';
+          data = await fetchTenantStatementAPI(targetTenant, {
             fromDate: fDate,
             toDate: tDate,
+            propertyId: pId && pId !== 'All' ? pId : undefined,
           });
           break;
+        }
 
         case 'landlord-report':
           if (!lId) throw new Error('Please select a landlord');
@@ -653,9 +637,10 @@ export function ReportsPage() {
           break;
 
         case 'property-report':
-          if (!pId) throw new Error('Please select a property');
+        case 'unit-report': {
+          const targetId = pId || uId || 'All';
           try {
-            data = await fetchPropertyReportAPI(pId, {
+            data = await fetchPropertyReportAPI(targetId, {
               fromDate: fDate,
               toDate: tDate,
             });
@@ -663,33 +648,26 @@ export function ReportsPage() {
             console.warn('[API Warning] Fetch property report fallback to local:', apiErr.message);
           }
           if (!data) {
-            data = buildLocalPropertyReport(pId, fDate, tDate);
+            data = buildLocalPropertyReport(targetId, fDate, tDate);
           }
           break;
+        }
 
-        case 'unit-report':
-          if (!uId) throw new Error('Please select a unit');
-          try {
-            data = await fetchUnitReportAPI(uId, {
-              fromDate: fDate,
-              toDate: tDate,
-            });
-          } catch (apiErr) {
-            console.warn('[API Warning] Fetch unit report fallback to local:', apiErr.message);
-          }
-          if (!data) {
-            data = buildLocalUnitReport(uId, fDate, tDate);
-          }
-          break;
-
-        case 'payment-report':
         case 'income-report':
-        case 'invoice-report':
-          data = await fetchPaymentReportAPI({
+          data = await fetchIncomeReportAPI({
             fromDate: fDate,
             toDate: tDate,
-            tenantId: tId !== 'All' ? tId : '',
             propertyId: pId !== 'All' ? pId : '',
+            tenantId: tId !== 'All' ? tId : '',
+          });
+          break;
+
+        case 'invoice-report':
+          data = await fetchInvoiceReportAPI({
+            fromDate: fDate,
+            toDate: tDate,
+            propertyId: pId !== 'All' ? pId : '',
+            tenantId: tId !== 'All' ? tId : '',
           });
           break;
 
@@ -705,6 +683,8 @@ export function ReportsPage() {
           data = await fetchFinancialSummaryReportAPI({
             fromDate: fDate,
             toDate: tDate,
+            propertyId: pId !== 'All' ? pId : '',
+            landlordId: lId !== 'All' ? lId : '',
           });
           break;
 
@@ -741,12 +721,18 @@ export function ReportsPage() {
     const query = `fromDate=${dateFrom}&toDate=${dateTo}`;
 
     switch (reportType) {
-      case 'tenant-statement': {
+      case 'tenant-statement':
+      case 'payment-report': {
+        const isAll = !selectedTenantId || selectedTenantId === 'All';
         const selectedTenantObj = tenants.find((t) => (t._id || t.id)?.toString() === selectedTenantId?.toString());
-        const tenantSafeName = (selectedTenantObj?.fullName || selectedTenantObj?.name || 'Tenant').replace(/[^a-zA-Z0-9]/g, '_');
+        const tenantSafeName = isAll
+          ? 'All_Tenants'
+          : (selectedTenantObj?.fullName || selectedTenantObj?.name || 'Tenant').replace(/[^a-zA-Z0-9]/g, '_');
+        const targetId = isAll ? 'All' : selectedTenantId;
+        const propParam = selectedPropertyId && selectedPropertyId !== 'All' ? `&propertyId=${selectedPropertyId}` : '';
         return {
-          url: `/reports/tenant-statement/${selectedTenantId}/${format}?${query}`,
-          filename: `Tenant_Statement_${tenantSafeName}.${formatExt}`,
+          url: `/reports/tenant-statement/${targetId}/${format}?${query}${propParam}`,
+          filename: isAll ? `Tenant_Payments_All_Tenants.${formatExt}` : `Tenant_Statement_${tenantSafeName}.${formatExt}`,
         };
       }
       case 'landlord-report':
@@ -760,20 +746,16 @@ export function ReportsPage() {
           filename: `Agent_Report.${formatExt}`,
         };
       case 'property-report':
+      case 'unit-report': {
+        const targetId = selectedPropertyId || selectedUnitId || 'All';
+        const propName = targetId === 'All'
+          ? 'Portfolio'
+          : (properties.find((p) => (p._id || p.id)?.toString() === targetId?.toString())?.title || 'Property').replace(/[^a-zA-Z0-9]/g, '_');
         return {
-          url: `/reports/property/${selectedPropertyId}/${format}?${query}`,
-          filename: `Property_Report.${formatExt}`,
+          url: `/reports/property/${targetId}/${format}?${query}`,
+          filename: `Property_Report_${propName}.${formatExt}`,
         };
-      case 'unit-report':
-        return {
-          url: `/reports/unit/${selectedUnitId}/${format}?${query}`,
-          filename: `Unit_Report.${formatExt}`,
-        };
-      case 'payment-report':
-        return {
-          url: `/reports/payments/${format}?${query}&propertyId=${selectedPropertyId !== 'All' ? selectedPropertyId : ''}&tenantId=${selectedTenantId !== 'All' ? selectedTenantId : ''}`,
-          filename: `Payment_Report.${formatExt}`,
-        };
+      }
       case 'expense-report':
         return {
           url: `/reports/expenses/${format}?${query}&propertyId=${selectedPropertyId !== 'All' ? selectedPropertyId : ''}`,
@@ -781,7 +763,7 @@ export function ReportsPage() {
         };
       case 'income-report':
         return {
-          url: `/reports/income/${format}?${query}&propertyId=${selectedPropertyId !== 'All' ? selectedPropertyId : ''}`,
+          url: `/reports/income/${format}?${query}&propertyId=${selectedPropertyId !== 'All' ? selectedPropertyId : ''}&tenantId=${selectedTenantId !== 'All' ? selectedTenantId : ''}`,
           filename: `Income_Report.${formatExt}`,
         };
       case 'invoice-report':
@@ -791,7 +773,7 @@ export function ReportsPage() {
         };
       case 'financial-summary':
         return {
-          url: `/reports/financial-summary/${format}?${query}`,
+          url: `/reports/financial-summary/${format}?${query}&propertyId=${selectedPropertyId !== 'All' ? selectedPropertyId : ''}&landlordId=${selectedLandlordId !== 'All' ? selectedLandlordId : ''}`,
           filename: `Financial_Summary.${formatExt}`,
         };
       case 'mortgage-report': {
@@ -935,29 +917,28 @@ export function ReportsPage() {
 
             <form onSubmit={handleGenerateReport} className="space-y-4">
               {/* Tenant Selection */}
-              {(selectedReportType === 'tenant-statement' || selectedReportType === 'payment-report') && (
+              {(selectedReportType === 'tenant-statement' || selectedReportType === 'payment-report' || selectedReportType === 'income-report' || selectedReportType === 'invoice-report') && (
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                    Select Tenant *
+                    Select Tenant / Portfolio Scope *
                   </label>
                   <select
                     value={selectedTenantId}
                     onChange={(e) => setSelectedTenantId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#04A26F] focus:border-transparent outline-none bg-white"
-                    required={selectedReportType === 'tenant-statement'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#04A26F] focus:border-transparent outline-none bg-white font-medium text-gray-800"
                   >
-                    {selectedReportType === 'payment-report' && <option value="All">All Tenants</option>}
+                    <option value="All">All Tenants (Full Payments & Statement History)</option>
                     {tenants.map((t) => (
                       <option key={t._id || t.id} value={t._id || t.id}>
                         {t.fullName || t.name} ({t.phone || t.email})
                       </option>
                     ))}
                   </select>
-                  {selectedReportType === 'tenant-statement' && (
-                    <p className="text-xs text-slate-500 mt-1 font-medium">
-                      ✓ Rented property, rent charges, and payment history are automatically pulled for the selected tenant.
-                    </p>
-                  )}
+                  <p className="text-xs text-slate-500 mt-1 font-medium">
+                    {selectedTenantId === 'All'
+                      ? '✓ Compiles all payment collections, rent charges, and transaction records across all portfolio tenants.'
+                      : '✓ Rented property, rent charges, receipts, and running balance ledger are automatically compiled for the selected tenant.'}
+                  </p>
                 </div>
               )}
 
@@ -1095,11 +1076,13 @@ export function ReportsPage() {
 
               {/* Property Selection */}
               {(selectedReportType === 'property-report' ||
-                selectedReportType === 'unit-report' ||
-                selectedReportType === 'expense-report') && (
+                selectedReportType === 'expense-report' ||
+                selectedReportType === 'income-report' ||
+                selectedReportType === 'invoice-report' ||
+                selectedReportType === 'financial-summary') && (
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                    Select Property {selectedReportType === 'property-report' && '*'}
+                    Select Property / Portfolio {selectedReportType === 'property-report' && '*'}
                   </label>
                   <select
                     value={selectedPropertyId}
@@ -1107,34 +1090,18 @@ export function ReportsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#04A26F] focus:border-transparent outline-none bg-white"
                     required={selectedReportType === 'property-report'}
                   >
-                    <option value="All">All Properties Portfolio</option>
+                    <option value="All">All Properties Portfolio (Combined)</option>
                     {properties.map((p) => (
                       <option key={p._id || p.id} value={p._id || p.id}>
-                        {p.title || p.name || p.propertyName}
+                        {p.title || p.name || p.propertyName} {p.type ? `(${p.type})` : ''}
                       </option>
                     ))}
                   </select>
-                </div>
-              )}
-
-              {/* Property / Unit Selection */}
-              {selectedReportType === 'unit-report' && (
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                    Select Property (Rentable Asset) *
-                  </label>
-                  <select
-                    value={selectedUnitId}
-                    onChange={(e) => setSelectedUnitId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#04A26F] focus:border-transparent outline-none bg-white"
-                    required
-                  >
-                    {availableUnits.map((u) => (
-                      <option key={u._id || u.id} value={u._id || u.id}>
-                        {u.name} ({u.type})
-                      </option>
-                    ))}
-                  </select>
+                  {selectedReportType === 'property-report' && (
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      ✓ Choose &quot;All Properties Portfolio&quot; for complete portfolio performance, or pick any individual property for single-property financial and tenancy analysis.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -1330,74 +1297,184 @@ export function ReportsPage() {
                       )}
                     </div>
 
-                    <div className="text-right space-y-1">
-                      <h2 className="text-2xl font-black text-gray-900 tracking-tight">Statement of Account</h2>
-                      <p className="text-xs font-bold text-gray-800">
-                        Tenant: <span className="font-extrabold text-gray-900">{reportData.tenant.name}</span>
-                      </p>
-                      {reportData.tenant.address && (
-                        <p className="text-xs text-gray-600">Tenant Address: {reportData.tenant.address}</p>
-                      )}
-                      <p className="text-xs text-gray-600">
-                        Property: {reportData.property.name} - {reportData.property.address}
-                      </p>
-                      <p className="text-xs text-gray-600">Landlord: {reportData.landlord.name}</p>
-                      <p className="text-xs font-bold text-gray-900 mt-1">Date: {reportData.statementDate}</p>
-                    </div>
+                    {(() => {
+                      const isAll = Boolean(reportData.isAllTenants || selectedTenantId === 'All' || reportData.tenant?.id === 'all_tenants');
+                      return (
+                        <div className="text-right space-y-1">
+                          <h2 className="text-2xl font-black text-gray-900 tracking-tight">
+                            {isAll ? 'Tenant Statement & Payments' : 'Statement of Account'}
+                          </h2>
+                          <p className="text-xs font-bold text-gray-800">
+                            {isAll ? (
+                              <>Scope: <span className="font-extrabold text-gray-900">All Tenants Portfolio (Combined)</span></>
+                            ) : (
+                              <>Tenant: <span className="font-extrabold text-gray-900">{reportData.tenant?.name || 'Tenant'}</span></>
+                            )}
+                          </p>
+                          {!isAll && reportData.tenant?.address && (
+                            <p className="text-xs text-gray-600">Tenant Address: {reportData.tenant.address}</p>
+                          )}
+                          <p className="text-xs text-gray-600">
+                            Property: {reportData.property?.name || 'Assigned Property'} {reportData.property?.address ? `- ${reportData.property.address}` : ''}
+                          </p>
+                          <p className="text-xs text-gray-600">Landlord / Management: {reportData.landlord?.name || 'PixxTechnologies'}</p>
+                          <p className="text-xs font-bold text-gray-900 mt-1">Statement Date: {reportData.statementDate}</p>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* SUMMARY SECTION */}
-                  <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200 space-y-2 text-xs">
-                    <p className="font-bold text-gray-900 text-sm mb-2">
-                      Period: From <span className="underline">{reportData.fromDate}</span> to{' '}
-                      <span className="underline">{reportData.toDate}</span>
-                    </p>
-                    <div className="flex justify-between max-w-md">
-                      <span className="font-medium text-gray-700">Balance Forward at {reportData.fromDate}:</span>
-                      <span className="font-bold text-gray-900">{reportData.summary.balanceForwardFormatted}</span>
+                  {(() => {
+                    const isAll = Boolean(reportData.isAllTenants || selectedTenantId === 'All' || reportData.tenant?.id === 'all_tenants');
+                    return (
+                      <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200 space-y-2 text-xs">
+                        <p className="font-bold text-gray-900 text-sm mb-2">
+                          Period: From <span className="underline">{reportData.fromDate}</span> to{' '}
+                          <span className="underline">{reportData.toDate}</span>
+                        </p>
+                        <div className="flex justify-between max-w-md">
+                          <span className="font-medium text-gray-700">
+                            {isAll ? 'Opening / Forward Balance:' : `Balance Forward at ${reportData.fromDate}:`}
+                          </span>
+                          <span className="font-bold text-gray-900">{reportData.summary.balanceForwardFormatted}</span>
+                        </div>
+                        <div className="flex justify-between max-w-md">
+                          <span className="font-medium text-gray-700">
+                            {isAll ? 'Total Rent Charged across Portfolio:' : 'Total Rent Due for Period:'}
+                          </span>
+                          <span className="font-bold text-gray-900">{reportData.summary.totalRentDueFormatted}</span>
+                        </div>
+                        <div className="flex justify-between max-w-md">
+                          <span className="font-medium text-gray-700">Total Payments Received:</span>
+                          <span className="font-bold text-emerald-700">{reportData.summary.totalPaymentsFormatted}</span>
+                        </div>
+                        <div className="flex justify-between max-w-md pt-1 border-t border-gray-200 font-bold text-gray-900">
+                          <span>Total Outstanding Balance at {reportData.toDate}:</span>
+                          <span className="text-rose-600 font-extrabold">{reportData.summary.totalOutstandingFormatted}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* VIEW SWITCH TABS (STATEMENT LEDGER vs PAYMENTS LIST) */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-3 no-print">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveLedgerTab('statement')}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
+                          activeLedgerTab === 'statement'
+                            ? 'bg-[#04A26F] text-white shadow-xs'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        Statement Ledger (Running Balance)
+                      </button>
+                      {reportData.payments && reportData.payments.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveLedgerTab('payments')}
+                          className={`px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
+                            activeLedgerTab === 'payments'
+                              ? 'bg-[#04A26F] text-white shadow-xs'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          Payment Collections List ({reportData.payments.length})
+                        </button>
+                      )}
                     </div>
-                    <div className="flex justify-between max-w-md">
-                      <span className="font-medium text-gray-700">Total Rent Due for Period:</span>
-                      <span className="font-bold text-gray-900">{reportData.summary.totalRentDueFormatted}</span>
-                    </div>
-                    <div className="flex justify-between max-w-md pt-1 border-t border-gray-200 font-bold text-gray-900">
-                      <span>Total Amount Due at {reportData.toDate}:</span>
-                      <span>{reportData.summary.totalAmountDueFormatted}</span>
-                    </div>
+                    <span className="text-xs text-gray-500 font-medium">
+                      {activeLedgerTab === 'statement'
+                        ? `${reportData.transactions?.length || 0} ledger transactions`
+                        : `${reportData.payments?.length || 0} payment receipts`}
+                    </span>
                   </div>
 
-                  {/* STATEMENT TRANSACTIONS TABLE */}
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-bold text-gray-900">Statement Transactions</h3>
-                    <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                      <table className="w-full text-left border-collapse text-xs">
-                        <thead>
-                          <tr className="bg-gray-100 border-b border-gray-200 font-bold text-gray-800 uppercase tracking-wider">
-                            <th className="py-2.5 px-3">Date</th>
-                            <th className="py-2.5 px-3">Reference</th>
-                            <th className="py-2.5 px-3">Description</th>
-                            <th className="py-2.5 px-3">Payee</th>
-                            <th className="py-2.5 px-3 text-right">Debit</th>
-                            <th className="py-2.5 px-3 text-right">Credit</th>
-                            <th className="py-2.5 px-3 text-right">Balance</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200 font-mono">
-                          {reportData.transactions.map((row, idx) => (
-                            <tr key={idx} className="hover:bg-gray-50">
-                              <td className="py-2.5 px-3 font-sans font-medium whitespace-nowrap">{row.date}</td>
-                              <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">{row.reference || '—'}</td>
-                              <td className="py-2.5 px-3 font-sans text-gray-900">{row.description}</td>
-                              <td className="py-2.5 px-3 font-sans text-gray-700">{row.payee || '—'}</td>
-                              <td className="py-2.5 px-3 text-right font-bold text-gray-900">{row.debitFormatted}</td>
-                              <td className="py-2.5 px-3 text-right font-bold text-emerald-700">{row.creditFormatted}</td>
-                              <td className="py-2.5 px-3 text-right font-bold text-gray-900">{row.balanceFormatted}</td>
+                  {/* 1. STATEMENT TRANSACTIONS TABLE */}
+                  {activeLedgerTab === 'statement' && (
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Statement Ledger & Running Balance</h3>
+                      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-gray-100 border-b border-gray-200 font-bold text-gray-800 uppercase tracking-wider">
+                              <th className="py-2.5 px-3">Date</th>
+                              <th className="py-2.5 px-3">Reference</th>
+                              <th className="py-2.5 px-3">Description</th>
+                              <th className="py-2.5 px-3">{selectedTenantId === 'All' ? 'Tenant / Payee' : 'Payee'}</th>
+                              <th className="py-2.5 px-3 text-right">Debit</th>
+                              <th className="py-2.5 px-3 text-right">Credit</th>
+                              <th className="py-2.5 px-3 text-right">Balance</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200 font-mono">
+                            {reportData.transactions.map((row, idx) => (
+                              <tr key={idx} className="hover:bg-gray-50">
+                                <td className="py-2.5 px-3 font-sans font-medium whitespace-nowrap">{row.date}</td>
+                                <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">{row.reference || '—'}</td>
+                                <td className="py-2.5 px-3 font-sans text-gray-900">{row.description}</td>
+                                <td className="py-2.5 px-3 font-sans text-gray-700">{row.payee || '—'}</td>
+                                <td className="py-2.5 px-3 text-right font-bold text-gray-900">{row.debitFormatted}</td>
+                                <td className="py-2.5 px-3 text-right font-bold text-emerald-700">{row.creditFormatted}</td>
+                                <td className="py-2.5 px-3 text-right font-bold text-gray-900">{row.balanceFormatted}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* 2. FLAT PAYMENTS COLLECTION TABLE */}
+                  {activeLedgerTab === 'payments' && reportData.payments && (
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Payment Receipts & Collections</h3>
+                      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-gray-100 border-b border-gray-200 font-bold text-gray-800 uppercase tracking-wider">
+                              <th className="py-2.5 px-3">Due Date</th>
+                              <th className="py-2.5 px-3">Paid Date</th>
+                              <th className="py-2.5 px-3">Tenant</th>
+                              <th className="py-2.5 px-3">Property</th>
+                              <th className="py-2.5 px-3 text-right">Amount</th>
+                              <th className="py-2.5 px-3 text-right">Paid</th>
+                              <th className="py-2.5 px-3 text-right">Remaining</th>
+                              <th className="py-2.5 px-3 text-center">Method</th>
+                              <th className="py-2.5 px-3 text-center">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {reportData.payments.map((p, idx) => (
+                              <tr key={p.id || idx} className="hover:bg-gray-50">
+                                <td className="py-2.5 px-3 font-medium whitespace-nowrap">{p.dueDate || '—'}</td>
+                                <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">{p.paidDate || '—'}</td>
+                                <td className="py-2.5 px-3 font-semibold text-gray-900">{p.tenantName}</td>
+                                <td className="py-2.5 px-3 text-gray-700">{p.propertyName}</td>
+                                <td className="py-2.5 px-3 text-right font-bold text-gray-900 font-mono">{formatCurrency(p.amount || 0)}</td>
+                                <td className="py-2.5 px-3 text-right font-bold text-emerald-700 font-mono">{formatCurrency(p.paidAmount || 0)}</td>
+                                <td className="py-2.5 px-3 text-right font-bold text-rose-600 font-mono">{formatCurrency(p.remainingAmount || 0)}</td>
+                                <td className="py-2.5 px-3 text-center text-gray-600">{p.paymentMethod || 'Cash'}</td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    p.status === 'Paid'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : p.status === 'Partial'
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : 'bg-rose-100 text-rose-800'
+                                  }`}>
+                                    {p.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
 
                   {/* STATEMENT FOOTER TOTALS */}
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-2 text-xs max-w-md ml-auto text-right">
@@ -1421,32 +1498,49 @@ export function ReportsPage() {
                     <p className="text-xs text-gray-500 mt-1">Generated Date: {reportData.reportDate}</p>
                   </div>
 
-                  {/* Unit Report Overview Header Card */}
-                  {selectedReportType === 'unit-report' && reportData.unit && (
+                  {/* Single Property Overview Header Card */}
+                  {selectedReportType === 'property-report' && reportData.property && reportData.property._id !== 'all_props' && (
                     <div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100 space-y-3 text-xs text-left">
                       <div className="flex justify-between items-start border-b border-emerald-100 pb-3">
                         <div>
-                          <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Unit Report Overview</span>
-                          <h3 className="text-xl font-black text-slate-900 mt-0.5">{reportData.unit.name}</h3>
-                          <p className="text-xs text-slate-500 font-semibold">{reportData.property?.name || 'Property'} • {reportData.unit.type} {reportData.unit.floor ? `(${reportData.unit.floor})` : ''}</p>
+                          <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Individual Property Overview</span>
+                          <h3 className="text-xl font-black text-slate-900 mt-0.5">{reportData.property.name || reportData.property.title}</h3>
+                          <p className="text-xs text-slate-500 font-semibold">
+                            {reportData.property.address || 'United Kingdom'} &bull; {reportData.property.type} &bull; Landlord: {reportData.property.landlordName || 'N/A'}
+                          </p>
                         </div>
-                        <span className="px-3 py-1 rounded-full text-xs font-black bg-white border border-emerald-200 text-[#04A26F]">
-                          {reportData.unit.status || 'Available'}
+                        <span className={`px-3 py-1 rounded-full text-xs font-black border ${
+                          reportData.unitsBreakdown?.[0]?.status === 'Occupied'
+                            ? 'bg-emerald-100 border-emerald-300 text-emerald-800'
+                            : 'bg-amber-100 border-amber-300 text-amber-800'
+                        }`}>
+                          {reportData.unitsBreakdown?.[0]?.status || 'Available'}
                         </span>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-slate-700">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-slate-700">
                         <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Monthly Rent / Agreed Price</span>
-                          <span className="text-base font-extrabold text-[#04A26F]">{formatCurrency(reportData.unit.price)}</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Monthly Rent</span>
+                          <span className="text-base font-extrabold text-[#04A26F]">
+                            {formatCurrency(reportData.unitsBreakdown?.[0]?.monthlyRent || reportData.summary?.totalRent || 0)}
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Assigned Tenant</span>
-                          <span className="text-xs font-extrabold text-slate-900">{reportData.tenant?.name || 'No Active Tenant'}</span>
-                          {reportData.tenant?.phone && <span className="text-[11px] text-slate-500 block">{reportData.tenant.phone}</span>}
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Active Tenant</span>
+                          <span className="text-xs font-extrabold text-slate-900">
+                            {reportData.unitsBreakdown?.[0]?.tenantName || 'Vacant / Available'}
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Property Address</span>
-                          <span className="text-xs font-semibold text-slate-700">{reportData.property?.address || 'N/A'}</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Assigned Agent</span>
+                          <span className="text-xs font-semibold text-slate-700">
+                            {reportData.unitsBreakdown?.[0]?.agentName || 'Direct / None'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Net Position</span>
+                          <span className="text-base font-extrabold text-slate-900">
+                            {reportData.summary?.netPositionFormatted || formatCurrency(reportData.summary?.netPosition || 0)}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1535,8 +1629,170 @@ export function ReportsPage() {
                     </div>
                   )}
 
+                  {/* Dedicated Summary Cards for Agent Report */}
+                  {selectedReportType === 'agent-report' && reportData.summary && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-6">
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Assigned Operating Units</span>
+                        <span className="text-2xl font-black text-gray-900 mt-1 block">
+                          {reportData.summary.assignedUnitsCount || 0}
+                          <span className="text-xs font-normal text-gray-500 ml-1.5">
+                            ({reportData.summary.occupiedUnitsCount || 0} active)
+                          </span>
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">Properties under management</span>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Expected Rent</span>
+                        <span className="text-2xl font-black text-blue-600 mt-1 block">
+                          {formatCurrency(reportData.summary.expectedAmount || reportData.summary.totalExpected || 0)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">Gross collections expected</span>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Approved Expenses</span>
+                        <span className="text-2xl font-black text-amber-600 mt-1 block">
+                          {formatCurrency(reportData.summary.expenseAmount || reportData.summary.totalExpenses || 0)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">Repairs & deductions</span>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Total Received</span>
+                        <span className="text-2xl font-black text-[#04A26F] mt-1 block">
+                          {formatCurrency(reportData.summary.paidAmount || reportData.summary.totalReceived || 0)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">
+                          Outstanding: {formatCurrency(reportData.summary.remainingAmount || reportData.summary.totalOutstanding || 0)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dedicated Summary Cards for Income Report */}
+                  {selectedReportType === 'income-report' && reportData.summary && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-6 text-left">
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Expected Rental Income</span>
+                        <span className="text-2xl font-black text-blue-600 mt-1 block">
+                          {reportData.summary.totalExpectedFormatted || formatCurrency(reportData.summary.totalExpected || 0)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">Total rent billed in period</span>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Received Rental Income</span>
+                        <span className="text-2xl font-black text-emerald-600 mt-1 block">
+                          {reportData.summary.totalReceivedFormatted || formatCurrency(reportData.summary.totalReceived || 0)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">Actual collected amount</span>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Outstanding Unpaid</span>
+                        <span className="text-2xl font-black text-rose-600 mt-1 block">
+                          {reportData.summary.totalOutstandingFormatted || formatCurrency(reportData.summary.totalOutstanding || 0)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">Pending tenant dues</span>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Collection Rate</span>
+                        <span className="text-2xl font-black text-teal-700 mt-1 block">
+                          {reportData.summary.collectionRate}%
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">Overall collection efficiency</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dedicated Summary Cards for Invoice Report */}
+                  {selectedReportType === 'invoice-report' && reportData.summary && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-6 text-left">
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Total Invoices Issued</span>
+                        <span className="text-2xl font-black text-slate-900 mt-1 block">
+                          {reportData.summary.totalInvoices || 0}
+                          <span className="text-xs font-normal text-slate-500 ml-1.5">
+                            ({reportData.summary.paidCount || 0} paid)
+                          </span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">Issued invoices in period</span>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Total Invoiced Amount</span>
+                        <span className="text-2xl font-black text-amber-600 mt-1 block">
+                          {reportData.summary.totalInvoicedFormatted || formatCurrency(reportData.summary.totalInvoiced || 0)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">Gross billed charges</span>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Total Collected</span>
+                        <span className="text-2xl font-black text-[#04A26F] mt-1 block">
+                          {reportData.summary.totalPaidFormatted || formatCurrency(reportData.summary.totalPaid || 0)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">Cleared invoices amount</span>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Total Outstanding</span>
+                        <span className="text-2xl font-black text-rose-600 mt-1 block">
+                          {reportData.summary.totalOutstandingFormatted || formatCurrency(reportData.summary.totalOutstanding || 0)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">
+                          {reportData.summary.overdueCount || 0} overdue invoices
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dedicated Summary Cards for Financial Summary */}
+                  {selectedReportType === 'financial-summary' && reportData.summary && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-6 text-left">
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Gross Rental Income</span>
+                        <span className="text-2xl font-black text-blue-600 mt-1 block">
+                          {reportData.summary.grossIncomeFormatted || reportData.summary.totalRentDueFormatted || formatCurrency(reportData.summary.grossIncome || reportData.summary.totalRentDue || 0)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">Total rent billed in period</span>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Rent Cleared / Received</span>
+                        <span className="text-2xl font-black text-emerald-600 mt-1 block">
+                          {reportData.summary.totalReceivedFormatted || reportData.summary.totalPaymentsReceivedFormatted || formatCurrency(reportData.summary.totalReceived || reportData.summary.totalPaymentsReceived || 0)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">
+                          Arrears: {reportData.summary.totalOutstandingRentFormatted || formatCurrency(reportData.summary.totalOutstandingRent || 0)}
+                        </span>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Operating Expenses</span>
+                        <span className="text-2xl font-black text-rose-600 mt-1 block">
+                          {reportData.summary.totalExpensesFormatted || formatCurrency(reportData.summary.totalExpenses || 0)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">Repairs & deductions</span>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
+                        <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">Net Operating Position</span>
+                        <span className="text-2xl font-black text-teal-700 mt-1 block">
+                          {reportData.summary.netIncomeFormatted || reportData.summary.netFinancialPositionFormatted || formatCurrency(reportData.summary.netIncome || reportData.summary.netFinancialPosition || 0)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5">
+                          Collection Rate: {reportData.summary.collectionRate}%
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Summary Cards for other reports */}
-                  {selectedReportType !== 'mortgage-report' && reportData.summary && (
+                  {selectedReportType !== 'mortgage-report' && selectedReportType !== 'agent-report' && selectedReportType !== 'income-report' && selectedReportType !== 'invoice-report' && selectedReportType !== 'financial-summary' && reportData.summary && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       {Object.entries(reportData.summary).map(([key, value]) => {
                         if (typeof value === 'object') return null;
@@ -1557,7 +1813,7 @@ export function ReportsPage() {
                   )}
 
                   {/* Tables Preview */}
-                  {reportData.properties && (
+                  {reportData.properties && selectedReportType !== 'financial-summary' && (
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-xs border-collapse">
                         <thead>
@@ -1588,32 +1844,56 @@ export function ReportsPage() {
                     </div>
                   )}
 
-                  {reportData.settlements && (
-                    <div className="overflow-x-auto">
+                  {/* Agent Assigned Operating Units Table */}
+                  {reportData.assignedUnits && reportData.assignedUnits.length > 0 && (
+                    <div className="overflow-x-auto border border-gray-200 rounded-xl mb-6 bg-white">
+                      <div className="px-4 py-3 bg-slate-50 border-b border-gray-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-[#04A26F]" />
+                          <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                            Assigned Operating Units & Properties ({reportData.assignedUnits.length})
+                          </h4>
+                        </div>
+                        <span className="text-[11px] text-gray-500 font-medium">
+                          {reportData.summary?.occupiedUnitsCount || 0} Occupied &bull; {reportData.summary?.vacantUnitsCount || 0} Vacant
+                        </span>
+                      </div>
                       <table className="w-full text-left text-xs border-collapse">
                         <thead>
-                          <tr className="bg-gray-100 font-bold border-b border-gray-200">
-                            <th className="p-2">Month</th>
-                            <th className="p-2">Property</th>
-                            <th className="p-2">Tenant</th>
-                            <th className="p-2">Expected</th>
-                            <th className="p-2">Expense</th>
-                            <th className="p-2">Net</th>
-                            <th className="p-2">Received</th>
-                            <th className="p-2">Status</th>
+                          <tr className="bg-gray-100 font-bold border-b border-gray-200 text-gray-700">
+                            <th className="p-2.5">#</th>
+                            <th className="p-2.5">Property / Unit</th>
+                            <th className="p-2.5">Type</th>
+                            <th className="p-2.5">Status</th>
+                            <th className="p-2.5">Active Tenant</th>
+                            <th className="p-2.5 text-right">Rent (£)</th>
+                            <th className="p-2.5 text-right">Agent Fee (£)</th>
+                            <th className="p-2.5">Tenancy Start</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                          {reportData.settlements.map((s) => (
-                            <tr key={s.id}>
-                              <td className="p-2 font-bold">{s.monthYear}</td>
-                              <td className="p-2">{s.property}</td>
-                              <td className="p-2">{s.tenant}</td>
-                              <td className="p-2">{formatCurrency(s.expectedAmount)}</td>
-                              <td className="p-2 text-amber-700">{formatCurrency(s.expenseAmount)}</td>
-                              <td className="p-2 font-bold">{formatCurrency(s.netAmount)}</td>
-                              <td className="p-2 text-emerald-700 font-bold">{formatCurrency(s.paidAmount)}</td>
-                              <td className="p-2">{s.status}</td>
+                          {reportData.assignedUnits.map((u, idx) => (
+                            <tr key={u.propertyId || idx} className="hover:bg-gray-50/80">
+                              <td className="p-2.5 text-gray-400 font-mono">{idx + 1}</td>
+                              <td className="p-2.5 font-bold text-gray-900">{u.propertyName}</td>
+                              <td className="p-2.5 text-gray-600">{u.type}</td>
+                              <td className="p-2.5">
+                                <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                                  u.status === 'Occupied' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                                }`}>
+                                  {u.status}
+                                </span>
+                              </td>
+                              <td className="p-2.5 text-gray-800 font-medium">
+                                {u.tenantName === 'Vacant' ? (
+                                  <span className="text-gray-400 italic">Vacant</span>
+                                ) : (
+                                  <span className="text-gray-900 font-semibold">{u.tenantName}</span>
+                                )}
+                              </td>
+                              <td className="p-2.5 text-right font-semibold text-gray-900">{formatCurrency(u.monthlyRent)}</td>
+                              <td className="p-2.5 text-right font-bold text-[#04A26F]">{formatCurrency(u.agentFee)}</td>
+                              <td className="p-2.5 text-gray-500 font-mono text-[11px]">{u.startDate}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1621,7 +1901,573 @@ export function ReportsPage() {
                     </div>
                   )}
 
-                  {reportData.payments && (
+                  {/* Agent Settlements Table */}
+                  {reportData.settlements && (
+                    <div className="overflow-x-auto border border-gray-200 rounded-xl mb-6 bg-white">
+                      <div className="px-4 py-3 bg-slate-50 border-b border-gray-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Receipt className="w-4 h-4 text-[#04A26F]" />
+                          <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                            Monthly Settlements & Collections Ledger ({reportData.settlements.length})
+                          </h4>
+                        </div>
+                      </div>
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-gray-100 font-bold border-b border-gray-200 text-gray-700">
+                            <th className="p-2.5">Month</th>
+                            <th className="p-2.5">Property</th>
+                            <th className="p-2.5">Tenant</th>
+                            <th className="p-2.5 text-right">Expected</th>
+                            <th className="p-2.5 text-right">Expense</th>
+                            <th className="p-2.5 text-right">Net</th>
+                            <th className="p-2.5 text-right">Received</th>
+                            <th className="p-2.5 text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {reportData.settlements.length === 0 ? (
+                            <tr>
+                              <td colSpan="8" className="p-4 text-center text-gray-400 italic">
+                                No settlement records recorded for this period.
+                              </td>
+                            </tr>
+                          ) : (
+                            reportData.settlements.map((s) => (
+                              <tr key={s.id} className="hover:bg-gray-50">
+                                <td className="p-2.5 font-bold text-gray-900">{s.monthYear}</td>
+                                <td className="p-2.5 text-gray-700">{s.property}</td>
+                                <td className="p-2.5 text-gray-700">{s.tenant}</td>
+                                <td className="p-2.5 text-right">{formatCurrency(s.expectedAmount)}</td>
+                                <td className="p-2.5 text-right text-amber-700">{formatCurrency(s.expenseAmount)}</td>
+                                <td className="p-2.5 text-right font-bold text-gray-900">{formatCurrency(s.netAmount)}</td>
+                                <td className="p-2.5 text-right text-emerald-700 font-bold">{formatCurrency(s.paidAmount)}</td>
+                                <td className="p-2.5 text-center">
+                                  <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                                    s.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {s.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Income Performance Table */}
+                  {selectedReportType === 'income-report' && reportData.rows && (
+                    <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white shadow-2xs">
+                      <div className="px-4 py-3 bg-slate-50 border-b border-gray-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Wallet className="w-4 h-4 text-emerald-600" />
+                          <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                            Monthly Rental Income Performance ({reportData.rows.length} billing periods)
+                          </h4>
+                        </div>
+                      </div>
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-gray-100 font-bold border-b border-gray-200 text-gray-700">
+                            <th className="p-3">Period / Month</th>
+                            <th className="p-3 text-center">Year</th>
+                            <th className="p-3 text-right">Expected Income</th>
+                            <th className="p-3 text-right">Received Income</th>
+                            <th className="p-3 text-right">Outstanding</th>
+                            <th className="p-3 text-center">Collection Rate</th>
+                            <th className="p-3 text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {reportData.rows.length === 0 ? (
+                            <tr>
+                              <td colSpan="7" className="p-6 text-center text-gray-400 italic">
+                                No rental income records found for this period.
+                              </td>
+                            </tr>
+                          ) : (
+                            reportData.rows.map((r, idx) => (
+                              <tr key={idx} className="hover:bg-gray-50">
+                                <td className="p-3 font-bold text-gray-900">{r.monthName}</td>
+                                <td className="p-3 text-center text-gray-600 font-mono">{r.year}</td>
+                                <td className="p-3 text-right font-bold text-blue-700 font-mono">{r.expectedFormatted || formatCurrency(r.expected || 0)}</td>
+                                <td className="p-3 text-right font-bold text-emerald-700 font-mono">{r.receivedFormatted || formatCurrency(r.received || 0)}</td>
+                                <td className="p-3 text-right font-bold text-rose-600 font-mono">{r.outstandingFormatted || formatCurrency(r.outstanding || 0)}</td>
+                                <td className="p-3 text-center font-bold text-gray-800">{r.collectionRate}%</td>
+                                <td className="p-3 text-center">
+                                  <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                    r.collectionRate >= 100
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : r.collectionRate > 0
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : 'bg-rose-100 text-rose-800'
+                                  }`}>
+                                    {r.collectionRate >= 100 ? 'Collected' : r.collectionRate > 0 ? 'Partial' : 'Overdue'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                          {/* Totals Row */}
+                          {reportData.summary && (
+                            <tr className="bg-slate-100 border-t-2 border-slate-300 font-extrabold text-slate-900 text-xs">
+                              <td className="p-3" colSpan="2">TOTAL PERFORMANCE</td>
+                              <td className="p-3 text-right font-mono text-blue-700">
+                                {reportData.summary.totalExpectedFormatted || formatCurrency(reportData.summary.totalExpected || 0)}
+                              </td>
+                              <td className="p-3 text-right font-mono text-emerald-700">
+                                {reportData.summary.totalReceivedFormatted || formatCurrency(reportData.summary.totalReceived || 0)}
+                              </td>
+                              <td className="p-3 text-right font-mono text-rose-600">
+                                {reportData.summary.totalOutstandingFormatted || formatCurrency(reportData.summary.totalOutstanding || 0)}
+                              </td>
+                              <td className="p-3 text-center font-mono">
+                                {reportData.summary.collectionRate}%
+                              </td>
+                              <td className="p-3 text-center">
+                                <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                  (reportData.summary.collectionRate || 0) >= 100
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}>
+                                  {(reportData.summary.collectionRate || 0) >= 100 ? 'Collected' : 'Pending'}
+                                </span>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Invoice Report Table */}
+                  {selectedReportType === 'invoice-report' && reportData.rows && (
+                    <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white shadow-2xs">
+                      <div className="px-4 py-3 bg-slate-50 border-b border-gray-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-slate-700" />
+                          <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                            Issued Rent Invoices Ledger ({reportData.rows.length} invoices)
+                          </h4>
+                        </div>
+                      </div>
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-gray-100 font-bold border-b border-gray-200 text-gray-700">
+                            <th className="p-3">Invoice #</th>
+                            <th className="p-3">Due Date</th>
+                            <th className="p-3">Tenant</th>
+                            <th className="p-3">Property</th>
+                            <th className="p-3 text-right">Invoiced Amount</th>
+                            <th className="p-3 text-right">Paid Amount</th>
+                            <th className="p-3 text-right">Outstanding</th>
+                            <th className="p-3 text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {reportData.rows.length === 0 ? (
+                            <tr>
+                              <td colSpan="8" className="p-6 text-center text-gray-400 italic">
+                                No rent invoices recorded for this period.
+                              </td>
+                            </tr>
+                          ) : (
+                            reportData.rows.map((inv) => (
+                              <tr key={inv.id || inv.invoiceNumber} className="hover:bg-gray-50">
+                                <td className="p-3 font-mono font-bold text-gray-900">{inv.invoiceNumber}</td>
+                                <td className="p-3 text-gray-600 whitespace-nowrap">{inv.dueDate}</td>
+                                <td className="p-3 font-semibold text-gray-900">{inv.tenantName}</td>
+                                <td className="p-3 text-gray-700">{inv.propertyName}</td>
+                                <td className="p-3 text-right font-bold text-gray-900 font-mono">
+                                  {inv.amountFormatted || formatCurrency(inv.amount || 0)}
+                                </td>
+                                <td className="p-3 text-right font-bold text-emerald-700 font-mono">
+                                  {inv.paidAmountFormatted || formatCurrency(inv.paidAmount || 0)}
+                                </td>
+                                <td className="p-3 text-right font-bold text-rose-600 font-mono">
+                                  {inv.outstandingFormatted || formatCurrency(inv.outstanding || inv.remainingAmount || 0)}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                    inv.status === 'Paid' || inv.status === 'Received'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : inv.status === 'Partial'
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : 'bg-rose-100 text-rose-800'
+                                  }`}>
+                                    {inv.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                          {/* Totals Row */}
+                          {reportData.summary && (
+                            <tr className="bg-slate-100 border-t-2 border-slate-300 font-extrabold text-slate-900 text-xs">
+                              <td className="p-3" colSpan="4">INVOICE TOTALS</td>
+                              <td className="p-3 text-right font-mono text-gray-900">
+                                {reportData.summary.totalInvoicedFormatted || formatCurrency(reportData.summary.totalInvoiced || 0)}
+                              </td>
+                              <td className="p-3 text-right font-mono text-emerald-700">
+                                {reportData.summary.totalPaidFormatted || formatCurrency(reportData.summary.totalPaid || 0)}
+                              </td>
+                              <td className="p-3 text-right font-mono text-rose-600">
+                                {reportData.summary.totalOutstandingFormatted || formatCurrency(reportData.summary.totalOutstanding || 0)}
+                              </td>
+                              <td className="p-3 text-center">
+                                {reportData.summary.paidCount || 0} Paid / {reportData.summary.overdueCount || 0} Overdue
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Financial Summary Performance & Category Ledger Table */}
+                  {selectedReportType === 'financial-summary' && reportData.rows && (
+                    <div className="space-y-6">
+                      {/* Section Navigation Tabs */}
+                      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-3">
+                        <button
+                          type="button"
+                          onClick={() => setFinancialSummaryTab('all')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            financialSummaryTab === 'all'
+                              ? 'bg-slate-900 text-white shadow-xs'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          All Sections
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFinancialSummaryTab('overview')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            financialSummaryTab === 'overview'
+                              ? 'bg-[#04A26F] text-white shadow-xs'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          Executive Overview ({reportData.rows.length})
+                        </button>
+                        {reportData.rentTransactions && reportData.rentTransactions.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setFinancialSummaryTab('rent')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                              financialSummaryTab === 'rent'
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            Rent Collections ({reportData.rentTransactions.length})
+                          </button>
+                        )}
+                        {reportData.expenseTransactions && reportData.expenseTransactions.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setFinancialSummaryTab('expenses')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                              financialSummaryTab === 'expenses'
+                                ? 'bg-rose-600 text-white shadow-xs'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            Operating Expenses ({reportData.expenseTransactions.length})
+                          </button>
+                        )}
+                        {reportData.properties && reportData.properties.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setFinancialSummaryTab('properties')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                              financialSummaryTab === 'properties'
+                                ? 'bg-amber-600 text-white shadow-xs'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            Property Performance ({reportData.properties.length})
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Section 1: Executive Overview */}
+                      {(financialSummaryTab === 'all' || financialSummaryTab === 'overview') && (
+                        <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white shadow-2xs">
+                          <div className="px-4 py-3 bg-slate-50 border-b border-gray-200 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <PieChart className="w-4 h-4 text-[#04A26F]" />
+                              <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                                Section 1: Executive Financial Performance Ledger
+                              </h4>
+                            </div>
+                            <span className="text-[11px] text-gray-500 font-medium">
+                              {reportData.rows.length} Financial Categories
+                            </span>
+                          </div>
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-gray-100 font-bold border-b border-gray-200 text-gray-700">
+                                <th className="p-3">Financial Category</th>
+                                <th className="p-3 text-right">Expected (£)</th>
+                                <th className="p-3 text-right">Actual Received / Paid (£)</th>
+                                <th className="p-3 text-right">Net Position (£)</th>
+                                <th className="p-3">Ledger Notes / Audit Details</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {reportData.rows.map((r, idx) => (
+                                <tr key={idx} className="hover:bg-gray-50">
+                                  <td className="p-3 font-bold text-gray-900">{r.category}</td>
+                                  <td className="p-3 text-right font-mono text-gray-800">
+                                    {r.expectedFormatted || formatCurrency(r.expected || 0)}
+                                  </td>
+                                  <td className="p-3 text-right font-mono text-gray-800 font-semibold">
+                                    {r.receivedFormatted || formatCurrency(r.received || 0)}
+                                  </td>
+                                  <td className={`p-3 text-right font-mono font-bold ${
+                                    (r.net || 0) >= 0 ? 'text-emerald-700' : 'text-rose-600'
+                                  }`}>
+                                    {r.netFormatted || formatCurrency(r.net || 0)}
+                                  </td>
+                                  <td className="p-3 text-gray-500 text-[11px]">{r.notes || '—'}</td>
+                                </tr>
+                              ))}
+                              {/* Totals Row */}
+                              {reportData.summary && (
+                                <tr className="bg-slate-100 border-t-2 border-slate-300 font-extrabold text-slate-900 text-xs">
+                                  <td className="p-3">NET FINANCIAL POSITION</td>
+                                  <td className="p-3 text-right font-mono text-gray-900">
+                                    {reportData.summary.grossIncomeFormatted || reportData.summary.totalRentDueFormatted || formatCurrency(reportData.summary.grossIncome || reportData.summary.totalRentDue || 0)}
+                                  </td>
+                                  <td className="p-3 text-right font-mono text-emerald-700">
+                                    {reportData.summary.totalReceivedFormatted || reportData.summary.totalPaymentsReceivedFormatted || formatCurrency(reportData.summary.totalReceived || reportData.summary.totalPaymentsReceived || 0)}
+                                  </td>
+                                  <td className={`p-3 text-right font-mono text-sm font-black ${
+                                    (reportData.summary.netIncome || reportData.summary.netFinancialPosition || 0) >= 0 ? 'text-emerald-700' : 'text-rose-600'
+                                  }`}>
+                                    {reportData.summary.netIncomeFormatted || reportData.summary.netFinancialPositionFormatted || formatCurrency(reportData.summary.netIncome || reportData.summary.netFinancialPosition || 0)}
+                                  </td>
+                                  <td className="p-3 text-emerald-700 font-medium text-[11px]">
+                                    ✓ {reportData.summary.collectionRate || 0}% Cleared Collection Efficiency
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Section 2: Itemized Rent Payment Collections */}
+                      {(financialSummaryTab === 'all' || financialSummaryTab === 'rent') && reportData.rentTransactions && reportData.rentTransactions.length > 0 && (
+                        <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white shadow-2xs">
+                          <div className="px-4 py-3 bg-slate-50 border-b border-gray-200 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Receipt className="w-4 h-4 text-blue-600" />
+                              <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                                Section 2: Itemized Rent Payment Collections ({reportData.rentTransactions.length} Transactions)
+                              </h4>
+                            </div>
+                            <span className="text-[11px] text-gray-500 font-medium">
+                              Total Due: {reportData.summary?.totalRentDueFormatted || reportData.summary?.grossIncomeFormatted || '£0.00'}
+                            </span>
+                          </div>
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-gray-100 font-bold border-b border-gray-200 text-gray-700">
+                                <th className="p-3 text-center">Due Date</th>
+                                <th className="p-3">Tenant</th>
+                                <th className="p-3">Property</th>
+                                <th className="p-3 text-right">Rent Due (£)</th>
+                                <th className="p-3 text-right">Paid (£)</th>
+                                <th className="p-3 text-right">Arrears (£)</th>
+                                <th className="p-3 text-center">Method</th>
+                                <th className="p-3 text-center">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {reportData.rentTransactions.map((pm, idx) => (
+                                <tr key={pm.id || idx} className="hover:bg-gray-50">
+                                  <td className="p-3 text-center text-gray-600 font-mono text-[11px]">
+                                    {pm.dateFormatted || pm.date || '—'}
+                                  </td>
+                                  <td className="p-3 font-bold text-gray-900">{pm.tenantName}</td>
+                                  <td className="p-3 text-gray-700">{pm.propertyName}</td>
+                                  <td className="p-3 text-right font-mono text-gray-900">
+                                    {pm.amountFormatted || formatCurrency(pm.amount || 0)}
+                                  </td>
+                                  <td className="p-3 text-right font-mono text-emerald-700 font-semibold">
+                                    {pm.paidAmountFormatted || formatCurrency(pm.paidAmount || 0)}
+                                  </td>
+                                  <td className={`p-3 text-right font-mono font-bold ${
+                                    (pm.remainingAmount || 0) > 0 ? 'text-rose-600' : 'text-gray-400'
+                                  }`}>
+                                    {pm.remainingAmountFormatted || formatCurrency(pm.remainingAmount || 0)}
+                                  </td>
+                                  <td className="p-3 text-center text-gray-500 text-[11px]">{pm.paymentMethod || 'Bank Transfer'}</td>
+                                  <td className="p-3 text-center">
+                                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      pm.status === 'Paid' || pm.status === 'Received'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : pm.status === 'Partial'
+                                        ? 'bg-amber-100 text-amber-800'
+                                        : 'bg-rose-100 text-rose-800'
+                                    }`}>
+                                      {pm.status}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                              {/* Subtotal Row */}
+                              {reportData.summary && (
+                                <tr className="bg-slate-100 border-t-2 border-slate-300 font-extrabold text-slate-900 text-xs">
+                                  <td className="p-3 text-center">TOTALS</td>
+                                  <td className="p-3" colSpan="2">{reportData.rentTransactions.length} Transactions</td>
+                                  <td className="p-3 text-right font-mono text-gray-900">
+                                    {reportData.summary.totalRentDueFormatted || reportData.summary.grossIncomeFormatted || formatCurrency(reportData.summary.grossIncome || 0)}
+                                  </td>
+                                  <td className="p-3 text-right font-mono text-emerald-700">
+                                    {reportData.summary.totalReceivedFormatted || reportData.summary.totalPaymentsReceivedFormatted || formatCurrency(reportData.summary.totalReceived || 0)}
+                                  </td>
+                                  <td className="p-3 text-right font-mono text-rose-600">
+                                    {reportData.summary.totalOutstandingRentFormatted || formatCurrency(reportData.summary.totalOutstandingRent || 0)}
+                                  </td>
+                                  <td className="p-3 text-center text-[11px] text-gray-600" colSpan="2">
+                                    {reportData.summary.collectionRate || 0}% Cleared
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Section 3: Itemized Operating & Maintenance Expenses */}
+                      {(financialSummaryTab === 'all' || financialSummaryTab === 'expenses') && reportData.expenseTransactions && reportData.expenseTransactions.length > 0 && (
+                        <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white shadow-2xs">
+                          <div className="px-4 py-3 bg-slate-50 border-b border-gray-200 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="w-4 h-4 text-rose-600" />
+                              <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                                Section 3: Itemized Operating & Maintenance Expenses ({reportData.expenseTransactions.length} Transactions)
+                              </h4>
+                            </div>
+                            <span className="text-[11px] text-rose-600 font-bold">
+                              Total Expenses: {reportData.summary?.totalExpensesFormatted || '£0.00'}
+                            </span>
+                          </div>
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-gray-100 font-bold border-b border-gray-200 text-gray-700">
+                                <th className="p-3 text-center">Date</th>
+                                <th className="p-3">Property / Location</th>
+                                <th className="p-3">Type</th>
+                                <th className="p-3">Category</th>
+                                <th className="p-3">Payee / Supplier</th>
+                                <th className="p-3">Details</th>
+                                <th className="p-3 text-right">Amount (£)</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {reportData.expenseTransactions.map((exp, idx) => (
+                                <tr key={exp.id || idx} className="hover:bg-gray-50">
+                                  <td className="p-3 text-center text-gray-600 font-mono text-[11px]">
+                                    {exp.dateFormatted || exp.date || '—'}
+                                  </td>
+                                  <td className="p-3 font-bold text-gray-900">{exp.propertyName}</td>
+                                  <td className="p-3 text-gray-600 text-[11px]">{exp.type}</td>
+                                  <td className="p-3 text-gray-700 font-medium">{exp.category}</td>
+                                  <td className="p-3 text-gray-600">{exp.supplier}</td>
+                                  <td className="p-3 text-gray-500 text-[11px]">{exp.description}</td>
+                                  <td className="p-3 text-right font-mono font-bold text-rose-600">
+                                    {exp.amountFormatted || formatCurrency(exp.amount || 0)}
+                                  </td>
+                                </tr>
+                              ))}
+                              {/* Subtotal Row */}
+                              {reportData.summary && (
+                                <tr className="bg-slate-100 border-t-2 border-slate-300 font-extrabold text-slate-900 text-xs">
+                                  <td className="p-3 text-center">TOTALS</td>
+                                  <td className="p-3" colSpan="5">{reportData.expenseTransactions.length} Expenses</td>
+                                  <td className="p-3 text-right font-mono text-rose-600">
+                                    {reportData.summary.totalExpensesFormatted || formatCurrency(reportData.summary.totalExpenses || 0)}
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Section 4: Property Financial Performance Breakdown Table */}
+                      {(financialSummaryTab === 'all' || financialSummaryTab === 'properties') && reportData.properties && reportData.properties.length > 0 && (
+                        <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white shadow-2xs">
+                          <div className="px-4 py-3 bg-slate-50 border-b border-gray-200 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Building2 className="w-4 h-4 text-[#04A26F]" />
+                              <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                                Section 4: Portfolio Property Financial Performance ({reportData.properties.length} properties)
+                              </h4>
+                            </div>
+                          </div>
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-gray-100 font-bold border-b border-gray-200 text-gray-700">
+                                <th className="p-3">Property Name</th>
+                                <th className="p-3">Type</th>
+                                <th className="p-3 text-center">Units</th>
+                                <th className="p-3 text-right">Rent Due (£)</th>
+                                <th className="p-3 text-right">Received (£)</th>
+                                <th className="p-3 text-right">Expenses (£)</th>
+                                <th className="p-3 text-right">Net Cash Flow (£)</th>
+                                <th className="p-3 text-center">Collection %</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {reportData.properties.map((p, idx) => (
+                                <tr key={idx} className="hover:bg-gray-50">
+                                  <td className="p-3 font-bold text-gray-900">{p.name || p.propertyName}</td>
+                                  <td className="p-3 text-gray-600">{p.propertyType || p.type || 'Residential'}</td>
+                                  <td className="p-3 text-center text-gray-600 font-mono">{p.totalUnits || 1}</td>
+                                  <td className="p-3 text-right font-mono text-gray-900">
+                                    {p.totalRentDueFormatted || formatCurrency(p.totalRentDue || 0)}
+                                  </td>
+                                  <td className="p-3 text-right font-mono text-emerald-700 font-semibold">
+                                    {p.totalPaidFormatted || formatCurrency(p.totalPaid || 0)}
+                                  </td>
+                                  <td className="p-3 text-right font-mono text-rose-600">
+                                    {p.totalExpensesFormatted || formatCurrency(p.totalExpenses || 0)}
+                                  </td>
+                                  <td className={`p-3 text-right font-mono font-bold ${
+                                    (p.netIncome || 0) >= 0 ? 'text-emerald-700' : 'text-rose-600'
+                                  }`}>
+                                    {p.netIncomeFormatted || formatCurrency(p.netIncome || 0)}
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      p.collectionRate >= 100
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : p.collectionRate > 0
+                                        ? 'bg-amber-100 text-amber-800'
+                                        : 'bg-rose-100 text-rose-800'
+                                    }`}>
+                                      {p.collectionRate}%
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Fallback Payments Table for Other Reports */}
+                  {selectedReportType !== 'income-report' && selectedReportType !== 'invoice-report' && selectedReportType !== 'mortgage-report' && selectedReportType !== 'financial-summary' && reportData.payments && (
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-xs border-collapse">
                         <thead>
@@ -1650,7 +2496,8 @@ export function ReportsPage() {
                     </div>
                   )}
 
-                  {reportData.rows && (
+                  {/* Mortgage Facilities Table */}
+                  {selectedReportType === 'mortgage-report' && reportData.rows && (
                     <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-xs">
                       <table className="w-full text-left text-xs border-collapse">
                         <thead>

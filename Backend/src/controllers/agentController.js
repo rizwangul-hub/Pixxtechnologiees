@@ -1,5 +1,8 @@
 const Agent = require('../models/Agent');
+const Property = require('../models/Property');
 const Tenancy = require('../models/Tenancy');
+const Landlord = require('../models/Landlord');
+const Customer = require('../models/Customer');
 const AgentPayment = require('../models/AgentPayment');
 const AgentExpense = require('../models/AgentExpense');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../services/cloudinaryService');
@@ -102,13 +105,29 @@ const getAgents = async (req, res) => {
       agents.map(async (agent) => {
         const obj = agent.toObject();
 
-        const activeTenancies = await Tenancy.find({
+        const assignedProps = await Property.find({
           agentId: agent._id,
+          isArchived: { $ne: true },
+        });
+        const assignedPropIds = assignedProps.map((p) => p._id);
+
+        const activeTenancies = await Tenancy.find({
+          $or: [
+            { agentId: agent._id },
+            { propertyId: { $in: assignedPropIds } },
+          ],
           status: 'Active',
+          isArchived: { $ne: true },
         });
 
-        const assignedUnitsCount = activeTenancies.length;
-        const monthlyAmount = activeTenancies.reduce((sum, t) => sum + (t.companyMonthlyAmount || 0), 0);
+        const uniqueUnitIds = new Set([
+          ...assignedPropIds.map((id) => id.toString()),
+          ...activeTenancies.map((t) => t.propertyId?.toString()).filter(Boolean),
+        ]);
+
+        const assignedUnitsCount = uniqueUnitIds.size;
+        const monthlyAmount = activeTenancies.reduce((sum, t) => sum + (t.companyMonthlyAmount || 0), 0)
+          || assignedProps.reduce((sum, p) => sum + (p.agentFee || 0), 0);
 
         const payments = await AgentPayment.find({ agentId: agent._id });
         const totalReceived = payments.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
@@ -167,14 +186,56 @@ const getAgentById = async (req, res) => {
       });
     }
 
-    // 1. Assigned Active Units / Tenancies
-    const assignedTenancies = await Tenancy.find({
+    // 1. Assigned Operating Units / Tenancies (from Properties & Tenancies)
+    const assignedProps = await Property.find({
       agentId: agent._id,
+      isArchived: { $ne: true },
+    }).populate('landlordId', 'fullName name email');
+
+    const assignedPropIds = assignedProps.map((p) => p._id);
+
+    const activeTenancies = await Tenancy.find({
+      $or: [
+        { agentId: agent._id },
+        { propertyId: { $in: assignedPropIds } },
+      ],
       status: 'Active',
+      isArchived: { $ne: true },
     })
-      .populate('propertyId', 'propertyName name address type')
-      
+      .populate('propertyId', 'propertyName name address type assetType propertyType monthlyRent price agentFee')
       .populate('customerId', 'fullName name phone email');
+
+    const tenancyByPropId = new Map();
+    activeTenancies.forEach((t) => {
+      if (t.propertyId) {
+        const pid = (t.propertyId._id || t.propertyId).toString();
+        tenancyByPropId.set(pid, t);
+      }
+    });
+
+    const assignedTenancies = assignedProps.map((p) => {
+      const pid = p._id.toString();
+      const existingT = tenancyByPropId.get(pid);
+      if (existingT) {
+        return existingT;
+      }
+      return {
+        _id: `prop_${pid}`,
+        propertyId: p,
+        customerId: null,
+        companyMonthlyAmount: p.agentFee || 0,
+        monthlyRent: Number(p.monthlyRent ?? p.price ?? 0),
+        startDate: '-',
+        status: p.status || 'Available',
+      };
+    });
+
+    activeTenancies.forEach((t) => {
+      const pid = (t.propertyId?._id || t.propertyId)?.toString();
+      if (pid && !assignedProps.some((p) => p._id.toString() === pid)) {
+        assignedTenancies.push(t);
+      }
+    });
 
     const assignedUnitsCount = assignedTenancies.length;
     const monthlyCompanyAmount = assignedTenancies.reduce((sum, t) => sum + (t.companyMonthlyAmount || 0), 0);

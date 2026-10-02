@@ -428,6 +428,18 @@ const updateProperty = async (req, res) => {
     if (!property) {
       return res.status(404).json({ success: false, message: 'Property not found' });
     }
+
+    // Keep active tenancy in sync with assigned property agent
+    if (req.body.agentId !== undefined || req.body.agentFee !== undefined) {
+      await Tenancy.updateMany(
+        { propertyId: property._id, status: 'Active', isArchived: { $ne: true } },
+        {
+          ...(req.body.agentId !== undefined ? { agentId: property.agentId } : {}),
+          ...(req.body.agentFee !== undefined && Number(property.agentFee) > 0 ? { companyMonthlyAmount: property.agentFee } : {}),
+        }
+      );
+    }
+
     res.status(200).json({ success: true, message: 'Property updated successfully', data: property });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });

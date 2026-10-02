@@ -111,7 +111,11 @@ async function renderPDFReportDoc(options) {
         logoUrl = null,
       } = options;
 
-      const doc = new PDFDocument({ size: 'A4', margin: 36, bufferPages: true });
+      const doc = new PDFDocument({
+        size: 'A4',
+        margin: { top: 36, bottom: 30, left: 36, right: 36 },
+        bufferPages: true,
+      });
       const buffers = [];
 
       doc.on('data', (chunk) => buffers.push(chunk));
@@ -139,7 +143,7 @@ async function renderPDFReportDoc(options) {
         } catch (e) {}
       }
 
-      doc.fontSize(14).fillColor('#FFFFFF').font('Helvetica-Bold').text(reportTitle.toUpperCase(), 250, 50, { width: 309, align: 'right' });
+      doc.fontSize(13).fillColor('#FFFFFF').font('Helvetica-Bold').text(reportTitle.toUpperCase(), 250, 49, { width: 309, align: 'right' });
 
       let y = 88;
 
@@ -175,8 +179,8 @@ async function renderPDFReportDoc(options) {
 
       // 3. EXECUTIVE SUMMARY KPI CARDS
       if (summaryCards && summaryCards.length > 0) {
-        doc.fontSize(10).font('Helvetica-Bold').fillColor('#0F172A').text('EXECUTIVE SUMMARY', 36, y);
-        y += 14;
+        doc.fontSize(9.5).font('Helvetica-Bold').fillColor('#0F172A').text('EXECUTIVE PERFORMANCE SUMMARY', 36, y);
+        y += 12;
 
         const cardWidth = Math.floor(523 / Math.min(summaryCards.length, 4)) - 6;
         let cardX = 36;
@@ -185,109 +189,140 @@ async function renderPDFReportDoc(options) {
         summaryCards.forEach((card, idx) => {
           if (idx > 0 && idx % 4 === 0) {
             cardX = 36;
-            startY += 42;
+            startY += 40;
           }
 
-          doc.rect(cardX, startY, cardWidth, 36).fillAndStroke('#F8FAFC', '#E2E8F0');
-          doc.fontSize(7).font('Helvetica-Bold').fillColor('#64748B').text(card.label.toUpperCase(), cardX + 6, startY + 6, { width: cardWidth - 12, align: 'center' });
-          doc.fontSize(10).font('Helvetica-Bold').fillColor(card.color || '#04A26F').text(String(card.value), cardX + 6, startY + 18, { width: cardWidth - 12, align: 'center' });
+          doc.rect(cardX, startY, cardWidth, 34).fillAndStroke('#F8FAFC', '#E2E8F0');
+          doc.fontSize(6.5).font('Helvetica-Bold').fillColor('#64748B').text(card.label.toUpperCase(), cardX + 4, startY + 5, { width: cardWidth - 8, align: 'center', lineBreak: false });
+          doc.fontSize(9.5).font('Helvetica-Bold').fillColor(card.color || '#04A26F').text(String(card.value), cardX + 4, startY + 17, { width: cardWidth - 8, align: 'center', lineBreak: false });
 
           cardX += cardWidth + 6;
         });
 
-        y = startY + 46;
+        y = startY + 44;
       }
 
-      // 4. DETAILED TRANSACTIONS TABLE
-      doc.fontSize(10).font('Helvetica-Bold').fillColor('#0F172A').text('DETAILED REPORT', 36, y);
-      y += 14;
+      // 4. DETAILED TABLES (Supports multi-table reports e.g. Category + Rent Transactions + Expenses)
+      const tablesList = (options.tables && options.tables.length > 0)
+        ? options.tables
+        : [{ title: 'DETAILED REPORT TRANSACTIONS', columns, rows, totalRow }];
 
-      const totalTableWidth = 523;
-      const calcWidths = columns.map((c) => c.width || Math.floor(totalTableWidth / columns.length));
+      tablesList.forEach((tbl) => {
+        const tblCols = tbl.columns || [];
+        const tblRows = tbl.rows || [];
+        const tblTotal = tbl.totalRow;
+        if (tblCols.length === 0) return;
 
-      let currentPositions = [];
-      let currentX = 36;
-      calcWidths.forEach((w) => {
-        currentPositions.push(currentX);
-        currentX += w;
-      });
-
-      function drawTableHeader(yPos) {
-        doc.rect(36, yPos, 523, 18).fill('#1E293B');
-        doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8);
-        columns.forEach((col, idx) => {
-          doc.text(col.label, currentPositions[idx] + 2, yPos + 5, {
-            width: calcWidths[idx] - 4,
-            align: col.align || 'left',
-          });
-        });
-      }
-
-      drawTableHeader(y);
-      y += 20;
-
-      doc.font('Helvetica').fontSize(8).fillColor('#1E293B');
-
-      rows.forEach((row, rIdx) => {
-        if (y > 750) {
+        // Ensure section fits comfortably on page
+        if (y > 680) {
           doc.addPage();
           y = 40;
-          drawTableHeader(y);
+        }
+
+        // Section Title Banner
+        if (tbl.title) {
+          doc.fontSize(9).font('Helvetica-Bold').fillColor('#0F172A').text(tbl.title, 36, y);
+          y += 12;
+        }
+
+        const totalTableWidth = 523;
+        const calcWidths = tblCols.map((c) => c.width || Math.floor(totalTableWidth / tblCols.length));
+        let currentPositions = [];
+        let currentX = 36;
+        calcWidths.forEach((w) => {
+          currentPositions.push(currentX);
+          currentX += w;
+        });
+
+        function drawTableHeader(yPos) {
+          doc.rect(36, yPos, 523, 17).fill('#1E293B');
+          doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(7.5);
+          tblCols.forEach((col, idx) => {
+            doc.text(col.label, currentPositions[idx] + 4, yPos + 4, {
+              width: calcWidths[idx] - 8,
+              align: col.align || 'left',
+              lineBreak: false,
+            });
+          });
+        }
+
+        drawTableHeader(y);
+        y += 18;
+
+        doc.font('Helvetica').fontSize(7.5).fillColor('#1E293B');
+
+        if (tblRows.length === 0) {
+          doc.rect(36, y, 523, 16).fill('#F8FAFC');
+          doc.fillColor('#94A3B8').font('Helvetica-Oblique').text('No recorded transactions in this period.', 44, y + 4);
+          y += 18;
+        } else {
+          tblRows.forEach((row, rIdx) => {
+            if (y > 750) {
+              doc.addPage();
+              y = 40;
+              drawTableHeader(y);
+              y += 18;
+              doc.font('Helvetica').fontSize(7.5).fillColor('#1E293B');
+            }
+
+            if (rIdx % 2 === 1) {
+              doc.rect(36, y - 2, 523, 15).fill('#F8FAFC');
+            }
+
+            tblCols.forEach((col, cIdx) => {
+              const rawVal = row[col.key];
+              const valStr = rawVal !== undefined && rawVal !== null ? String(rawVal) : '-';
+              doc.fillColor('#1E293B').text(valStr, currentPositions[cIdx] + 4, y + 2, {
+                width: calcWidths[cIdx] - 8,
+                align: col.align || 'left',
+                lineBreak: false,
+                ellipsis: true,
+              });
+            });
+
+            doc.moveTo(36, y + 13).lineTo(559, y + 13).strokeColor('#F1F5F9').lineWidth(0.5).stroke();
+            y += 15;
+          });
+        }
+
+        // Table Bottom Total Row
+        if (tblTotal) {
+          if (y > 740) {
+            doc.addPage();
+            y = 40;
+          }
+
+          doc.rect(36, y, 523, 17).fill('#F1F5F9');
+          doc.moveTo(36, y).lineTo(559, y).strokeColor('#04A26F').lineWidth(1.5).stroke();
+
+          doc.font('Helvetica-Bold').fontSize(7.5).fillColor('#0F172A');
+          tblCols.forEach((col, cIdx) => {
+            const totVal = tblTotal[col.key];
+            const valStr = totVal !== undefined && totVal !== null ? String(totVal) : (cIdx === 0 ? 'TOTAL' : '');
+            doc.text(valStr, currentPositions[cIdx] + 4, y + 4, {
+              width: calcWidths[cIdx] - 8,
+              align: col.align || 'left',
+              lineBreak: false,
+              ellipsis: true,
+            });
+          });
+
           y += 20;
-          doc.font('Helvetica').fontSize(8).fillColor('#1E293B');
         }
 
-        if (rIdx % 2 === 1) {
-          doc.rect(36, y - 2, 523, 16).fill('#F8FAFC');
-        }
-
-        columns.forEach((col, cIdx) => {
-          const rawVal = row[col.key];
-          const valStr = rawVal !== undefined && rawVal !== null ? String(rawVal) : '-';
-          doc.fillColor('#1E293B').text(valStr, currentPositions[cIdx] + 2, y + 2, {
-            width: calcWidths[cIdx] - 4,
-            align: col.align || 'left',
-            lineBreak: false,
-          });
-        });
-
-        doc.moveTo(36, y + 14).lineTo(559, y + 14).strokeColor('#F1F5F9').lineWidth(0.5).stroke();
-        y += 16;
+        y += 12; // gap between tables
       });
 
-      // 5. BOTTOM TOTAL ROW
-      if (totalRow) {
-        if (y > 740) {
-          doc.addPage();
-          y = 40;
-        }
-
-        doc.rect(36, y, 523, 18).fill('#F1F5F9');
-        doc.moveTo(36, y).lineTo(559, y).strokeColor('#04A26F').lineWidth(1.5).stroke();
-
-        doc.font('Helvetica-Bold').fontSize(8).fillColor('#0F172A');
-        columns.forEach((col, cIdx) => {
-          const totVal = totalRow[col.key];
-          const valStr = totVal !== undefined && totVal !== null ? String(totVal) : (cIdx === 0 ? 'TOTAL' : '');
-          doc.text(valStr, currentPositions[cIdx] + 2, y + 4, {
-            width: calcWidths[cIdx] - 4,
-            align: col.align || 'left',
-          });
-        });
-
-        y += 22;
-      }
-
-      // 6. FOOTER WITH PAGE NUMBERS
+      // 5. FOOTER WITH PAGE NUMBERS (Positioned safely to prevent empty phantom pages)
       const range = doc.bufferedPageRange();
       for (let i = range.start; i < range.start + range.count; i++) {
         doc.switchToPage(i);
-        doc.moveTo(36, 800).lineTo(559, 800).strokeColor('#CBD5E1').lineWidth(0.5).stroke();
-        doc.fontSize(8).fillColor('#64748B').font('Helvetica').text(
+        doc.moveTo(36, 786).lineTo(559, 786).strokeColor('#CBD5E1').lineWidth(0.5).stroke();
+        doc.fontSize(7.5).fillColor('#64748B').font('Helvetica').text(
           `PixxTechnologies Property Management System | Generated: ${formatUKDate(generatedAt)} | Page ${i + 1} of ${range.count}`,
           36,
-          806,
-          { align: 'center', width: 523 }
+          790,
+          { align: 'center', width: 523, lineBreak: false }
         );
       }
 
@@ -304,21 +339,34 @@ async function renderPDFReportDoc(options) {
 async function generateTenantStatementPDF(data) {
   const fromStr = formatUKDate(data.fromDate);
   const toStr = formatUKDate(data.toDate);
+  const isAll = Boolean(
+    data.isAllTenants ||
+    data.tenant?.id === 'all_tenants' ||
+    String(data.tenant?.name).toLowerCase().includes('all tenants') ||
+    String(data.reportType).includes('All Tenants')
+  );
 
   return renderPDFReportDoc({
-    reportTitle: 'STATEMENT OF ACCOUNT',
+    reportTitle: isAll ? 'TENANT STATEMENT & PAYMENTS' : 'STATEMENT OF ACCOUNT',
     generatedAt: data.statementDate,
     periodText: `${fromStr} - ${toStr}`,
     logoUrl: data.landlord?.logoUrl,
-    metaFields: [
-      { label: 'Tenant', value: data.tenant.name },
-      { label: 'Tenant Address', value: data.tenant.address || '-' },
-      { label: 'Property', value: `${data.property.name} ${data.property.address ? '(' + data.property.address + ')' : ''}` },
-      { label: 'Landlord', value: data.landlord.name },
-    ],
+    metaFields: isAll
+      ? [
+          { label: 'Report Scope', value: 'All Tenants Portfolio (Combined)' },
+          { label: 'Total Records', value: `${data.summary?.totalRecords || data.transactions?.length || 0} transactions` },
+          { label: 'Property Scope', value: 'Portfolio Wide' },
+          { label: 'Management', value: data.landlord?.name || 'PixxTechnologies Property Management' },
+        ]
+      : [
+          { label: 'Tenant', value: data.tenant?.name || 'Tenant' },
+          { label: 'Tenant Address', value: data.tenant?.address || '-' },
+          { label: 'Property', value: `${data.property?.name || 'Property'} ${data.property?.address ? '(' + data.property.address + ')' : ''}` },
+          { label: 'Landlord', value: data.landlord?.name || 'Landlord' },
+        ],
     summaryCards: [
-      { label: 'Balance Forward', value: data.summary.balanceForwardFormatted, color: '#475569' },
-      { label: 'Total Rent Due', value: data.summary.totalRentDueFormatted, color: '#D97706' },
+      { label: isAll ? 'Opening Balance' : 'Balance Forward', value: data.summary.balanceForwardFormatted, color: '#475569' },
+      { label: isAll ? 'Total Rent Charged' : 'Total Rent Due', value: data.summary.totalRentDueFormatted, color: '#D97706' },
       { label: 'Total Payments', value: data.summary.totalPaymentsFormatted, color: '#04A26F' },
       { label: 'Total Outstanding', value: data.summary.totalOutstandingFormatted, color: '#DC2626' },
     ],
@@ -403,15 +451,16 @@ async function generateAgentReportPDF(data) {
     metaFields: [
       { label: 'Agent Name', value: data.agent.name },
       { label: 'Phone', value: data.agent.phone || '-' },
-      { label: 'Email', value: data.agent.email || '-' },
       { label: 'Region', value: data.agent.region || 'All' },
+      { label: 'Assigned Units', value: `${data.summary?.assignedUnitsCount || 0} (${data.summary?.occupiedUnitsCount || 0} Occupied)` },
     ],
     summaryCards: [
-      { label: 'Expected Rent', value: data.summary.totalExpectedFormatted, color: '#2563EB' },
-      { label: 'Approved Expenses', value: data.summary.totalExpensesFormatted, color: '#DC2626' },
-      { label: 'Net Due', value: data.summary.netAmountDueFormatted, color: '#D97706' },
-      { label: 'Total Received', value: data.summary.totalReceivedFormatted, color: '#04A26F' },
-      { label: 'Outstanding', value: data.summary.totalOutstandingFormatted, color: '#DC2626' },
+      { label: 'Assigned Units', value: String(data.summary?.assignedUnitsCount || 0), color: '#0F172A' },
+      { label: 'Expected Rent', value: data.summary.totalExpectedFormatted || data.summary.expectedAmountFormatted || '£0.00', color: '#2563EB' },
+      { label: 'Approved Expenses', value: data.summary.totalExpensesFormatted || data.summary.expenseAmountFormatted || '£0.00', color: '#DC2626' },
+      { label: 'Net Due', value: data.summary.netAmountDueFormatted || data.summary.netAmountFormatted || '£0.00', color: '#D97706' },
+      { label: 'Total Received', value: data.summary.totalReceivedFormatted || data.summary.paidAmountFormatted || '£0.00', color: '#04A26F' },
+      { label: 'Outstanding', value: data.summary.totalOutstandingFormatted || data.summary.remainingAmountFormatted || '£0.00', color: '#DC2626' },
     ],
     columns: [
       { key: 'date', label: 'Date', width: 65 },
@@ -497,43 +546,7 @@ async function generatePropertyReportPDF(data) {
 // 5. UNIT REPORT PDF
 // ----------------------------------------------------
 async function generateUnitReportPDF(data) {
-  const fromStr = formatUKDate(data.fromDate);
-  const toStr = formatUKDate(data.toDate);
-
-  return renderPDFReportDoc({
-    reportTitle: 'UNIT FINANCIAL REPORT',
-    generatedAt: data.reportDate,
-    periodText: `${fromStr} - ${toStr}`,
-    metaFields: [
-      { label: 'Unit', value: data.unit.name },
-      { label: 'Property', value: data.property.name },
-      { label: 'Type', value: data.unit.type || '-' },
-      { label: 'Current Tenant', value: data.tenant?.name || 'Available' },
-    ],
-    summaryCards: [
-      { label: 'Monthly Rent', value: data.summary.monthlyRentFormatted, color: '#2563EB' },
-      { label: 'Total Rent Due', value: data.summary.totalRentDueFormatted, color: '#D97706' },
-      { label: 'Rent Collected', value: data.summary.totalPaymentsFormatted, color: '#04A26F' },
-      { label: 'Expenses', value: data.summary.totalExpensesFormatted, color: '#DC2626' },
-      { label: 'Net Balance', value: data.summary.netBalanceFormatted, color: '#04A26F' },
-    ],
-    columns: [
-      { key: 'date', label: 'Date', width: 65 },
-      { key: 'type', label: 'Type', width: 75 },
-      { key: 'reference', label: 'Reference', width: 85 },
-      { key: 'description', label: 'Description', width: 140 },
-      { key: 'amountFormatted', label: 'Amount (£)', width: 78, align: 'right' },
-      { key: 'status', label: 'Status', width: 80, align: 'center' },
-    ],
-    rows: (data.transactions || []).map((t) => ({
-      ...t,
-      date: formatUKDate(t.date),
-    })),
-    totalRow: {
-      date: 'TOTALS',
-      amountFormatted: data.summary.netBalanceFormatted,
-    },
-  });
+  return generatePropertyReportPDF(data);
 }
 
 // ----------------------------------------------------
@@ -678,30 +691,76 @@ async function generateInvoiceReportPDF(data) {
 async function generateFinancialSummaryPDF(data) {
   const fromStr = formatUKDate(data.fromDate);
   const toStr = formatUKDate(data.toDate);
+  const summary = data.summary || {};
+  const rentList = data.rentTransactions || data.payments || [];
+  const expList = data.expenseTransactions || data.expenses || [];
 
   return renderPDFReportDoc({
     reportTitle: 'FINANCIAL PERFORMANCE SUMMARY',
-    generatedAt: formatUKDate(data.generatedAt),
-    periodText: `${fromStr} - ${toStr}`,
+    generatedAt: formatUKDate(data.generatedAt || data.reportDate || new Date()),
+    periodText: data.fromDate && data.toDate ? `${fromStr} - ${toStr}` : 'Full Portfolio History',
     summaryCards: [
-      { label: 'Gross Income', value: data.summary.grossIncomeFormatted, color: '#2563EB' },
-      { label: 'Operating Expenses', value: data.summary.totalExpensesFormatted, color: '#DC2626' },
-      { label: 'Net Income', value: data.summary.netIncomeFormatted, color: '#04A26F' },
-      { label: 'Bank Debt', value: data.summary.mortgageDebtFormatted, color: '#9333EA' },
+      { label: 'Gross Expected Rent', value: summary.grossIncomeFormatted || summary.totalRentDueFormatted || '£0.00', color: '#2563EB' },
+      { label: 'Rent Cleared / Received', value: summary.totalReceivedFormatted || summary.totalPaymentsReceivedFormatted || '£0.00', color: '#04A26F' },
+      { label: 'Operating Expenses', value: summary.totalExpensesFormatted || '£0.00', color: '#DC2626' },
+      { label: 'Net Cash Flow', value: summary.netIncomeFormatted || summary.netFinancialPositionFormatted || '£0.00', color: '#04A26F' },
     ],
-    columns: [
-      { key: 'category', label: 'Financial Category', width: 173 },
-      { key: 'expectedFormatted', label: 'Expected (£)', width: 110, align: 'right' },
-      { key: 'receivedFormatted', label: 'Actual Received (£)', width: 120, align: 'right' },
-      { key: 'netFormatted', label: 'Net Position (£)', width: 120, align: 'right' },
+    tables: [
+      {
+        title: 'SECTION 1: FINANCIAL CATEGORY PERFORMANCE',
+        columns: [
+          { key: 'category', label: 'Financial Category', width: 170 },
+          { key: 'expectedFormatted', label: 'Expected (£)', width: 115, align: 'right' },
+          { key: 'receivedFormatted', label: 'Actual Received / Paid (£)', width: 120, align: 'right' },
+          { key: 'netFormatted', label: 'Net Position (£)', width: 118, align: 'right' },
+        ],
+        rows: data.rows || [],
+        totalRow: {
+          category: 'NET FINANCIAL POSITION',
+          expectedFormatted: summary.grossIncomeFormatted || summary.totalRentDueFormatted || '£0.00',
+          receivedFormatted: summary.totalReceivedFormatted || summary.totalPaymentsReceivedFormatted || '£0.00',
+          netFormatted: summary.netIncomeFormatted || summary.netFinancialPositionFormatted || '£0.00',
+        },
+      },
+      {
+        title: `SECTION 2: ITEMIZED RENT PAYMENT TRANSACTIONS (${rentList.length} Records)`,
+        columns: [
+          { key: 'dateFormatted', label: 'Date', width: 62, align: 'center' },
+          { key: 'tenantName', label: 'Tenant', width: 105 },
+          { key: 'propertyName', label: 'Property', width: 115 },
+          { key: 'amountFormatted', label: 'Due (£)', width: 64, align: 'right' },
+          { key: 'paidAmountFormatted', label: 'Received (£)', width: 64, align: 'right' },
+          { key: 'remainingAmountFormatted', label: 'Arrears (£)', width: 60, align: 'right' },
+          { key: 'status', label: 'Status', width: 53, align: 'center' },
+        ],
+        rows: rentList,
+        totalRow: {
+          dateFormatted: 'TOTALS',
+          tenantName: `${rentList.length} Payments`,
+          amountFormatted: summary.totalRentDueFormatted || summary.grossIncomeFormatted || '£0.00',
+          paidAmountFormatted: summary.totalReceivedFormatted || summary.totalPaymentsReceivedFormatted || '£0.00',
+          remainingAmountFormatted: summary.totalOutstandingRentFormatted || '£0.00',
+          status: `${summary.collectionRate || 0}%`,
+        },
+      },
+      {
+        title: `SECTION 3: ITEMIZED OPERATING & MAINTENANCE EXPENSES (${expList.length} Records)`,
+        columns: [
+          { key: 'dateFormatted', label: 'Date', width: 62, align: 'center' },
+          { key: 'propertyName', label: 'Property / Location', width: 120 },
+          { key: 'category', label: 'Category', width: 90 },
+          { key: 'supplier', label: 'Payee / Supplier', width: 95 },
+          { key: 'description', label: 'Details', width: 93 },
+          { key: 'amountFormatted', label: 'Amount (£)', width: 63, align: 'right' },
+        ],
+        rows: expList,
+        totalRow: {
+          dateFormatted: 'TOTALS',
+          propertyName: `${expList.length} Expenses`,
+          amountFormatted: summary.totalExpensesFormatted || '£0.00',
+        },
+      },
     ],
-    rows: data.rows || [],
-    totalRow: {
-      category: 'NET FINANCIAL POSITION',
-      expectedFormatted: data.summary.grossIncomeFormatted,
-      receivedFormatted: data.summary.grossIncomeFormatted,
-      netFormatted: data.summary.netIncomeFormatted,
-    },
   });
 }
 

@@ -409,8 +409,13 @@ const getAgentDashboardSummary = async (req, res) => {
     await generateMonthlyAgentSettlements();
 
     const activeAgentsCount = await Agent.countDocuments({ status: 'Active' });
-    const assignedTenancies = await Tenancy.find({ status: 'Active', agentId: { $ne: null } });
-    const assignedUnitsCount = assignedTenancies.length;
+    const assignedProperties = await Property.find({ agentId: { $ne: null }, isArchived: { $ne: true } });
+    const assignedTenancies = await Tenancy.find({ status: 'Active', agentId: { $ne: null }, isArchived: { $ne: true } });
+    const uniqueUnitIds = new Set([
+      ...assignedProperties.map((p) => p._id.toString()),
+      ...assignedTenancies.map((t) => t.propertyId?.toString()).filter(Boolean),
+    ]);
+    const assignedUnitsCount = uniqueUnitIds.size;
 
     const allAgentPayments = await AgentPayment.find();
 

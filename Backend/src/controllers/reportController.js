@@ -605,8 +605,8 @@ const downloadInvoiceReportExcel = async (req, res) => {
 // ----------------------------------------------------
 const getFinancialSummary = async (req, res) => {
   try {
-    const { fromDate, toDate } = req.query;
-    const data = await generateFinancialSummaryData(fromDate, toDate);
+    const { fromDate, toDate, propertyId, landlordId } = req.query;
+    const data = await generateFinancialSummaryData(fromDate, toDate, { propertyId, landlordId });
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -615,10 +615,11 @@ const getFinancialSummary = async (req, res) => {
 
 const downloadFinancialSummaryPDF = async (req, res) => {
   try {
-    const { fromDate, toDate } = req.query;
-    const data = (req.body && req.body.reportData)
+    const { fromDate, toDate, propertyId, landlordId } = req.query;
+    const filters = { propertyId, landlordId, ...(req.body?.filters || {}) };
+    const data = (req.body && req.body.reportData && req.body.reportData.rows && req.body.reportData.rows.length > 0)
       ? req.body.reportData
-      : await generateFinancialSummaryData(fromDate, toDate);
+      : await generateFinancialSummaryData(fromDate, toDate, filters);
     const pdfBuffer = await pdfGenerators.generateFinancialSummaryPDF(data);
     sendDownloadBuffer(res, pdfBuffer, 'application/pdf', `Financial_Summary_${Date.now()}.pdf`);
   } catch (error) {
@@ -628,10 +629,11 @@ const downloadFinancialSummaryPDF = async (req, res) => {
 
 const downloadFinancialSummaryWord = async (req, res) => {
   try {
-    const { fromDate, toDate } = req.query;
-    const data = (req.body && req.body.reportData)
+    const { fromDate, toDate, propertyId, landlordId } = req.query;
+    const filters = { propertyId, landlordId, ...(req.body?.filters || {}) };
+    const data = (req.body && req.body.reportData && req.body.reportData.rows && req.body.reportData.rows.length > 0)
       ? req.body.reportData
-      : await generateFinancialSummaryData(fromDate, toDate);
+      : await generateFinancialSummaryData(fromDate, toDate, filters);
     const wordBuffer = await wordGenerators.generateFinancialSummaryWord(data);
     sendDownloadBuffer(
       res,
@@ -646,10 +648,11 @@ const downloadFinancialSummaryWord = async (req, res) => {
 
 const downloadFinancialSummaryExcel = async (req, res) => {
   try {
-    const { fromDate, toDate } = req.query;
-    const data = (req.body && req.body.reportData)
+    const { fromDate, toDate, propertyId, landlordId } = req.query;
+    const filters = { propertyId, landlordId, ...(req.body?.filters || {}) };
+    const data = (req.body && req.body.reportData && req.body.reportData.rows && req.body.reportData.rows.length > 0)
       ? req.body.reportData
-      : await generateFinancialSummaryData(fromDate, toDate);
+      : await generateFinancialSummaryData(fromDate, toDate, filters);
     const excelBuffer = await excelGenerators.generateFinancialSummaryExcel(data);
     sendDownloadBuffer(
       res,

@@ -85,6 +85,7 @@ export function PaymentTable({ payments, isIncomeTab, onAddPaymentClick, onEditP
                 <th className="py-3 px-4">Property</th>
                 <th className="py-3 px-4">Date</th>
                 <th className="py-3 px-4">Account</th>
+                <th className="py-3 px-4 text-center">Status</th>
                 <th className="py-3 px-4 text-right">Payment Amount</th>
                 <th className="py-3 px-4 text-right">Allocated Amount</th>
                 <th className="py-3 px-4 text-right">Unallocated Amount</th>
@@ -94,7 +95,7 @@ export function PaymentTable({ payments, isIncomeTab, onAddPaymentClick, onEditP
             <tbody className="divide-y divide-slate-100">
               {paginatedRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-slate-400 font-medium">
+                  <td colSpan={11} className="py-8 text-center text-slate-400 font-medium">
                     No payment records found matching criteria.
                   </td>
                 </tr>
@@ -130,12 +131,27 @@ export function PaymentTable({ payments, isIncomeTab, onAddPaymentClick, onEditP
                       <td className="py-3 px-4 font-medium text-slate-700">{item.property || '-'}</td>
                       <td className="py-3 px-4 font-medium text-slate-600">{formatDate(item.date)}</td>
                       <td className="py-3 px-4 font-medium text-slate-600">{item.account || '-'}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                          item.status === 'Paid' || item.status === 'Received'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : item.status === 'Partially Paid' || item.status === 'Partially Received'
+                            ? 'bg-amber-100 text-amber-800'
+                            : item.status === 'Overdue'
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {item.status || 'Pending'}
+                        </span>
+                      </td>
                       <td className="py-3 px-4 font-bold text-sky-700 text-right">
                         {formatCurrency(item.paymentAmount)}
                       </td>
-                      <td className="py-3 px-4 font-bold text-slate-800 text-right flex items-center justify-end gap-1">
-                        <span>{formatCurrency(item.allocatedAmount)}</span>
-                        <ChevronRight className="w-3.5 h-3.5 text-slate-400 inline" />
+                      <td className="py-3 px-4 font-bold text-slate-800 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <span>{formatCurrency(item.allocatedAmount)}</span>
+                          <ChevronRight className="w-3.5 h-3.5 text-slate-400 inline" />
+                        </div>
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-600 text-right">
                         {formatCurrency(item.unallocatedAmount)}
@@ -273,6 +289,31 @@ export function PaymentTable({ payments, isIncomeTab, onAddPaymentClick, onEditP
             Bulk Options ▾
           </button>
         </div>
+
+        {/* PAGINATION CONTROLS */}
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-bold transition-colors cursor-pointer text-xs"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-slate-500 font-bold px-2">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-bold transition-colors cursor-pointer text-xs"
+            >
+              Next
+            </button>
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
           <button

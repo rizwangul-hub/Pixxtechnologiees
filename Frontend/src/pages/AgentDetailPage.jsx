@@ -272,13 +272,19 @@ export default function AgentDetailPage() {
                   ) : (
                     assignedTenancies.map((t) => {
                       const propName = t.propertyId?.propertyName || t.propertyId?.name || 'N/A';
-                      const unitName = t.unitId?.unitName || t.unitId?.name || 'N/A';
-                      const tenantName = t.customerId?.fullName || t.customerId?.name || 'N/A';
+                      const unitName = t.unitId?.unitName || t.unitId?.name || t.propertyId?.type || 'Main Unit';
+                      const tenantName = t.customerId?.fullName || t.customerId?.name || null;
                       return (
                         <tr key={t._id || t.id} className="hover:bg-slate-50">
                           <td className="py-3 px-4 font-bold text-slate-900">{propName}</td>
                           <td className="py-3 px-4 text-slate-700 font-semibold">{unitName}</td>
-                          <td className="py-3 px-4 font-bold text-[#04A26F]">{tenantName}</td>
+                          <td className="py-3 px-4 font-bold">
+                            {tenantName ? (
+                              <span className="text-[#04A26F]">{tenantName}</span>
+                            ) : (
+                              <span className="text-amber-600 font-semibold bg-amber-50 px-2 py-0.5 rounded-full text-[11px]">Vacant (Available)</span>
+                            )}
+                          </td>
                           <td className="py-3 px-4 font-black text-slate-900">
                             {formatCurrency(t.companyMonthlyAmount || 0)}
                           </td>
@@ -287,12 +293,21 @@ export default function AgentDetailPage() {
                           </td>
                           <td className="py-3 px-4 font-mono text-[11px] text-slate-600">{t.startDate}</td>
                           <td className="py-3 px-4 text-right">
-                            <Link
-                              to={`/tenants/${t.customerId?._id || t.customerId}`}
-                              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors"
-                            >
-                              View Tenant
-                            </Link>
+                            {t.customerId ? (
+                              <Link
+                                to={`/tenants/${t.customerId?._id || t.customerId}`}
+                                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors"
+                              >
+                                View Tenant
+                              </Link>
+                            ) : (
+                              <Link
+                                to={`/properties/${t.propertyId?._id || t.propertyId}`}
+                                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors"
+                              >
+                                View Property
+                              </Link>
+                            )}
                           </td>
                         </tr>
                       );
