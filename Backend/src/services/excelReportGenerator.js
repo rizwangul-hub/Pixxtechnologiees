@@ -43,7 +43,7 @@ async function renderExcelReportWorkbook(options) {
   // 1. TITLE BANNER ROW
   sheet.mergeCells(1, 1, 1, colCount);
   const titleCell = sheet.getCell('A1');
-  titleCell.value = `PIXXTECHNOLOGIES - ${reportTitle.toUpperCase()}`;
+  titleCell.value = `UK PIXXTECHNOLGIES - ${reportTitle.toUpperCase()}`;
   titleCell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
   titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF04A26F' } };
   titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -650,7 +650,7 @@ async function generateTenantStatementExcel(data) {
   currentRow += 1;
   sheet.mergeCells(`A${currentRow}:G${currentRow}`);
   const footerSys = sheet.getCell(`A${currentRow}`);
-  footerSys.value = `Generated on ${statementDateStr} by PixxTechnologies UK Property Management System`;
+  footerSys.value = `Generated on ${statementDateStr} by UK Pixxtechnolgies UK Property Management System`;
   footerSys.font = { name: 'Calibri', size: 8.5, color: { argb: 'FF94A3B8' } };
   footerSys.alignment = { horizontal: 'center', vertical: 'middle' };
   sheet.getRow(currentRow).height = 16;
@@ -1856,7 +1856,7 @@ async function generateFinancialSummaryExcel(data) {
   // Title Banner
   sheet1.mergeCells('A1:E1');
   const tCell = sheet1.getCell('A1');
-  tCell.value = 'PIXXTECHNOLOGIES - FINANCIAL PERFORMANCE SUMMARY';
+  tCell.value = 'UK PIXXTECHNOLGIES - FINANCIAL PERFORMANCE SUMMARY';
   tCell.font = { name: 'Calibri', size: 15, bold: true, color: { argb: 'FFFFFFFF' } };
   tCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF04A26F' } };
   tCell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -2015,7 +2015,7 @@ async function generateFinancialSummaryExcel(data) {
 
     sheet2.mergeCells('A1:I1');
     const s2Title = sheet2.getCell('A1');
-    s2Title.value = `PIXXTECHNOLOGIES - ITEMIZED RENT COLLECTIONS LEDGER (${rentList.length} TRANSACTIONS)`;
+    s2Title.value = `UK PIXXTECHNOLGIES - ITEMIZED RENT COLLECTIONS LEDGER (${rentList.length} TRANSACTIONS)`;
     s2Title.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
     s2Title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF04A26F' } };
     s2Title.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -2115,7 +2115,7 @@ async function generateFinancialSummaryExcel(data) {
 
     sheet3.mergeCells('A1:G1');
     const s3Title = sheet3.getCell('A1');
-    s3Title.value = `PIXXTECHNOLOGIES - ITEMIZED OPERATING & MAINTENANCE EXPENSES (${expList.length} TRANSACTIONS)`;
+    s3Title.value = `UK PIXXTECHNOLGIES - ITEMIZED OPERATING & MAINTENANCE EXPENSES (${expList.length} TRANSACTIONS)`;
     s3Title.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
     s3Title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF04A26F' } };
     s3Title.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -2279,7 +2279,7 @@ async function generateMortgageExcelWorkbook(data) {
   const applySheetHeader = (sheet, title, colCount) => {
     sheet.mergeCells(1, 1, 1, colCount);
     const titleCell = sheet.getCell('A1');
-    titleCell.value = `PIXXTECHNOLOGIES - ${title.toUpperCase()}`;
+    titleCell.value = `UK PIXXTECHNOLGIES - ${title.toUpperCase()}`;
     titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
     titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF04A26F' } };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };

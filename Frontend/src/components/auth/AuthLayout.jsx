@@ -18,7 +18,7 @@ export function AuthLayout({ children }) {
 
         {/* FOOTER */}
         <div className="text-[11px] font-semibold text-slate-400 text-center pt-2 border-t border-slate-100">
-          &copy; {new Date().getFullYear()} Pixx Technologies. Internal System.
+          &copy; {new Date().getFullYear()} UK Pixxtechnolgies. Internal System.
         </div>
       </div>
     </div>

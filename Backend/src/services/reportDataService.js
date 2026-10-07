@@ -274,7 +274,7 @@ async function generateTenantStatementData(tenantId, fromDate, toDate, propertyI
     isAllTenants: isAll,
     landlord: {
       id: landlord?._id || '',
-      name: landlord?.fullName || 'PixxTechnologies Property Management',
+      name: landlord?.fullName || 'UK Pixxtechnolgies Property Management',
       address: landlord?.address || '',
       logoUrl: landlord?.logo?.url || '',
     },

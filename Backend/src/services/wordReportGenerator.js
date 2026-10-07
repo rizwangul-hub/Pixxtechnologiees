@@ -126,7 +126,7 @@ async function renderWordReportDoc(options) {
       spacing: { before: 100, after: 40 },
       children: [
         new TextRun({
-          text: 'PIXXTECHNOLOGIES',
+          text: 'UK PIXXTECHNOLGIES',
           bold: true,
           size: 28, // 14pt
           color: '04A26F',
@@ -409,7 +409,7 @@ async function renderWordReportDoc(options) {
       alignment: AlignmentType.CENTER,
       children: [
         new TextRun({
-          text: `PixxTechnologies Property Management System | Generated: ${formatUKDate(generatedAt)}`,
+          text: `UK Pixxtechnolgies Property Management System | Generated: ${formatUKDate(generatedAt)}`,
           size: 14,
           color: '94A3B8',
         }),

@@ -249,7 +249,7 @@ export default function PropertiesScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Top Header with Pixxtechnologiees Branding & Logo */}
+      {/* Top Header with UK Pixxtechnologies Branding & Logo */}
       <View
         style={[
           styles.topHeader,
@@ -258,12 +258,12 @@ export default function PropertiesScreen() {
       >
         <View style={styles.headerBrandWrap}>
           <Image
-            source={require('@/assets/images/logo.png')}
+            source={require('@/assets/images/logo1.jpg')}
             style={styles.headerLogo}
             resizeMode="contain"
           />
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={styles.brandTitle}>Pixxtechnologiees</Text>
+            <Text style={styles.brandTitle}>UK Pixxtechnologies</Text>
             <Text style={styles.screenSubtitle} numberOfLines={1}>
               {loading ? 'Loading properties...' : `${properties.length} ${properties.length === 1 ? 'property' : 'properties'} listed`}
             </Text>
@@ -651,9 +651,9 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerLogo: {
-    width: 68,
-    height: 46,
-    borderRadius: 6,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
   },
   brandTitle: {
     fontSize: 18,

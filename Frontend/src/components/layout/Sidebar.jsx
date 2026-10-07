@@ -70,7 +70,10 @@ export function Sidebar({ isMobileMenuOpen, setIsMobileMenuOpen }) {
             <div className="space-y-6 text-left">
               {/* Header inside Mobile Drawer */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <PixxLogo variant="dashboard" />
+                <div className="flex items-center gap-2">
+                  <PixxLogo variant="dashboard" />
+                  <span className="font-black text-sm text-slate-900 tracking-tight">UK Pixxtechnolgies</span>
+                </div>
                 <button
                   type="button"
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -114,7 +117,7 @@ export function Sidebar({ isMobileMenuOpen, setIsMobileMenuOpen }) {
               </button>
 
               <div className="text-[11px] font-semibold text-slate-400 text-center">
-                Pixx Technologies &copy; {new Date().getFullYear()}
+                UK Pixxtechnolgies &copy; {new Date().getFullYear()}
               </div>
             </div>
           </div>

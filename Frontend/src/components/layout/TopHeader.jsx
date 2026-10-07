@@ -140,8 +140,11 @@ export function TopHeader({ onToggleMobileMenu }) {
             <Menu className="w-5 h-5" />
           </button>
 
-          <Link to="/dashboard" className="flex items-center transition-transform hover:scale-102">
+          <Link to="/dashboard" className="flex items-center gap-2.5 transition-transform hover:scale-102">
             <PixxLogo variant="dark" />
+            <span className="font-black text-xs sm:text-sm tracking-tight text-white inline-block">
+              UK Pixxtechnolgies
+            </span>
           </Link>
 
           <div className="hidden sm:block w-[1px] h-6 bg-slate-800" />

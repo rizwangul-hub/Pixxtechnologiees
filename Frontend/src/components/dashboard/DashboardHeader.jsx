@@ -25,7 +25,7 @@ export function DashboardHeader() {
           <Sparkles className="w-5 h-5 text-amber-500 fill-amber-400" />
         </div>
         <p className="text-xs sm:text-sm font-medium text-slate-500 flex items-center gap-1.5 flex-wrap">
-          <span>Here's an overview of your Pixx Technologies property management portal:</span>
+          <span>Here's an overview of your UK Pixxtechnolgies property management portal:</span>
           <span className="font-extrabold text-[#04A26F] bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
             {selectedPortfolio}
           </span>

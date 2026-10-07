@@ -92,12 +92,12 @@ export default function LoginScreen() {
         <View style={styles.contentWrapper}>
           <View style={styles.brandingSection}>
             <Image
-              source={require('@/assets/images/logo.png')}
+              source={require('@/assets/images/logo1.jpg')}
               style={styles.logo}
               resizeMode="contain"
             />
             <Text style={styles.title}>Manager Login</Text>
-            <Text style={styles.subtitle}>Sign in to PixxTechnologies Property Management</Text>
+            <Text style={styles.subtitle}>Sign in to UK Pixxtechnologies Property Management</Text>
           </View>
 
         <View style={styles.formCard}>
@@ -202,8 +202,9 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   logo: {
-    width: 220,
-    height: 110,
+    width: 90,
+    height: 90,
+    borderRadius: 18,
     marginBottom: 16,
   },
   title: {

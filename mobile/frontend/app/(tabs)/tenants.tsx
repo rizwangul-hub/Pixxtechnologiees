@@ -274,7 +274,7 @@ export default function TenantsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header with Pixxtechnologiees Logo & Branding */}
+      {/* Header with UK Pixxtechnologies Logo & Branding */}
       <View style={[styles.topHeader, { paddingTop: headerPaddingTop }]}>
         <TouchableOpacity
           style={styles.headerBackBtn}
@@ -291,12 +291,12 @@ export default function TenantsScreen() {
         </TouchableOpacity>
         <View style={styles.headerBrandWrap}>
           <Image
-            source={require('@/assets/images/logo.png')}
+            source={require('@/assets/images/logo1.jpg')}
             style={styles.headerLogo}
             resizeMode="contain"
           />
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={styles.brandTitle}>Pixxtechnologiees</Text>
+            <Text style={styles.brandTitle}>UK Pixxtechnologies</Text>
             <Text style={styles.screenSubtitle} numberOfLines={1}>
               {loading ? 'Loading tenants...' : `${tenants.length} ${tenants.length === 1 ? 'tenant' : 'tenants'} registered`}
             </Text>
@@ -661,9 +661,9 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerLogo: {
-    width: 68,
-    height: 46,
-    borderRadius: 6,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
   },
   brandTitle: {
     fontSize: 18,

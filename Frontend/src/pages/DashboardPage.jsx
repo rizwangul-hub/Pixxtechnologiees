@@ -364,7 +364,7 @@ export function DashboardPage() {
               Dashboard Overview
             </h1>
             <p className="text-xs sm:text-sm font-medium text-gray-500 mt-1">
-              Pixx Technologies Property Management & Real-time Financial Tracking.
+              UK Pixxtechnolgies Property Management & Real-time Financial Tracking.
             </p>
           </div>
           {loading && !initialCache && (

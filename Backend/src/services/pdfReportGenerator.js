@@ -131,10 +131,10 @@ async function renderPDFReportDoc(options) {
         try {
           doc.image(systemLogoBuffer, 44, 41, { fit: [100, 30] });
         } catch (e) {
-          doc.fontSize(14).fillColor('#FFFFFF').font('Helvetica-Bold').text('PIXXTECHNOLOGIES', 44, 46);
+          doc.fontSize(14).fillColor('#FFFFFF').font('Helvetica-Bold').text('UK PIXXTECHNOLGIES', 44, 46);
         }
       } else {
-        doc.fontSize(14).fillColor('#FFFFFF').font('Helvetica-Bold').text('PIXXTECHNOLOGIES', 44, 46);
+        doc.fontSize(14).fillColor('#FFFFFF').font('Helvetica-Bold').text('UK PIXXTECHNOLGIES', 44, 46);
       }
 
       if (landlordLogoBuffer) {
@@ -319,7 +319,7 @@ async function renderPDFReportDoc(options) {
         doc.switchToPage(i);
         doc.moveTo(36, 786).lineTo(559, 786).strokeColor('#CBD5E1').lineWidth(0.5).stroke();
         doc.fontSize(7.5).fillColor('#64748B').font('Helvetica').text(
-          `PixxTechnologies Property Management System | Generated: ${formatUKDate(generatedAt)} | Page ${i + 1} of ${range.count}`,
+          `UK Pixxtechnolgies Property Management System | Generated: ${formatUKDate(generatedAt)} | Page ${i + 1} of ${range.count}`,
           36,
           790,
           { align: 'center', width: 523, lineBreak: false }

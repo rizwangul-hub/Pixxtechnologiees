@@ -1292,7 +1292,7 @@ export function ReportsPage() {
                         />
                       ) : (
                         <div className="h-12 w-36 bg-emerald-50 rounded-lg border border-emerald-200 flex items-center justify-center font-bold text-[#04A26F] text-sm">
-                          {reportData.landlord?.name || 'PixxTechnologies'}
+                          {reportData.landlord?.name || 'UK Pixxtechnolgies'}
                         </div>
                       )}
                     </div>
@@ -1317,7 +1317,7 @@ export function ReportsPage() {
                           <p className="text-xs text-gray-600">
                             Property: {reportData.property?.name || 'Assigned Property'} {reportData.property?.address ? `- ${reportData.property.address}` : ''}
                           </p>
-                          <p className="text-xs text-gray-600">Landlord / Management: {reportData.landlord?.name || 'PixxTechnologies'}</p>
+                          <p className="text-xs text-gray-600">Landlord / Management: {reportData.landlord?.name || 'UK Pixxtechnolgies'}</p>
                           <p className="text-xs font-bold text-gray-900 mt-1">Statement Date: {reportData.statementDate}</p>
                         </div>
                       );

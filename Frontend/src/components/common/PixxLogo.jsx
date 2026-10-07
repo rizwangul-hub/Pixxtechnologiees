@@ -27,7 +27,7 @@ export function PixxLogo({ variant = 'dark', useDashboardLogo = false, className
       {/* BRAND LOGO IMAGE */}
       <img
         src={currentLogo}
-        alt="PixxTechnologies Logo"
+        alt="UK Pixxtechnolgies Logo"
         className="h-11 md:h-13 w-auto object-contain shrink-0 drop-shadow-sm animate-rotate-y"
       />
     </div>

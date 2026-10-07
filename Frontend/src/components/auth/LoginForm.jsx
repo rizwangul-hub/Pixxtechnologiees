@@ -80,7 +80,7 @@ export function LoginForm() {
 
       setStatusMessage({
         type: 'success',
-        text: 'Authenticated! Accessing PixxTechnologies Internal Portal...',
+        text: 'Authenticated! Accessing UK Pixxtechnolgies Internal Portal...',
       });
 
       setTimeout(() => {

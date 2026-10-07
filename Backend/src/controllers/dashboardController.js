@@ -89,7 +89,7 @@ const getUnifiedDashboard = async (req, res) => {
       monthlyCollectedRent += p.paidAmount || 0;
       monthlyOutstandingRent += p.remainingAmount || 0;
 
-      if (p.status === 'Paid') {
+      if (p.status === 'Paid' || p.status === 'Received' || (p.remainingAmount === 0 && (p.paidAmount || 0) > 0)) {
         paidPaymentCount++;
       } else if (p.status === 'Overdue' || (p.dueDate < todayStr && p.remainingAmount > 0)) {
         totalOverdue += p.remainingAmount || 0;

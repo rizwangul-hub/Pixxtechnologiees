@@ -85,12 +85,12 @@ export default function DashboardScreen() {
       <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <View style={styles.brandContainer}>
           <Image
-            source={require('@/assets/images/logo.png')}
+            source={require('@/assets/images/logo1.jpg')}
             style={styles.headerLogo}
             resizeMode="contain"
           />
-          <View style={{ flex: 1, marginLeft: 8 }}>
-            <Text style={styles.brandTitle}>Pixxtechnologiees</Text>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.brandTitle}>UK Pixxtechnologies</Text>
             <Text style={styles.welcomeText} numberOfLines={1}>
               Welcome, Fahad
             </Text>
@@ -295,9 +295,9 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerLogo: {
-    width: 68,
-    height: 46,
-    borderRadius: 6,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
   },
   brandTitle: {
     fontSize: 18,

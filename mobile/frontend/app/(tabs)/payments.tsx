@@ -60,16 +60,16 @@ export default function PaymentsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Top Header with Pixxtechnologiees Logo & Branding */}
+      {/* Top Header with UK Pixxtechnologies Logo & Branding */}
       <View style={[styles.topHeader, { paddingTop: Math.max(insets.top, 16) + 12 }]}>
         <View style={styles.headerBrandWrap}>
           <Image
-            source={require('@/assets/images/logo.png')}
+            source={require('@/assets/images/logo1.jpg')}
             style={styles.headerLogo}
             resizeMode="contain"
           />
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={styles.brandTitle}>Pixxtechnologiees</Text>
+            <Text style={styles.brandTitle}>UK Pixxtechnologies</Text>
             <Text style={styles.topHeaderSubtitle}>{payments.length} Payment Records</Text>
           </View>
         </View>
@@ -221,9 +221,9 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerLogo: {
-    width: 68,
-    height: 46,
-    borderRadius: 6,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
   },
   brandTitle: {
     fontSize: 18,

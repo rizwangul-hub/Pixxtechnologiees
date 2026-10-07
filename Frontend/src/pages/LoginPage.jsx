@@ -11,7 +11,7 @@ export function LoginPage() {
             Manager Sign In
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Enter your credentials to access Pixx Technologies internal management system.
+            Enter your credentials to access UK Pixxtechnolgies internal management system.
           </p>
         </div>
 

@@ -185,6 +185,25 @@ export function PaymentTable({ payments, isIncomeTab, onAddPaymentClick, onEditP
                 })
               )}
             </tbody>
+            {payments.length > 0 && (
+              <tfoot className="bg-slate-50 border-t-2 border-slate-200 font-extrabold text-slate-900">
+                <tr>
+                  <td colSpan={7} className="py-3 px-4 text-right uppercase tracking-wider text-[11px] text-slate-500">
+                    Grand Total ({totalRecords} records):
+                  </td>
+                  <td className="py-3 px-4 text-right text-sky-700">
+                    {formatCurrency(payments.reduce((s, p) => s + (Number(p.paymentAmount) || 0), 0))}
+                  </td>
+                  <td className="py-3 px-4 text-right text-emerald-700">
+                    {formatCurrency(payments.reduce((s, p) => s + (Number(p.allocatedAmount) || 0), 0))}
+                  </td>
+                  <td className="py-3 px-4 text-right text-rose-700">
+                    {formatCurrency(payments.reduce((s, p) => s + (Number(p.unallocatedAmount) || 0), 0))}
+                  </td>
+                  <td className="py-3 px-4"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>

@@ -9,20 +9,20 @@ import {
 } from './metricsService';
 
 /**
- * Clean & Automated Corporate Export System for Pixx Technologies Reports
+ * Clean & Automated Corporate Export System for UK Pixxtechnolgies Reports
  * Supports Excel (.xlsx) and CSV (.csv) export formats with UK (£) formatting.
  */
 
 function createProfessionalSheet(rows, reportTitle) {
   if (!rows || rows.length === 0) {
-    return XLSX.utils.aoa_to_sheet([[`PIXXTECHNOLOGIES - ${reportTitle.toUpperCase()}`], ['No records available']]);
+    return XLSX.utils.aoa_to_sheet([[`UK PIXXTECHNOLGIES - ${reportTitle.toUpperCase()}`], ['No records available']]);
   }
 
   const headers = Object.keys(rows[0]);
   const dateStr = new Date().toLocaleDateString('en-GB');
 
   const aoa = [
-    [`PIXXTECHNOLOGIES - ${reportTitle.toUpperCase()}`],
+    [`UK PIXXTECHNOLGIES - ${reportTitle.toUpperCase()}`],
     [`Report Generated: ${dateStr}`, '', '', `Total Records: ${rows.length}`],
     [],
     headers,
@@ -161,7 +161,7 @@ export function exportPropertyReport(filters = {}, format = 'xlsx') {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Properties_Summary');
   }
 
-  downloadWorkbook(workbook, `Pixx_Property_Report_${(property?.name || 'Portfolio').replace(/[^a-zA-Z0-9]/g, '_')}`, format);
+  downloadWorkbook(workbook, `UK_Pixxtechnolgies_Property_Report_${(property?.name || 'Portfolio').replace(/[^a-zA-Z0-9]/g, '_')}`, format);
 }
 
 // 2. Unit Report Export
@@ -251,7 +251,7 @@ export function exportOutstandingPaymentReport(filters = {}, format = 'xlsx') {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'OutstandingPayments');
 
-  downloadWorkbook(workbook, 'Pixx_Outstanding_Payments_Report', format);
+  downloadWorkbook(workbook, 'UK_Pixxtechnolgies_Outstanding_Payments_Report', format);
 }
 
 // 6. Rental Income Report Export
@@ -295,5 +295,5 @@ export function exportRentalIncomeReport(filters = {}, format = 'xlsx') {
   XLSX.utils.book_append_sheet(workbook, summarySheet, 'Income_Summary');
   XLSX.utils.book_append_sheet(workbook, detailSheet, 'Detailed_Schedules');
 
-  downloadWorkbook(workbook, 'Pixx_Rental_Income_Report', format);
+  downloadWorkbook(workbook, 'UK_Pixxtechnolgies_Rental_Income_Report', format);
 }
